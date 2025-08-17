@@ -205,7 +205,7 @@ ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(ComPtr<ID3D12Device> device, D
     ComPtr<ID3D12DescriptorHeap> descriptorHeap;
 
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.NumDescriptors = descriptors;
+    desc.NumDescriptors = descriptors; // Set the number of descriptors the heap will contain.
     desc.Type = type;
 
     AssertIfFailed(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&descriptorHeap)));
@@ -216,17 +216,18 @@ void UpdateRenderTargetViews(ComPtr<ID3D12Device2> device, ComPtr<IDXGISwapChain
 {
     UINT rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = descHeap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvDescHandle = descHeap->GetCPUDescriptorHandleForHeapStart();
 
     for (int i = 0; i < numFrames; i++)
     {
         ComPtr<ID3D12Resource> backBuffer;
         AssertIfFailed(swapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)));
 
-        device->CreateRenderTargetView(backBuffer.Get(), nullptr, rtvHandle);
+        // NOTE: Passing nullptr for pDesc will created a default RTV based on the back buffer resource.
+        device->CreateRenderTargetView(backBuffer.Get(), nullptr, rtvDescHandle);
 
         backBuffers[i] = backBuffer;
-        rtvHandle.ptr += rtvDescriptorSize;
+        rtvDescHandle.ptr += rtvDescriptorSize;
     }
 }
 
@@ -237,7 +238,7 @@ ComPtr<ID3D12CommandAllocator> CreateCommandAllocator(ComPtr<ID3D12Device2> devi
     return cmdAllocator;
 }
 
-ComPtr<ID3D12CommandList> CreateCommandList(ComPtr<ID3D12Device2> device, ComPtr<ID3D12CommandAllocator> cmdAllocator, D3D12_COMMAND_LIST_TYPE type)
+ComPtr<ID3D12GraphicsCommandList> CreateCommandList(ComPtr<ID3D12Device2> device, ComPtr<ID3D12CommandAllocator> cmdAllocator, D3D12_COMMAND_LIST_TYPE type)
 {
     ComPtr<ID3D12GraphicsCommandList> cmdList;
     AssertIfFailed(device->CreateCommandList(0, type, cmdAllocator.Get(), nullptr, IID_PPV_ARGS(&cmdList)));
@@ -252,4 +253,38 @@ ComPtr<ID3D12Fence> CreateFence(ComPtr<ID3D12Device2> device)
     return fence;
 }
 
-u64 Signal(ComPtr<ID3D12CommandQueue> cmdQueue, ComPtr<ID3D12Fence> fence, u64 * french)
+u64 Signal(ComPtr<ID3D12CommandQueue> cmdQueue, ComPtr<ID3D12Fence> fence, u64& fenceValue)
+{
+    fenceValue += 1;
+    u64 fenceSignalValue = fenceValue;
+    AssertIfFailed(cmdQueue->Signal(fence.Get(), fenceSignalValue));
+    return fenceSignalValue;
+}
+
+void WaitForFenceValue(ComPtr<ID3D12Fence> fence, u64 fenceValue, HANDLE fenceEvent)
+{
+    if (fence->GetCompletedValue() < fenceValue)
+    {
+        AssertIfFailed(fence->SetEventOnCompletion(fenceValue, fenceEvent));
+        WaitForSingleObject(fenceEvent, INFINITE);
+    }
+}
+
+inline D3D12_RESOURCE_BARRIER CreateTransitionBarrier(ID3D12Resource * pResource, D3D12_RESOURCE_STATES stateBefore, D3D12_RESOURCE_STATES stateAfter)
+{
+    D3D12_RESOURCE_BARRIER barrier = {};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+
+    barrier.Transition.pResource = pResource;
+    barrier.Transition.StateBefore = stateBefore;
+    barrier.Transition.StateAfter = stateAfter;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    return barrier;
+}
+
+void Flush(ComPtr<ID3D12CommandQueue> cmdQueue, ComPtr<ID3D12Fence> fence,  u64& fenceValue, HANDLE fenceEvent)
+{
+    u64 fenceSignalValue = Signal(cmdQueue, fence, fenceValue);
+    WaitForFenceValue(fence, fenceSignalValue, fenceEvent);
+}
