@@ -200,13 +200,14 @@ ComPtr<IDXGISwapChain4> CreateSwapChain(HWND hWnd, ComPtr<ID3D12CommandQueue> cm
     return swapChain4;
 }
 
-ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(ComPtr<ID3D12Device> device, D3D12_DESCRIPTOR_HEAP_TYPE type, u32 descriptors)
+ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(ComPtr<ID3D12Device> device, D3D12_DESCRIPTOR_HEAP_TYPE type, u32 numDescriptors)
 {
     ComPtr<ID3D12DescriptorHeap> descriptorHeap;
 
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.NumDescriptors = descriptors; // Set the number of descriptors the heap will contain.
+    desc.NumDescriptors = numDescriptors;
     desc.Type = type;
+    desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 
     AssertIfFailed(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&descriptorHeap)));
     return descriptorHeap;
@@ -215,7 +216,6 @@ ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(ComPtr<ID3D12Device> device, D
 void UpdateRenderTargetViews(ComPtr<ID3D12Device2> device, ComPtr<IDXGISwapChain4> swapChain, ComPtr<ID3D12DescriptorHeap> descHeap, ComPtr<ID3D12Resource> * backBuffers, u32 numFrames)
 {
     UINT rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
     D3D12_CPU_DESCRIPTOR_HANDLE rtvDescHandle = descHeap->GetCPUDescriptorHandleForHeapStart();
 
     for (int i = 0; i < numFrames; i++)
@@ -253,10 +253,10 @@ ComPtr<ID3D12Fence> CreateFence(ComPtr<ID3D12Device2> device)
     return fence;
 }
 
-u64 Signal(ComPtr<ID3D12CommandQueue> cmdQueue, ComPtr<ID3D12Fence> fence, u64& fenceValue)
+u64 SignalCommandQueue(ComPtr<ID3D12CommandQueue> cmdQueue, ComPtr<ID3D12Fence> fence, u64 * fenceValue)
 {
-    fenceValue += 1;
-    u64 fenceSignalValue = fenceValue;
+    *fenceValue += 1;
+    u64 fenceSignalValue = *fenceValue; // Signal value that the fence will be set too.
     AssertIfFailed(cmdQueue->Signal(fence.Get(), fenceSignalValue));
     return fenceSignalValue;
 }
@@ -283,8 +283,103 @@ inline D3D12_RESOURCE_BARRIER CreateTransitionBarrier(ID3D12Resource * pResource
     return barrier;
 }
 
-void Flush(ComPtr<ID3D12CommandQueue> cmdQueue, ComPtr<ID3D12Fence> fence,  u64& fenceValue, HANDLE fenceEvent)
+void Flush(ComPtr<ID3D12CommandQueue> cmdQueue, ComPtr<ID3D12Fence> fence,  u64 * fenceValue, HANDLE fenceEvent)
 {
-    u64 fenceSignalValue = Signal(cmdQueue, fence, fenceValue);
+    u64 fenceSignalValue = SignalCommandQueue(cmdQueue, fence, fenceValue);
     WaitForFenceValue(fence, fenceSignalValue, fenceEvent);
+}
+
+HANDLE CreateFenceEventHandle()
+{
+    HANDLE fenceEvent;
+    fenceEvent = CreateEvent(0, FALSE, FALSE, 0);
+    return fenceEvent;
+}
+
+void ExecuteCommandList(ComPtr<ID3D12CommandQueue> cmdQueue, ID3D12GraphicsCommandList * pCMDList)
+{
+    AssertIfFailed(pCMDList->Close());
+    ID3D12CommandList * const cmdLists[] = { pCMDList };
+    cmdQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
+}
+
+void CreateBufferResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDestinationResource, ID3D12Resource ** pIntermediateResource, size_t bufferSize)
+{
+
+    D3D12_HEAP_PROPERTIES uploadHeapProperties = {};
+    uploadHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+    uploadHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    uploadHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    uploadHeapProperties.CreationNodeMask = 1;
+    uploadHeapProperties.VisibleNodeMask = 1;
+
+    D3D12_HEAP_PROPERTIES heapProperties = {};
+    heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    heapProperties.CreationNodeMask = 1;
+    heapProperties.VisibleNodeMask = 1;
+
+    D3D12_RESOURCE_DESC resourceDesc = {};
+    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    resourceDesc.DepthOrArraySize = 1;
+    resourceDesc.Width = bufferSize;
+    resourceDesc.Height = 1;
+    resourceDesc.MipLevels = 1;
+    resourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+    resourceDesc.SampleDesc.Count = 1;
+    resourceDesc.SampleDesc.Quality = 0;
+    resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+
+    AssertIfFailed(
+        device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(pIntermediateResource))
+    );
+    AssertIfFailed(
+        device->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(pDestinationResource))
+    );
+}
+
+void UpdateBufferResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Resource> buffer, RendererState & state, size_t bufferSize, const void * bufferData)
+{
+    void * uploadBufferAddress;
+    D3D12_RANGE uploadRange;
+    uploadRange.Begin = 0;
+    uploadRange.End = bufferSize - 1;
+    HRESULT result = uploadBuffer->Map(0, &uploadRange, &uploadBufferAddress);
+    memcpy(uploadBufferAddress, bufferData, bufferSize);
+    uploadBuffer->Unmap(0, &uploadRange);
+
+    state.cmdList->Reset(state.cmdAllocators[0].Get(), nullptr);
+    state.cmdList->CopyBufferRegion(buffer.Get(), 0, uploadBuffer.Get(), 0, bufferSize);
+    ExecuteCommandList(state.cmdQueue, state.cmdList.Get());
+    SignalCommandQueue(state.cmdQueue, state.fence, &state.fenceValue);
+}
+
+RendererState InitializeRenderer(HWND windowHandle, bool useWARP, bool enableVSync, u32 width, u32 height)
+{
+    RendererState state = {};
+    state.adapter = GetAdapter(useWARP);
+    state.device = CreateDevice(state.adapter);
+    state.tearingSupported = CheckTearingSupported();
+    state.cmdQueue = CreateCommandQueue(state.device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    state.swapChain = CreateSwapChain(windowHandle, state.cmdQueue, width, height, NUM_FRAMES);
+    state.rtvDescHeap = CreateDescriptorHeap(state.device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NUM_FRAMES);
+    state.rtvDescSize = state.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    state.dsvDescHeap = CreateDescriptorHeap(state.device, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1);
+    state.backBufferIndex = state.swapChain->GetCurrentBackBufferIndex();
+
+    for (int i = 0; i < NUM_FRAMES; i++)
+    {
+        state.cmdAllocators[i] = CreateCommandAllocator(state.device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    }
+
+    state.cmdList = CreateCommandList(state.device, state.cmdAllocators[state.backBufferIndex], D3D12_COMMAND_LIST_TYPE_DIRECT);
+    state.fence = CreateFence(state.device);
+    state.fenceEvent = CreateFenceEventHandle();
+    state.vSyncEnabled = enableVSync;
+
+    return state;
 }
