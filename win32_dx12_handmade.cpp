@@ -1,5 +1,6 @@
 #include "includes.h"
 #include "render.cpp"
+#include <climits>
 
 bool USE_WARP = false;
 u32 CLIENT_WIDTH = 1280;
@@ -57,6 +58,47 @@ ColorRGBA GetHSVSpectrumColor(float time, float speed = 1.0f)
 {
     float hue = fmod(time * speed * 60.0f, 360.0f);
     return HSVtoRGBA(hue, 1.0f, 1.0f);
+}
+
+void DEBUG_PlatformFreeFileMemory(void ** memory)
+{
+    if (*memory)
+    {
+        VirtualFree(*memory, 0, MEM_RELEASE);
+        *memory = NULL;
+    }
+}
+
+DEBUG_FileResult DEBUG_PlatformReadEntireFile(const char * filenameASCII)
+{
+    DEBUG_FileResult result = {NULL, 0};
+    HANDLE fileHandle = CreateFileA(filenameASCII, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, NULL, NULL);
+
+    if (fileHandle != INVALID_HANDLE_VALUE)
+    {
+        LARGE_INTEGER fileSize;
+        if (GetFileSizeEx(fileHandle, &fileSize))
+        {
+            result.data = VirtualAlloc(0, fileSize.QuadPart, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+            result.size = fileSize.QuadPart;
+            if (result.data)
+            {
+                if (fileSize.QuadPart <= UINT_MAX) { /* TODO: assert here. */ }
+                DWORD bytesRead = 0;
+                if (ReadFile(fileHandle, result.data, fileSize.QuadPart, &bytesRead, 0) && (fileSize.QuadPart == bytesRead))
+                {
+                    // NOTE: File read successfully.
+                }
+                else
+                {
+                    DEBUG_PlatformFreeFileMemory(&result.data);
+                }
+            }
+        }
+    }
+
+    CloseHandle(fileHandle);
+    return result;
 }
 
 void win32ProcessPendingMessages(HWND windowHandle)
@@ -184,6 +226,35 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
                     0, 0, hInstance, 0);
 
     if (!windowHandle) { return -1; }
+
+    // Shader Compilation
+
+    DEBUG_FileResult vertexShaderSrc = DEBUG_PlatformReadEntireFile("../vertex.hlsl");
+    DEBUG_FileResult pixelShaderSrc = DEBUG_PlatformReadEntireFile("../pixel.hlsl");
+
+    ID3DBlob * vertexShaderBlob = nullptr;
+    ID3DBlob * vertexShaderErrorBlob = nullptr;
+
+    ID3DBlob * pixelShaderBlob = nullptr;
+    ID3DBlob * pixelShaderErrorBlob = nullptr;
+
+    if (FAILED(D3DCompile(vertexShaderSrc.data, vertexShaderSrc.size, "vertex.hlsl", NULL, NULL,"main", "vs_5_1", D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0, &vertexShaderBlob, &vertexShaderErrorBlob)))
+    {
+        if (vertexShaderErrorBlob)
+        {
+            OutputDebugStringA(static_cast<char*>(vertexShaderErrorBlob->GetBufferPointer()));
+        }
+    };
+    if (FAILED(D3DCompile(pixelShaderSrc.data, pixelShaderSrc.size, "pixel.hlsl", NULL, NULL, "main", "vs_5_1", D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0, &pixelShaderBlob, &pixelShaderErrorBlob)))
+    {
+        if (vertexShaderErrorBlob)
+        {
+            OutputDebugStringA(static_cast<char*>(pixelShaderErrorBlob->GetBufferPointer()));
+        }
+    };
+
+    D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
+    D3D12_SHADER_BYTECODE pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
     //                          DirectX12
     EnableDebugLayer();
 
@@ -197,7 +268,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     ComPtr<ID3D12Resource> vertexBuffer;
     ComPtr<ID3D12Resource> vertexUploadBuffer;
-    D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
+    D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
 
     ComPtr<ID3D12Resource> indexBuffer;
     D3D12_INDEX_BUFFER_VIEW indexBufferView;
@@ -214,7 +285,45 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ComPtr<ID3D12RootSignature> rootSigature;
 
     // Pipeline state object
+    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+            { "Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "Color"   , 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
+    };
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = {};
+
+    pipelineStateDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+    pipelineStateDesc.InputLayout.pInputElementDescs = inputElementDescs;
+    pipelineStateDesc.InputLayout.NumElements = 2;
+
+    pipelineStateDesc.VS = vertexShaderBytecode;
+    pipelineStateDesc.PS = pixelShaderBytecode;
+
+    pipelineStateDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    pipelineStateDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // TODO: set this to back.
+    pipelineStateDesc.RasterizerState.FrontCounterClockwise = FALSE;
+    pipelineStateDesc.RasterizerState.DepthBias = 0;
+    pipelineStateDesc.RasterizerState.DepthBiasClamp = 0.0f;
+    pipelineStateDesc.RasterizerState.DepthClipEnable = FALSE;
+    pipelineStateDesc.RasterizerState.MultisampleEnable = FALSE;
+    pipelineStateDesc.RasterizerState.AntialiasedLineEnable = FALSE;
+    pipelineStateDesc.RasterizerState.ForcedSampleCount = 0;
+    pipelineStateDesc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+    pipelineStateDesc.StreamOutput.NumEntries = 0;
+    pipelineStateDesc.StreamOutput.NumStrides = 0;
+    pipelineStateDesc.StreamOutput.pBufferStrides = nullptr;
+    pipelineStateDesc.StreamOutput.pSODeclaration = nullptr;
+    pipelineStateDesc.StreamOutput.RasterizedStream = 0;
+
+    pipelineStateDesc.NumRenderTargets = 1;
+    //pipelineStateDesc.RTVFormats = 
+
     ComPtr<ID3D12PipelineState> pipelineState;
+
+    // Input Assembler
+    vertexBufferView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
+    vertexBufferView.SizeInBytes = sizeof(vertices);
+    vertexBufferView.StrideInBytes = sizeof(vertices) / sizeof(VertexPosColor);
 
     D3D12_VIEWPORT viewport;
     D3D12_RECT scissorRect;
@@ -253,6 +362,11 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         clearColor[2] = color.b;
 
         BeginFrame(RENDERER_STATE, clearColor);
+
+        // RENDERER_STATE.cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);
+        // RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        // RENDERER_STATE.cmdList->DrawInstanced(_countof(vertices), 1, 0, 0);
+
         EndFrame(RENDERER_STATE);
         // Profiling
         LARGE_INTEGER endCounter;

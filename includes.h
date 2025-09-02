@@ -28,7 +28,7 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-//#define _DEBUG
+#define _DEBUG
 
 const static UINT NUM_FRAMES = 2;
 typedef struct {
@@ -66,5 +66,10 @@ typedef struct {
     vec3 position;
     vec3 color;
 } VertexPosColor;
+
+typedef struct {
+    void * data;
+    u64 size;
+} DEBUG_FileResult;
 
 #endif // INCLUDES_H

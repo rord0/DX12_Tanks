@@ -3,6 +3,7 @@
         "xstring": "cpp",
         "cstdio": "cpp",
         "algorithm": "cpp",
-        "xmemory": "cpp"
+        "xmemory": "cpp",
+        "climits": "cpp"
     }
 }
