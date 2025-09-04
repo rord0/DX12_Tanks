@@ -333,7 +333,6 @@ void CreateBufferResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDesti
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-
     AssertIfFailed(
         device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(pIntermediateResource))
     );
@@ -402,13 +401,15 @@ void UpdateBufferResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Reso
     uploadRange.Begin = 0;
     uploadRange.End = bufferSize - 1;
     HRESULT result = uploadBuffer->Map(0, &uploadRange, &uploadBufferAddress);
+    AssertIfFailed(result);
     memcpy(uploadBufferAddress, bufferData, bufferSize);
     uploadBuffer->Unmap(0, &uploadRange);
 
     state.cmdList->Reset(state.cmdAllocators[0].Get(), nullptr);
     state.cmdList->CopyBufferRegion(buffer.Get(), 0, uploadBuffer.Get(), 0, bufferSize);
     ExecuteCommandList(state.cmdQueue, state.cmdList.Get());
-    SignalCommandQueue(state.cmdQueue, state.fence, &state.fenceValue);
+    int fenceValue = SignalCommandQueue(state.cmdQueue, state.fence, &state.fenceValue);
+    WaitForFenceValue(state.fence, fenceValue, state.fenceEvent);
 }
 
 RendererState InitializeRenderer(HWND windowHandle, bool useWARP, bool enableVSync, u32 width, u32 height)
@@ -423,6 +424,7 @@ RendererState InitializeRenderer(HWND windowHandle, bool useWARP, bool enableVSy
     state.rtvDescSize = state.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     state.dsvDescHeap = CreateDescriptorHeap(state.device, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1);
     state.backBufferIndex = state.swapChain->GetCurrentBackBufferIndex();
+
     state.viewport.TopLeftX = 0;
     state.viewport.TopLeftY = 0;
     state.viewport.Width = width;

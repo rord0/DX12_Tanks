@@ -269,16 +269,16 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     //                          DirectX12
     EnableDebugLayer();
 
-    VertexPosColor vertices[3] = {{{-0.5, -0.5, 0.0}, {1.0, 0.0, 0.0}},
+    VertexPosColor svertices[3] = {{{-0.5, -0.5, 0.0}, {1.0, 0.0, 0.0}},
                                   {{0.0, 0.5, 0.0}, {0.0, 1.0, 0.0}},
                                   {{0.5, -0.5, 0.0}, {0.0, 0.0, 1.0}}};
     
-    VertexPosColor quadVertices[4] = {{{-0.5,  0.5, 0.0},  {1.0, 0.0, 0.0}},    // Top Left     (red)
-                                      {{ 0.5,  0.5, 0.0},  {0.0, 1.0, 0.0}},    // Top Right    (green)
-                                      {{-0.5, -0.5, 0.0},  {0.0, 0.0, 1.0}},    // Bottom Right (blue)
-                                      {{ 0.5, -0.5, 0.0},  {1.0, 1.0, 0.0}}};   // Bottom Left  (yellow)
+    VertexPosColor quadVertices[4] = {{{-0.5,  0.5, 0.0},  {0.0, 1.0, 0.0}},    // Top Left     (red)
+                                      {{ 0.5,  0.5, 0.0},  {1.0, 0.0, 0.0}},    // Top Right    (yellow)
+                                      {{-0.5, -0.5, 0.0},  {0.0, 0.0, 1.0}},    // Bottom Right (green)
+                                      {{ 0.5, -0.5, 0.0},  {1.0, 1.0, 0.0}}};   // Bottom Left  (blue)
 
-    WORD quadIndices[6] = {0, 1, 2, 1, 3, 2};
+    u16 quadIndices[6] = {0, 1, 2, 1, 3, 2};
 
     RENDERER_STATE = InitializeRenderer(windowHandle, USE_WARP, false, CLIENT_WIDTH, CLIENT_HEIGHT);
     UpdateRenderTargetViews(RENDERER_STATE.device, RENDERER_STATE.swapChain, RENDERER_STATE.rtvDescHeap, RENDERER_STATE.backBuffers, NUM_FRAMES);
@@ -288,14 +288,22 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
 
     ComPtr<ID3D12Resource> indexBuffer;
-    D3D12_INDEX_BUFFER_VIEW indexBufferView;
+    ComPtr<ID3D12Resource> indexUploadBuffer;
+    D3D12_INDEX_BUFFER_VIEW indexBufferView = {};
 
-    CreateBufferResource(RENDERER_STATE.device, &vertexBuffer, &vertexUploadBuffer, sizeof(VertexPosColor) * 3);
+    CreateBufferResource(RENDERER_STATE.device, &vertexBuffer, &vertexUploadBuffer, sizeof(quadVertices));
+    CreateBufferResource(RENDERER_STATE.device, &indexBuffer, &indexUploadBuffer, sizeof(quadIndices));
+
     vertexBuffer->SetName(L"Vertex Buffer");
     vertexUploadBuffer->SetName(L"Vertex Upload Buffer");
-    UpdateBufferResource(vertexUploadBuffer, vertexBuffer, RENDERER_STATE, sizeof(VertexPosColor) * 3, &vertices);
+    
+    indexBuffer->SetName(L"Index Buffer");
+    indexUploadBuffer->SetName(L"Index Upload Buffer");
 
-    ComPtr<ID3D12Resource> depthBuffer;
+    UpdateBufferResource(vertexUploadBuffer, vertexBuffer, RENDERER_STATE, sizeof(quadVertices), &quadVertices);
+    UpdateBufferResource(indexUploadBuffer, indexBuffer, RENDERER_STATE, sizeof(quadIndices), &quadIndices);
+
+    ComPtr<ID3D12Resource> depthBuffer;       // Depth Buffer
     ComPtr<ID3D12DescriptorHeap> dsvHeapDesc; // Depth Stencil View Heap Desciptor
 
     // Root Signature
@@ -363,9 +371,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     // Input Assembler
     vertexBufferView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
-    vertexBufferView.SizeInBytes = sizeof(vertices);
+    vertexBufferView.SizeInBytes = sizeof(quadVertices);
     vertexBufferView.StrideInBytes = sizeof(VertexPosColor);
 
+    indexBufferView.BufferLocation = indexBuffer->GetGPUVirtualAddress();
+    indexBufferView.SizeInBytes = sizeof(quadIndices);
+    indexBufferView.Format = DXGI_FORMAT_R16_UINT; 
 
     float modelMatirx[4][4];
     float viewMatrix[4][4];
@@ -385,7 +396,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     LARGE_INTEGER lastCounter;
     // ----------------------------
 
-    float clearColor[4] = {0.4f, 0.6f, 0.9f, 1.0f};
+    float clearColor[4] = {0.2f, 0.2f, 0.3f, 1.0f};
 
     double time = 0.0f;
     RUNNING = true;
@@ -408,7 +419,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         RENDERER_STATE.cmdList->RSSetViewports(1, &RENDERER_STATE.viewport);
         RENDERER_STATE.cmdList->RSSetScissorRects(1, &RENDERER_STATE.scissorRect);
         RENDERER_STATE.cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);
-        RENDERER_STATE.cmdList->DrawInstanced(3, 1, 0, 0);
+        RENDERER_STATE.cmdList->IASetIndexBuffer(&indexBufferView);
+        RENDERER_STATE.cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
         EndFrame(RENDERER_STATE);
         // Profiling
