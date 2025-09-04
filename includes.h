@@ -28,7 +28,7 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-#define _DEBUG
+//#define _DEBUG
 
 const static UINT NUM_FRAMES = 2;
 typedef struct {
@@ -48,6 +48,9 @@ typedef struct {
     u64 fenceValues[NUM_FRAMES];
     HANDLE fenceEvent;
     UINT backBufferIndex;
+    // Viewport
+    D3D12_RECT scissorRect;
+    D3D12_VIEWPORT viewport;
     bool tearingSupported;
     bool vSyncEnabled;
 } RendererState;

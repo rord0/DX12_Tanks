@@ -342,6 +342,59 @@ void CreateBufferResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDesti
     );
 }
 
+ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
+{
+    ComPtr<ID3D12RootSignature> rootSignature;
+
+    // Check for highest support root signature version.
+    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
+    featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+    if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+    {
+        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+    }
+
+    D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS|
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+
+    D3D12_ROOT_PARAMETER1 rootParameters[1] = {};
+
+    D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionRootSignatureDesc = {};
+    
+    if (featureData.HighestVersion == D3D_ROOT_SIGNATURE_VERSION_1_1)
+    {
+        versionRootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
+        versionRootSignatureDesc.Desc_1_1.NumParameters = 0;
+        versionRootSignatureDesc.Desc_1_1.NumStaticSamplers = 0;
+        versionRootSignatureDesc.Desc_1_1.pParameters = nullptr;
+        versionRootSignatureDesc.Desc_1_1.pStaticSamplers = nullptr;
+    }
+    else
+    {
+        versionRootSignatureDesc.Desc_1_0.Flags = rootSignatureFlags;
+        versionRootSignatureDesc.Desc_1_0.NumParameters = 0;
+        versionRootSignatureDesc.Desc_1_0.NumStaticSamplers = 0;
+        versionRootSignatureDesc.Desc_1_0.pParameters = nullptr;
+        versionRootSignatureDesc.Desc_1_0.pStaticSamplers = nullptr;
+    }
+    versionRootSignatureDesc.Version = featureData.HighestVersion;
+
+    ID3DBlob * rootSignatureBlob = nullptr;
+    ID3DBlob * rootSignatureErrorBlob = nullptr;
+
+    AssertIfFailed(D3D12SerializeVersionedRootSignature(&versionRootSignatureDesc, &rootSignatureBlob, &rootSignatureErrorBlob));
+    AssertIfFailed(device->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(), rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature)));
+
+    rootSignatureBlob->Release();
+    if (rootSignatureErrorBlob) rootSignatureErrorBlob->Release();
+
+    return rootSignature;
+}
+
 void UpdateBufferResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Resource> buffer, RendererState & state, size_t bufferSize, const void * bufferData)
 {
     void * uploadBufferAddress;
@@ -370,6 +423,16 @@ RendererState InitializeRenderer(HWND windowHandle, bool useWARP, bool enableVSy
     state.rtvDescSize = state.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     state.dsvDescHeap = CreateDescriptorHeap(state.device, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1);
     state.backBufferIndex = state.swapChain->GetCurrentBackBufferIndex();
+    state.viewport.TopLeftX = 0;
+    state.viewport.TopLeftY = 0;
+    state.viewport.Width = width;
+    state.viewport.Height = height;
+    state.viewport.MaxDepth = 0.0f;
+    state.viewport.MinDepth = 1.0f;
+    state.scissorRect.left = 0;
+    state.scissorRect.top = 0;
+    state.scissorRect.right = width;
+    state.scissorRect.bottom = height;
 
     for (int i = 0; i < NUM_FRAMES; i++)
     {

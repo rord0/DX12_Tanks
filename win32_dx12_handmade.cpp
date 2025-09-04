@@ -3,8 +3,8 @@
 #include <climits>
 
 bool USE_WARP = false;
-u32 CLIENT_WIDTH = 1280;
-u32 CLIENT_HEIGHT = 720;
+u32 CLIENT_WIDTH = 800;
+u32 CLIENT_HEIGHT = 600;
 
 bool RUNNING = false;
 RendererState RENDERER_STATE = {};
@@ -26,6 +26,16 @@ void Resize(u32 width, u32 height, RendererState & state)
         AssertIfFailed(state.swapChain->GetDesc(&swapChainDesc));
         AssertIfFailed(state.swapChain->ResizeBuffers(NUM_FRAMES, CLIENT_WIDTH, CLIENT_HEIGHT, swapChainDesc.BufferDesc.Format, swapChainDesc.Flags));
 
+        state.viewport.TopLeftX = 0;
+        state.viewport.TopLeftY = 0;
+        state.viewport.Width = CLIENT_WIDTH;
+        state.viewport.Height = CLIENT_HEIGHT;
+        state.viewport.MaxDepth = D3D12_MAX_DEPTH;
+        state.viewport.MinDepth = D3D12_MIN_DEPTH;
+        state.scissorRect.left = 0;
+        state.scissorRect.top = 0;
+        state.scissorRect.right = CLIENT_WIDTH;
+        state.scissorRect.bottom = CLIENT_HEIGHT;
         state.backBufferIndex = state.swapChain->GetCurrentBackBufferIndex();
 
         UpdateRenderTargetViews(state.device, state.swapChain, state.rtvDescHeap, state.backBuffers, NUM_FRAMES);
@@ -169,6 +179,7 @@ void BeginFrame(RendererState& state, float clearColor[4])
     // Clear Render Target
     D3D12_CPU_DESCRIPTOR_HANDLE rtvDescHandle = state.rtvDescHeap->GetCPUDescriptorHandleForHeapStart();
     rtvDescHandle.ptr += (state.backBufferIndex * state.rtvDescSize);
+    state.cmdList->OMSetRenderTargets(1, &rtvDescHandle, FALSE, 0);
     state.cmdList->ClearRenderTargetView(rtvDescHandle, clearColor, 0, nullptr);
     // Clear Depth Buffer
 }
@@ -245,9 +256,9 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             OutputDebugStringA(static_cast<char*>(vertexShaderErrorBlob->GetBufferPointer()));
         }
     };
-    if (FAILED(D3DCompile(pixelShaderSrc.data, pixelShaderSrc.size, "pixel.hlsl", NULL, NULL, "main", "vs_5_1", D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0, &pixelShaderBlob, &pixelShaderErrorBlob)))
+    if (FAILED(D3DCompile(pixelShaderSrc.data, pixelShaderSrc.size, "pixel.hlsl", NULL, NULL, "main", "ps_5_1", D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0, &pixelShaderBlob, &pixelShaderErrorBlob)))
     {
-        if (vertexShaderErrorBlob)
+        if (pixelShaderErrorBlob)
         {
             OutputDebugStringA(static_cast<char*>(pixelShaderErrorBlob->GetBufferPointer()));
         }
@@ -258,10 +269,16 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     //                          DirectX12
     EnableDebugLayer();
 
-    VertexPosColor vertices[3] = {{{-0.25, -0.25, 0.0}, {1.0, 0.0, 0.0}},
-                                  {{0.25, -0.25, 0.0}, {0.0, 1.0, 0.0}},
-                                  {{0.0, 0.25, 0.0}, {0.0, 0.0, 1.0}}};
-    WORD indices[3] = {0,1,2};
+    VertexPosColor vertices[3] = {{{-0.5, -0.5, 0.0}, {1.0, 0.0, 0.0}},
+                                  {{0.0, 0.5, 0.0}, {0.0, 1.0, 0.0}},
+                                  {{0.5, -0.5, 0.0}, {0.0, 0.0, 1.0}}};
+    
+    VertexPosColor quadVertices[4] = {{{-0.5,  0.5, 0.0},  {1.0, 0.0, 0.0}},    // Top Left     (red)
+                                      {{ 0.5,  0.5, 0.0},  {0.0, 1.0, 0.0}},    // Top Right    (green)
+                                      {{-0.5, -0.5, 0.0},  {0.0, 0.0, 1.0}},    // Bottom Right (blue)
+                                      {{ 0.5, -0.5, 0.0},  {1.0, 1.0, 0.0}}};   // Bottom Left  (yellow)
+
+    WORD quadIndices[6] = {0, 1, 2, 1, 3, 2};
 
     RENDERER_STATE = InitializeRenderer(windowHandle, USE_WARP, false, CLIENT_WIDTH, CLIENT_HEIGHT);
     UpdateRenderTargetViews(RENDERER_STATE.device, RENDERER_STATE.swapChain, RENDERER_STATE.rtvDescHeap, RENDERER_STATE.backBuffers, NUM_FRAMES);
@@ -282,7 +299,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ComPtr<ID3D12DescriptorHeap> dsvHeapDesc; // Depth Stencil View Heap Desciptor
 
     // Root Signature
-    ComPtr<ID3D12RootSignature> rootSigature;
+    ComPtr<ID3D12RootSignature> rootSignature = CreateRootSignature(RENDERER_STATE.device);
+
 
     // Pipeline state object
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
@@ -290,7 +308,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             { "Color"   , 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
     };
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = {};
-
+  
+    pipelineStateDesc.pRootSignature = rootSignature.Get();
     pipelineStateDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
     pipelineStateDesc.InputLayout.pInputElementDescs = inputElementDescs;
     pipelineStateDesc.InputLayout.NumElements = 2;
@@ -298,6 +317,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     pipelineStateDesc.VS = vertexShaderBytecode;
     pipelineStateDesc.PS = pixelShaderBytecode;
 
+    pipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pipelineStateDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     pipelineStateDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // TODO: set this to back.
     pipelineStateDesc.RasterizerState.FrontCounterClockwise = FALSE;
@@ -316,17 +336,36 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     pipelineStateDesc.StreamOutput.RasterizedStream = 0;
 
     pipelineStateDesc.NumRenderTargets = 1;
-    //pipelineStateDesc.RTVFormats = 
+    pipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    pipelineStateDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+
+    pipelineStateDesc.BlendState.AlphaToCoverageEnable = FALSE;
+    pipelineStateDesc.BlendState.IndependentBlendEnable = FALSE;
+    pipelineStateDesc.BlendState.RenderTarget[0].BlendEnable = FALSE;
+    pipelineStateDesc.BlendState.RenderTarget[0].LogicOpEnable = FALSE;
+    pipelineStateDesc.BlendState.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+    pipelineStateDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+    pipelineStateDesc.DepthStencilState.DepthEnable = FALSE;
+    pipelineStateDesc.DepthStencilState.StencilEnable = FALSE;
+    pipelineStateDesc.SampleMask = 0xFFFFFFFF;
+    pipelineStateDesc.SampleDesc.Count = 1;
+    pipelineStateDesc.SampleDesc.Quality = 0; 
+
+    pipelineStateDesc.NodeMask = 0;
+    pipelineStateDesc.CachedPSO.CachedBlobSizeInBytes = 0;
+    pipelineStateDesc.CachedPSO.pCachedBlob = nullptr;
+    pipelineStateDesc.NumRenderTargets = 1;
+    pipelineStateDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
     ComPtr<ID3D12PipelineState> pipelineState;
+    AssertIfFailed(RENDERER_STATE.device->CreateGraphicsPipelineState(&pipelineStateDesc, IID_PPV_ARGS(&pipelineState)));
 
     // Input Assembler
     vertexBufferView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
     vertexBufferView.SizeInBytes = sizeof(vertices);
-    vertexBufferView.StrideInBytes = sizeof(vertices) / sizeof(VertexPosColor);
+    vertexBufferView.StrideInBytes = sizeof(VertexPosColor);
 
-    D3D12_VIEWPORT viewport;
-    D3D12_RECT scissorRect;
 
     float modelMatirx[4][4];
     float viewMatrix[4][4];
@@ -357,15 +396,19 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         win32ProcessPendingMessages(windowHandle);
 
         ColorRGBA color = GetHSVSpectrumColor(time);
-        clearColor[0]= color.r;
-        clearColor[1] = color.g;
-        clearColor[2] = color.b;
+        // clearColor[0]= color.r;
+        // clearColor[1] = color.g;
+        // clearColor[2] = color.b;
 
         BeginFrame(RENDERER_STATE, clearColor);
 
-        // RENDERER_STATE.cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);
-        // RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        // RENDERER_STATE.cmdList->DrawInstanced(_countof(vertices), 1, 0, 0);
+        RENDERER_STATE.cmdList->SetPipelineState(pipelineState.Get());
+        RENDERER_STATE.cmdList->SetGraphicsRootSignature(rootSignature.Get());
+        RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        RENDERER_STATE.cmdList->RSSetViewports(1, &RENDERER_STATE.viewport);
+        RENDERER_STATE.cmdList->RSSetScissorRects(1, &RENDERER_STATE.scissorRect);
+        RENDERER_STATE.cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);
+        RENDERER_STATE.cmdList->DrawInstanced(3, 1, 0, 0);
 
         EndFrame(RENDERER_STATE);
         // Profiling
