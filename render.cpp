@@ -360,27 +360,42 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS|
         D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 
-    D3D12_ROOT_PARAMETER1 rootParameters[1] = {};
 
     D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionRootSignatureDesc = {};
-    
-    if (featureData.HighestVersion == D3D_ROOT_SIGNATURE_VERSION_1_1)
+
+    versionRootSignatureDesc.Version = featureData.HighestVersion;
+
+    D3D12_ROOT_PARAMETER1 rootParameters1_1[1] = {};
+    D3D12_ROOT_PARAMETER rootParameters1_0[1] = {};
+
+    if (featureData.HighestVersion >= D3D_ROOT_SIGNATURE_VERSION_1_1)
     {
         versionRootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
-        versionRootSignatureDesc.Desc_1_1.NumParameters = 0;
+        versionRootSignatureDesc.Desc_1_1.NumParameters = 1;
+        versionRootSignatureDesc.Desc_1_1.pParameters = rootParameters1_1;
         versionRootSignatureDesc.Desc_1_1.NumStaticSamplers = 0;
-        versionRootSignatureDesc.Desc_1_1.pParameters = nullptr;
         versionRootSignatureDesc.Desc_1_1.pStaticSamplers = nullptr;
+
+        rootParameters1_1[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        rootParameters1_1[0].Constants.Num32BitValues = 16;
+        rootParameters1_1[0].Constants.RegisterSpace = 0;
+        rootParameters1_1[0].Constants.ShaderRegister = 0;
+        rootParameters1_1[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
     }
     else
     {
         versionRootSignatureDesc.Desc_1_0.Flags = rootSignatureFlags;
-        versionRootSignatureDesc.Desc_1_0.NumParameters = 0;
+        versionRootSignatureDesc.Desc_1_0.NumParameters = 1;
         versionRootSignatureDesc.Desc_1_0.NumStaticSamplers = 0;
-        versionRootSignatureDesc.Desc_1_0.pParameters = nullptr;
+        versionRootSignatureDesc.Desc_1_0.pParameters = rootParameters1_0;
         versionRootSignatureDesc.Desc_1_0.pStaticSamplers = nullptr;
+
+        rootParameters1_0[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        rootParameters1_0[0].Constants.Num32BitValues = 16;
+        rootParameters1_0[0].Constants.RegisterSpace = 0;
+        rootParameters1_0[0].Constants.ShaderRegister = 0;
+        rootParameters1_0[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
     }
-    versionRootSignatureDesc.Version = featureData.HighestVersion;
 
     ID3DBlob * rootSignatureBlob = nullptr;
     ID3DBlob * rootSignatureErrorBlob = nullptr;

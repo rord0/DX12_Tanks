@@ -266,18 +266,16 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
     D3D12_SHADER_BYTECODE pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
+
     //                          DirectX12
     EnableDebugLayer();
 
-    VertexPosColor svertices[3] = {{{-0.5, -0.5, 0.0}, {1.0, 0.0, 0.0}},
-                                  {{0.0, 0.5, 0.0}, {0.0, 1.0, 0.0}},
-                                  {{0.5, -0.5, 0.0}, {0.0, 0.0, 1.0}}};
-    
-    VertexPosColor quadVertices[4] = {{{-0.5,  0.5, 0.0},  {0.0, 1.0, 0.0}},    // Top Left     (red)
-                                      {{ 0.5,  0.5, 0.0},  {1.0, 0.0, 0.0}},    // Top Right    (yellow)
-                                      {{-0.5, -0.5, 0.0},  {0.0, 0.0, 1.0}},    // Bottom Right (green)
-                                      {{ 0.5, -0.5, 0.0},  {1.0, 1.0, 0.0}}};   // Bottom Left  (blue)
+    VertexPosUV quadVertices[4] = {{{-0.25,  0.25, 0.0}, {0.0, 0.0}},    // Top Left     (blk)
+                                   {{ 0.25,  0.25, 0.0}, {1.0, 0.0}},    // Top Right    (red)
+                                   {{-0.25, -0.25, 0.0}, {0.0, 1.0}},    // Bottom Left  (grn)
+                                   {{ 0.25, -0.25, 0.0}, {1.0, 1.0}}};   // Bottom Right (ylw)
 
+    //InstanceData instanceData[2] = {{{}, {}, {}}};
     u16 quadIndices[6] = {0, 1, 2, 1, 3, 2};
 
     RENDERER_STATE = InitializeRenderer(windowHandle, USE_WARP, false, CLIENT_WIDTH, CLIENT_HEIGHT);
@@ -286,6 +284,10 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ComPtr<ID3D12Resource> vertexBuffer;
     ComPtr<ID3D12Resource> vertexUploadBuffer;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
+
+    ComPtr<ID3D12Resource> instanceBuffer;
+    ComPtr<ID3D12Resource> instanceUploadBuffer;
+    D3D12_VERTEX_BUFFER_VIEW instanceBufferView = {};
 
     ComPtr<ID3D12Resource> indexBuffer;
     ComPtr<ID3D12Resource> indexUploadBuffer;
@@ -313,7 +315,9 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     // Pipeline state object
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
             { "Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "Color"   , 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
+            { "UV", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "InstancePosition", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 0},
+            { "InstanceColor",    0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 12, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 0},
     };
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = {};
   
@@ -372,18 +376,20 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     // Input Assembler
     vertexBufferView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
     vertexBufferView.SizeInBytes = sizeof(quadVertices);
-    vertexBufferView.StrideInBytes = sizeof(VertexPosColor);
+    vertexBufferView.StrideInBytes = sizeof(VertexPosUV);
 
     indexBufferView.BufferLocation = indexBuffer->GetGPUVirtualAddress();
     indexBufferView.SizeInBytes = sizeof(quadIndices);
     indexBufferView.Format = DXGI_FORMAT_R16_UINT; 
 
-    float modelMatirx[4][4];
+    //instanceBufferView.BufferLocation = instanceBuffer->GetGPUVirtualAddress();
+    instanceBufferView.SizeInBytes = 1024;
+
+    float modelMatrix[4][4];
     float viewMatrix[4][4];
     float projectionMatrix[4][4];
 
     float cameraFov;
-
 
     bool contentLoaded = false;
     // -----------------------------------
@@ -415,10 +421,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
         RENDERER_STATE.cmdList->SetPipelineState(pipelineState.Get());
         RENDERER_STATE.cmdList->SetGraphicsRootSignature(rootSignature.Get());
+        RENDERER_STATE.cmdList->SetGraphicsRoot32BitConstants(0, 16, &modelMatrix, 0);
         RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         RENDERER_STATE.cmdList->RSSetViewports(1, &RENDERER_STATE.viewport);
         RENDERER_STATE.cmdList->RSSetScissorRects(1, &RENDERER_STATE.scissorRect);
         RENDERER_STATE.cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);
+
         RENDERER_STATE.cmdList->IASetIndexBuffer(&indexBufferView);
         RENDERER_STATE.cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 

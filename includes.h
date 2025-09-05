@@ -65,10 +65,25 @@ typedef union {
     };
 } vec3;
 
+typedef union {
+    float elements[2];
+    struct
+    {
+        union {float x, u; };
+        union {float y, v; };
+    };
+} vec2;
+
 typedef struct {
     vec3 position;
-    vec3 color;
-} VertexPosColor;
+    vec2 UV;
+} VertexPosUV;
+
+typedef struct {
+    vec3 position;
+    vec2 scale;
+    float rotation;
+} InstanceData2D;
 
 typedef struct {
     void * data;
