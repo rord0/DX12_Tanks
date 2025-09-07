@@ -31,10 +31,9 @@ float line2(float2 uv, float2 center, float radius)
 float4 main(PixelShaderInput IN) : SV_TARGET
 {
     float2 uv = IN.UV;
-    float3 color = {0.0f, 0.0f, 0.0f};
     float2 center = {0.5f, 0.5f};
-    color += circle(uv, center, 0.5f) * float3(1.0f, 1.0f, 1.0f);
-    color -= line2(uv, center, 0.1f) * float3(0.0f, 1.0f, 0.0f);
-    float4 pixelColor = {color, 1.0f};
+    float3 color = {0.0f, 0.0f, 0.0f};
+    //color += circle(uv, center, 0.5f) * float3(1.0f, 1.0f, 1.0f);
+    float4 pixelColor = {uv,0.0f, 1.0f};
     return pixelColor;
 }

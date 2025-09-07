@@ -2,12 +2,16 @@
 #include "render.cpp"
 #include <climits>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 bool USE_WARP = false;
 u32 CLIENT_WIDTH = 800;
 u32 CLIENT_HEIGHT = 600;
 
 bool RUNNING = false;
 RendererState RENDERER_STATE = {};
+
 
 void Resize(u32 width, u32 height, RendererState & state)
 {
@@ -242,6 +246,11 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     DEBUG_FileResult vertexShaderSrc = DEBUG_PlatformReadEntireFile("../vertex.hlsl");
     DEBUG_FileResult pixelShaderSrc = DEBUG_PlatformReadEntireFile("../pixel.hlsl");
+    DEBUG_FileResult testPNG = DEBUG_PlatformReadEntireFile("../gdeasy.png");
+    int imgX;
+    int imgY;
+    int numComponents;
+    stbi_uc * testBitmap = stbi_load_from_memory((stbi_uc*)testPNG.data, testPNG.size, &imgX, &imgY, &numComponents, 0);
 
     ID3DBlob * vertexShaderBlob = nullptr;
     ID3DBlob * vertexShaderErrorBlob = nullptr;
@@ -275,7 +284,11 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
                                    {{-0.25, -0.25, 0.0}, {0.0, 1.0}},    // Bottom Left  (grn)
                                    {{ 0.25, -0.25, 0.0}, {1.0, 1.0}}};   // Bottom Right (ylw)
 
-    //InstanceData instanceData[2] = {{{}, {}, {}}};
+    InstanceData2D instanceData[4] = {{{-0.5f, 0.0f, 0.0f}, {1.0f, 1.0f}, 0.0f},
+                                      {{ 0.0f, 0.5f, 0.0f}, {1.0f, 1.0f}, 90.0f},
+                                      {{ 0.0f,-0.5f, 0.0f}, {1.0f, 1.0f}, 180.0f},
+                                      {{ 0.5f, 0.0f, 0.0f}, {1.0f, 1.0f}, 240.0f}};
+
     u16 quadIndices[6] = {0, 1, 2, 1, 3, 2};
 
     RENDERER_STATE = InitializeRenderer(windowHandle, USE_WARP, false, CLIENT_WIDTH, CLIENT_HEIGHT);
@@ -295,6 +308,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     CreateBufferResource(RENDERER_STATE.device, &vertexBuffer, &vertexUploadBuffer, sizeof(quadVertices));
     CreateBufferResource(RENDERER_STATE.device, &indexBuffer, &indexUploadBuffer, sizeof(quadIndices));
+    CreateBufferResource(RENDERER_STATE.device, &instanceBuffer, &instanceUploadBuffer, sizeof(instanceData));
 
     vertexBuffer->SetName(L"Vertex Buffer");
     vertexUploadBuffer->SetName(L"Vertex Upload Buffer");
@@ -302,8 +316,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     indexBuffer->SetName(L"Index Buffer");
     indexUploadBuffer->SetName(L"Index Upload Buffer");
 
+    instanceBuffer->SetName(L"Instance Buffer");
+    instanceUploadBuffer->SetName(L"Instance Upload Buffer");
+
     UpdateBufferResource(vertexUploadBuffer, vertexBuffer, RENDERER_STATE, sizeof(quadVertices), &quadVertices);
     UpdateBufferResource(indexUploadBuffer, indexBuffer, RENDERER_STATE, sizeof(quadIndices), &quadIndices);
+    UpdateBufferResource(instanceUploadBuffer, instanceBuffer, RENDERER_STATE, sizeof(instanceData), &instanceData);
 
     ComPtr<ID3D12Resource> depthBuffer;       // Depth Buffer
     ComPtr<ID3D12DescriptorHeap> dsvHeapDesc; // Depth Stencil View Heap Desciptor
@@ -311,20 +329,20 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     // Root Signature
     ComPtr<ID3D12RootSignature> rootSignature = CreateRootSignature(RENDERER_STATE.device);
 
-
     // Pipeline state object
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-            { "Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "UV", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "InstancePosition", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 0},
-            { "InstanceColor",    0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 12, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 0},
+            { "Position",         0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "UV",               0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "InstancePosition", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceSize",     0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = {};
   
     pipelineStateDesc.pRootSignature = rootSignature.Get();
     pipelineStateDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
     pipelineStateDesc.InputLayout.pInputElementDescs = inputElementDescs;
-    pipelineStateDesc.InputLayout.NumElements = 2;
+    pipelineStateDesc.InputLayout.NumElements = 5;
 
     pipelineStateDesc.VS = vertexShaderBytecode;
     pipelineStateDesc.PS = pixelShaderBytecode;
@@ -382,8 +400,9 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     indexBufferView.SizeInBytes = sizeof(quadIndices);
     indexBufferView.Format = DXGI_FORMAT_R16_UINT; 
 
-    //instanceBufferView.BufferLocation = instanceBuffer->GetGPUVirtualAddress();
-    instanceBufferView.SizeInBytes = 1024;
+    instanceBufferView.BufferLocation = instanceBuffer->GetGPUVirtualAddress();
+    instanceBufferView.SizeInBytes = sizeof(instanceData);
+    instanceBufferView.StrideInBytes = sizeof(InstanceData2D);
 
     float modelMatrix[4][4];
     float viewMatrix[4][4];
@@ -413,22 +432,23 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         win32ProcessPendingMessages(windowHandle);
 
         ColorRGBA color = GetHSVSpectrumColor(time);
-        // clearColor[0]= color.r;
-        // clearColor[1] = color.g;
-        // clearColor[2] = color.b;
 
         BeginFrame(RENDERER_STATE, clearColor);
 
         RENDERER_STATE.cmdList->SetPipelineState(pipelineState.Get());
+
         RENDERER_STATE.cmdList->SetGraphicsRootSignature(rootSignature.Get());
         RENDERER_STATE.cmdList->SetGraphicsRoot32BitConstants(0, 16, &modelMatrix, 0);
+
         RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        RENDERER_STATE.cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);
+        RENDERER_STATE.cmdList->IASetVertexBuffers(1, 1, &instanceBufferView);
+        RENDERER_STATE.cmdList->IASetIndexBuffer(&indexBufferView);
+
         RENDERER_STATE.cmdList->RSSetViewports(1, &RENDERER_STATE.viewport);
         RENDERER_STATE.cmdList->RSSetScissorRects(1, &RENDERER_STATE.scissorRect);
-        RENDERER_STATE.cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);
 
-        RENDERER_STATE.cmdList->IASetIndexBuffer(&indexBufferView);
-        RENDERER_STATE.cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+        RENDERER_STATE.cmdList->DrawIndexedInstanced(6, 4, 0, 0, 0);
 
         EndFrame(RENDERER_STATE);
         // Profiling

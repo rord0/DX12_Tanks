@@ -28,7 +28,7 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-//#define _DEBUG
+#define _DEBUG
 
 const static UINT NUM_FRAMES = 2;
 typedef struct {
@@ -59,9 +59,9 @@ typedef union {
     float elements[3];
     struct
     {
-        union {float x, r; };
-        union {float y, g; };
-        union {float z, b; };
+        union { float x, r; };
+        union { float y, g; };
+        union { float z, b; };
     };
 } vec3;
 
@@ -69,8 +69,8 @@ typedef union {
     float elements[2];
     struct
     {
-        union {float x, u; };
-        union {float y, v; };
+        union { float x, u; };
+        union { float y, v; };
     };
 } vec2;
 
