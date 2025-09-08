@@ -414,22 +414,50 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
 
     versionRootSignatureDesc.Version = featureData.HighestVersion;
 
-    D3D12_ROOT_PARAMETER1 rootParameters1_1[1] = {};
-    D3D12_ROOT_PARAMETER rootParameters1_0[1] = {};
+    D3D12_DESCRIPTOR_RANGE1 descRange1 = {};
+    descRange1.NumDescriptors = 1;
+    descRange1.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descRange1.BaseShaderRegister = 0;
+    descRange1.RegisterSpace = 0;
+    descRange1.OffsetInDescriptorsFromTableStart = 0;
+    descRange1.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC;
+
+    D3D12_STATIC_SAMPLER_DESC staticSamplerDesc = {};
+    staticSamplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    staticSamplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    staticSamplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    staticSamplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    staticSamplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+    staticSamplerDesc.MaxAnisotropy = 0;
+    staticSamplerDesc.MipLODBias = 0;
+    staticSamplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplerDesc.MinLOD = 0.0f;
+    staticSamplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplerDesc.ShaderRegister = 0;
+    staticSamplerDesc.RegisterSpace = 0;
+    staticSamplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    D3D12_ROOT_PARAMETER1 rootParameters1_1[2] = {};
+    D3D12_ROOT_PARAMETER rootParameters1_0[2] = {};
 
     if (featureData.HighestVersion >= D3D_ROOT_SIGNATURE_VERSION_1_1)
     {
         versionRootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
         versionRootSignatureDesc.Desc_1_1.NumParameters = 1;
         versionRootSignatureDesc.Desc_1_1.pParameters = rootParameters1_1;
-        versionRootSignatureDesc.Desc_1_1.NumStaticSamplers = 0;
-        versionRootSignatureDesc.Desc_1_1.pStaticSamplers = nullptr;
+        versionRootSignatureDesc.Desc_1_1.NumStaticSamplers = 1;
+        versionRootSignatureDesc.Desc_1_1.pStaticSamplers = &staticSamplerDesc;
 
         rootParameters1_1[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
         rootParameters1_1[0].Constants.Num32BitValues = 16;
         rootParameters1_1[0].Constants.RegisterSpace = 0;
         rootParameters1_1[0].Constants.ShaderRegister = 0;
         rootParameters1_1[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+
+        rootParameters1_1[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        rootParameters1_1[1].DescriptorTable.NumDescriptorRanges = 1;
+        rootParameters1_1[1].DescriptorTable.pDescriptorRanges = &descRange1;
+        rootParameters1_1[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     }
     else
     {
@@ -449,7 +477,13 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
     ID3DBlob * rootSignatureBlob = nullptr;
     ID3DBlob * rootSignatureErrorBlob = nullptr;
 
-    AssertIfFailed(D3D12SerializeVersionedRootSignature(&versionRootSignatureDesc, &rootSignatureBlob, &rootSignatureErrorBlob));
+    if (FAILED(D3D12SerializeVersionedRootSignature(&versionRootSignatureDesc, &rootSignatureBlob, &rootSignatureErrorBlob)))
+    {
+        if (rootSignatureErrorBlob)
+        {
+            OutputDebugStringA(static_cast<char*>(rootSignatureErrorBlob->GetBufferPointer()));
+        }
+    }
     AssertIfFailed(device->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(), rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature)));
 
     rootSignatureBlob->Release();
