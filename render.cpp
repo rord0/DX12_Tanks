@@ -341,6 +341,55 @@ void CreateBufferResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDesti
     );
 }
 
+void CreateTextureResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDestinationResource, ID3D12Resource ** pIntermediateResource, u64 width, u64 height, size_t bufferSize)
+{
+    D3D12_HEAP_PROPERTIES uploadHeapProperties = {};
+    uploadHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+    uploadHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    uploadHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    uploadHeapProperties.CreationNodeMask = 1;
+    uploadHeapProperties.VisibleNodeMask = 1;
+
+    D3D12_HEAP_PROPERTIES heapProperties = {};
+    heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    heapProperties.CreationNodeMask = 1;
+    heapProperties.VisibleNodeMask = 1;
+
+    D3D12_RESOURCE_DESC resourceDesc = {};
+    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    resourceDesc.Width = width;
+    resourceDesc.Height = height;
+    resourceDesc.DepthOrArraySize = 1;
+    resourceDesc.MipLevels = 1;
+    resourceDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; 
+    resourceDesc.SampleDesc.Count = 1;
+    resourceDesc.SampleDesc.Quality = 0;
+    resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    D3D12_RESOURCE_DESC resourceDescUpload = {};
+    resourceDescUpload.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resourceDescUpload.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    resourceDescUpload.DepthOrArraySize = 1;
+    resourceDescUpload.Width = bufferSize;
+    resourceDescUpload.Height = 1;
+    resourceDescUpload.MipLevels = 1;
+    resourceDescUpload.Format = DXGI_FORMAT_UNKNOWN;
+    resourceDescUpload.SampleDesc.Count = 1;
+    resourceDescUpload.SampleDesc.Quality = 0;
+    resourceDescUpload.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    resourceDescUpload.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    AssertIfFailed(
+        device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &resourceDescUpload, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(pIntermediateResource))
+    );
+    AssertIfFailed(
+        device->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(pDestinationResource))
+    );
+}
+
 ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
 {
     ComPtr<ID3D12RootSignature> rootSignature;
@@ -422,6 +471,54 @@ void UpdateBufferResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Reso
 
     state.cmdList->Reset(state.cmdAllocators[0].Get(), nullptr);
     state.cmdList->CopyBufferRegion(buffer.Get(), 0, uploadBuffer.Get(), 0, bufferSize);
+
+    ExecuteCommandList(state.cmdQueue, state.cmdList.Get());
+    int fenceValue = SignalCommandQueue(state.cmdQueue, state.fence, &state.fenceValue);
+    WaitForFenceValue(state.fence, fenceValue, state.fenceEvent);
+}
+
+void UpdateTextureResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Resource> buffer, RendererState & state, u64 width, u64 height, size_t bufferSize, const void * bufferData)
+{
+    void * uploadBufferAddress;
+    D3D12_RANGE uploadRange;
+    uploadRange.Begin = 0;
+    uploadRange.End = bufferSize - 1;
+    HRESULT result = uploadBuffer->Map(0, &uploadRange, &uploadBufferAddress);
+    AssertIfFailed(result);
+    memcpy(uploadBufferAddress, bufferData, bufferSize);
+    uploadBuffer->Unmap(0, &uploadRange);
+
+    state.cmdList->Reset(state.cmdAllocators[0].Get(), nullptr);
+
+    D3D12_BOX textureSizeBox = {};
+    textureSizeBox.left = 0;
+    textureSizeBox.right = width;
+    textureSizeBox.top = 0;
+    textureSizeBox.bottom = height;
+    textureSizeBox.front = 0;
+    textureSizeBox.back = 1;
+
+    D3D12_SUBRESOURCE_FOOTPRINT footprint;
+    footprint.Width = width;
+    footprint.Height = height;
+    footprint.Depth = 1;
+    footprint.RowPitch = width * 4;
+    footprint.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    D3D12_TEXTURE_COPY_LOCATION textureSrc;
+    textureSrc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    textureSrc.pResource = uploadBuffer.Get();
+    textureSrc.SubresourceIndex = 0;
+    textureSrc.PlacedFootprint.Offset = 0;
+    textureSrc.PlacedFootprint.Footprint = footprint;
+
+    D3D12_TEXTURE_COPY_LOCATION textureDest;
+    textureDest.pResource = buffer.Get();
+    textureDest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    textureDest.SubresourceIndex = 0;
+
+    state.cmdList->CopyTextureRegion(&textureDest, 0, 0, 0, &textureSrc, &textureSizeBox);
+
     ExecuteCommandList(state.cmdQueue, state.cmdList.Get());
     int fenceValue = SignalCommandQueue(state.cmdQueue, state.fence, &state.fenceValue);
     WaitForFenceValue(state.fence, fenceValue, state.fenceEvent);

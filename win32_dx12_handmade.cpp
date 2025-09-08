@@ -233,7 +233,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     HWND windowHandle = CreateWindowEx(0, windowClass.lpszClassName,
                     L"TANKS!",
-                    WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                    WS_OVERLAPPEDWINDOW,
                     windowX,
                     windowY,
                     windowWidth,
@@ -251,6 +251,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     int imgY;
     int numComponents;
     stbi_uc * testBitmap = stbi_load_from_memory((stbi_uc*)testPNG.data, testPNG.size, &imgX, &imgY, &numComponents, 0);
+    size_t bitmapSize = imgX * imgY * numComponents;
 
     ID3DBlob * vertexShaderBlob = nullptr;
     ID3DBlob * vertexShaderErrorBlob = nullptr;
@@ -306,9 +307,15 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ComPtr<ID3D12Resource> indexUploadBuffer;
     D3D12_INDEX_BUFFER_VIEW indexBufferView = {};
 
+    
+    ComPtr<ID3D12Resource> textureBuffer;
+    ComPtr<ID3D12Resource> textureUploadBuffer;
+
     CreateBufferResource(RENDERER_STATE.device, &vertexBuffer, &vertexUploadBuffer, sizeof(quadVertices));
     CreateBufferResource(RENDERER_STATE.device, &indexBuffer, &indexUploadBuffer, sizeof(quadIndices));
     CreateBufferResource(RENDERER_STATE.device, &instanceBuffer, &instanceUploadBuffer, sizeof(instanceData));
+    CreateTextureResource(RENDERER_STATE.device, &textureBuffer, &textureUploadBuffer, imgX, imgY, numComponents * imgX * imgY);
+
 
     vertexBuffer->SetName(L"Vertex Buffer");
     vertexUploadBuffer->SetName(L"Vertex Upload Buffer");
@@ -318,10 +325,13 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     instanceBuffer->SetName(L"Instance Buffer");
     instanceUploadBuffer->SetName(L"Instance Upload Buffer");
+    textureBuffer->SetName(L"Texture Buffer");
+    textureUploadBuffer->SetName(L"Texture Upload Buffer");
 
     UpdateBufferResource(vertexUploadBuffer, vertexBuffer, RENDERER_STATE, sizeof(quadVertices), &quadVertices);
     UpdateBufferResource(indexUploadBuffer, indexBuffer, RENDERER_STATE, sizeof(quadIndices), &quadIndices);
     UpdateBufferResource(instanceUploadBuffer, instanceBuffer, RENDERER_STATE, sizeof(instanceData), &instanceData);
+    UpdateTextureResource(textureUploadBuffer, textureBuffer, RENDERER_STATE, imgX, imgY,bitmapSize, testBitmap);
 
     ComPtr<ID3D12Resource> depthBuffer;       // Depth Buffer
     ComPtr<ID3D12DescriptorHeap> dsvHeapDesc; // Depth Stencil View Heap Desciptor
@@ -425,6 +435,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     double time = 0.0f;
     RUNNING = true;
+    ShowWindow(windowHandle, SW_SHOW);
     while (RUNNING)
     {
         QueryPerformanceCounter(&lastCounter);
