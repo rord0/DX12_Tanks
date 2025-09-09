@@ -381,11 +381,20 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     pipelineStateDesc.BlendState.AlphaToCoverageEnable = FALSE;
     pipelineStateDesc.BlendState.IndependentBlendEnable = FALSE;
-    pipelineStateDesc.BlendState.RenderTarget[0].BlendEnable = FALSE;
+
+    pipelineStateDesc.BlendState.RenderTarget[0].BlendEnable = TRUE;
     pipelineStateDesc.BlendState.RenderTarget[0].LogicOpEnable = FALSE;
     pipelineStateDesc.BlendState.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
-    pipelineStateDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
+    pipelineStateDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+    pipelineStateDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+    pipelineStateDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+
+    pipelineStateDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    pipelineStateDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+    pipelineStateDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
+
+    pipelineStateDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     pipelineStateDesc.DepthStencilState.DepthEnable = FALSE;
     pipelineStateDesc.DepthStencilState.StencilEnable = FALSE;
     pipelineStateDesc.SampleMask = 0xFFFFFFFF;
@@ -413,6 +422,27 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     instanceBufferView.BufferLocation = instanceBuffer->GetGPUVirtualAddress();
     instanceBufferView.SizeInBytes = sizeof(instanceData);
     instanceBufferView.StrideInBytes = sizeof(InstanceData2D);
+
+    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+    srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    srvHeapDesc.NodeMask = 0;
+    srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    srvHeapDesc.NumDescriptors = 8;
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Texture2D.MipLevels = 1;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Texture2D.PlaneSlice = 0;
+    srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+
+
+    ComPtr<ID3D12DescriptorHeap> srvHeap;
+    AssertIfFailed(RENDERER_STATE.device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap)));
+
+    RENDERER_STATE.device->CreateShaderResourceView(textureBuffer.Get(), &srvDesc, srvHeap->GetCPUDescriptorHandleForHeapStart());
 
     float modelMatrix[4][4];
     float viewMatrix[4][4];
@@ -447,9 +477,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         BeginFrame(RENDERER_STATE, clearColor);
 
         RENDERER_STATE.cmdList->SetPipelineState(pipelineState.Get());
+        ID3D12DescriptorHeap * heaps[] = { srvHeap.Get() };
+        RENDERER_STATE.cmdList->SetDescriptorHeaps(1, heaps);
 
         RENDERER_STATE.cmdList->SetGraphicsRootSignature(rootSignature.Get());
         RENDERER_STATE.cmdList->SetGraphicsRoot32BitConstants(0, 16, &modelMatrix, 0);
+        RENDERER_STATE.cmdList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
 
         RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         RENDERER_STATE.cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);

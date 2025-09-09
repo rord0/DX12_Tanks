@@ -406,8 +406,7 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS|
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 
     D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionRootSignatureDesc = {};
@@ -423,7 +422,7 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
     descRange1.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC;
 
     D3D12_STATIC_SAMPLER_DESC staticSamplerDesc = {};
-    staticSamplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    staticSamplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
     staticSamplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
     staticSamplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
@@ -443,7 +442,7 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
     if (featureData.HighestVersion >= D3D_ROOT_SIGNATURE_VERSION_1_1)
     {
         versionRootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
-        versionRootSignatureDesc.Desc_1_1.NumParameters = 1;
+        versionRootSignatureDesc.Desc_1_1.NumParameters =2;
         versionRootSignatureDesc.Desc_1_1.pParameters = rootParameters1_1;
         versionRootSignatureDesc.Desc_1_1.NumStaticSamplers = 1;
         versionRootSignatureDesc.Desc_1_1.pStaticSamplers = &staticSamplerDesc;
@@ -552,6 +551,9 @@ void UpdateTextureResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Res
     textureDest.SubresourceIndex = 0;
 
     state.cmdList->CopyTextureRegion(&textureDest, 0, 0, 0, &textureSrc, &textureSizeBox);
+
+    D3D12_RESOURCE_BARRIER b = CreateTransitionBarrier(buffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    state.cmdList->ResourceBarrier(1, &b);
 
     ExecuteCommandList(state.cmdQueue, state.cmdList.Get());
     int fenceValue = SignalCommandQueue(state.cmdQueue, state.fence, &state.fenceValue);

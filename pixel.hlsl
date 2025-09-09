@@ -42,6 +42,6 @@ float4 main(PixelShaderInput IN) : SV_TARGET
     float3 color = {0.0f, 0.0f, 0.0f};
     // color += circle(uv, center, 0.5f) * float3(1.0f, 1.0f, 1.0f);
 
-    float4 pixelColor = {texel.rgb, 1.0f};
+    float4 pixelColor = {texel.rgba};
     return pixelColor;
 }
