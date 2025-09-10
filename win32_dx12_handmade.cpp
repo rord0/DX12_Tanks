@@ -311,10 +311,13 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ComPtr<ID3D12Resource> textureBuffer;
     ComPtr<ID3D12Resource> textureUploadBuffer;
 
+    ComPtr<ID3D12Resource> uploadBuffer;
+
     CreateBufferResource(RENDERER_STATE.device, &vertexBuffer, &vertexUploadBuffer, sizeof(quadVertices));
     CreateBufferResource(RENDERER_STATE.device, &indexBuffer, &indexUploadBuffer, sizeof(quadIndices));
     CreateBufferResource(RENDERER_STATE.device, &instanceBuffer, &instanceUploadBuffer, sizeof(instanceData));
     CreateTextureResource(RENDERER_STATE.device, &textureBuffer, &textureUploadBuffer, imgX, imgY, numComponents * imgX * imgY);
+    CreateUploadBufferResource(RENDERER_STATE.device, &uploadBuffer, sizeof(InstanceData2D) * 4096);
 
 
     vertexBuffer->SetName(L"Vertex Buffer");
@@ -437,7 +440,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     srvDesc.Texture2D.MostDetailedMip = 0;
     srvDesc.Texture2D.PlaneSlice = 0;
     srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
-
 
     ComPtr<ID3D12DescriptorHeap> srvHeap;
     AssertIfFailed(RENDERER_STATE.device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap)));
