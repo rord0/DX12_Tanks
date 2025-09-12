@@ -8,6 +8,7 @@
 bool USE_WARP = false;
 u32 CLIENT_WIDTH = 800;
 u32 CLIENT_HEIGHT = 600;
+float ASPECT = (float)CLIENT_WIDTH / (float)CLIENT_HEIGHT;
 
 bool RUNNING = false;
 RendererState RENDERER_STATE = {};
@@ -19,6 +20,7 @@ void Resize(u32 width, u32 height, RendererState & state)
     {
         CLIENT_WIDTH = std::max(1u, width);
         CLIENT_HEIGHT = std::max(1u, height);
+        ASPECT = (float)CLIENT_WIDTH / (float)CLIENT_HEIGHT;
         Flush(state.cmdQueue, state.fence, &state.fenceValue, state.fenceEvent);
         for (int i = 0; i < NUM_FRAMES; i++)
         {
@@ -80,7 +82,7 @@ mat4 orthograhpicProjection(float right, float left, float top, float bottom, fl
     m.m[2][3] = -((f + n)/(f - n));
 
     m.m[3][3] = 1.0f;
-
+    return m;
 }                      
 
 ColorRGBA GetHSVSpectrumColor(float time, float speed = 1.0f)
@@ -459,7 +461,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     RENDERER_STATE.device->CreateShaderResourceView(textureBuffer.Get(), &srvDesc, srvHeap->GetCPUDescriptorHandleForHeapStart());
 
     float viewMatrix[4][4];
-    float projectionMatrix[4][4];
 
     float cameraFov;
 
@@ -482,7 +483,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ShowWindow(windowHandle, SW_SHOW);
     while (RUNNING)
     {
-
         // Profiling
         LARGE_INTEGER endCounter;
         QueryPerformanceCounter(&endCounter);
@@ -500,11 +500,13 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         win32ProcessPendingMessages(windowHandle);
 
         ColorRGBA color = GetHSVSpectrumColor(time);
+        mat4 projectionMatrix = orthograhpicProjection(ASPECT, -ASPECT, 1.0f, -1.0f, -0.01f, 100.0f);
         instanceData[0].position.x = sinf(time) * 0.5f;
         instanceData[0].position.y = sinf(time) * 0.5f;
         instanceData[1].scale.x = 1.0f + sinf(time) * 0.5f;
         instanceData[1].scale.y = 1.0f + sinf(time) * 0.5f;
         instanceData[2].rotation = fmod(time, 360.0);
+        instanceData[3].position.x = cosf(time) * 0.5 + 0.25;
         // Render
 
         BeginFrame(RENDERER_STATE, clearColor);
@@ -515,7 +517,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         RENDERER_STATE.cmdList->SetDescriptorHeaps(1, heaps);
 
         RENDERER_STATE.cmdList->SetGraphicsRootSignature(rootSignature.Get());
-        RENDERER_STATE.cmdList->SetGraphicsRoot32BitConstants(0, 16, &viewMatrix, 0);
+        RENDERER_STATE.cmdList->SetGraphicsRoot32BitConstants(0, 16, &projectionMatrix.m, 0);
         RENDERER_STATE.cmdList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
 
         RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -529,7 +531,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         RENDERER_STATE.cmdList->DrawIndexedInstanced(6, 4, 0, 0, 0);
 
         EndFrame(RENDERER_STATE);
-
         
         char buffer[256];
         snprintf(buffer, 256, "MS/Frame: %dms FPS: %d Time: %lf", msPerFrame, FPS, time);

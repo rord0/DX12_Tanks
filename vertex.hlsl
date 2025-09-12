@@ -45,7 +45,8 @@ VertexShaderOutput main(VertexData IN)
     };
 
     float4x4 modelMatrix = mul(translation, mul(rotationX, scale));
-    OUT.Position = mul(modelMatrix, float4(IN.Position, 1));
+    float4x4 MVP = mul(ModelViewProjectionCB.MVP, modelMatrix);
+    OUT.Position = mul(MVP, float4(IN.Position, 1));
     OUT.UV = IN.UV;
 
     return OUT;
