@@ -344,7 +344,7 @@ void CreateBufferResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDesti
 void CreateUploadBufferResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** ppResource, size_t bufferSize)
 {
     D3D12_HEAP_PROPERTIES heapProperties = {};
-    heapProperties.Type = D3D12_HEAP_TYPE_GPU_UPLOAD;
+    heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
     heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
     heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
     heapProperties.CreationNodeMask = 1;
@@ -535,6 +535,23 @@ void UpdateBufferResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Reso
     ExecuteCommandList(state.cmdQueue, state.cmdList.Get());
     int fenceValue = SignalCommandQueue(state.cmdQueue, state.fence, &state.fenceValue);
     WaitForFenceValue(state.fence, fenceValue, state.fenceEvent);
+}
+
+void DynamicUpdateBufferResource(ID3D12Resource * uploadBuffer, ID3D12Resource * buffer, ID3D12GraphicsCommandList * cmdList, size_t bufferSize, const void * bufferData)
+{
+    // Upload Buffer to CPU
+    void * uploadBufferAddress;
+    D3D12_RANGE uploadRange;
+    uploadRange.Begin = 0;
+    uploadRange.End = bufferSize - 1;
+    HRESULT result = uploadBuffer->Map(0, &uploadRange, &uploadBufferAddress);
+    AssertIfFailed(result);
+    memcpy(uploadBufferAddress, bufferData, bufferSize);
+    uploadBuffer->Unmap(0, &uploadRange);
+
+    cmdList->CopyBufferRegion(buffer, 0, uploadBuffer, 0, bufferSize);
+    D3D12_RESOURCE_BARRIER barrier = CreateTransitionBarrier(buffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+    cmdList->ResourceBarrier(1, &barrier);
 }
 
 void UpdateTextureResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Resource> buffer, RendererState & state, u64 width, u64 height, size_t bufferSize, const void * bufferData)

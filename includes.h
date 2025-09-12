@@ -65,6 +65,11 @@ typedef union {
     };
 } vec3;
 
+typedef struct 
+{
+    float m[4][4];
+} mat4;
+
 typedef union {
     float elements[2];
     struct

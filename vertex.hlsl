@@ -23,8 +23,29 @@ struct VertexShaderOutput
 VertexShaderOutput main(VertexData IN)
 {
     VertexShaderOutput OUT;
+    float4x4 translation = {
+        1, 0, 0, IN.instancePosition.x,
+        0, 1, 0, IN.instancePosition.y,
+        0, 0, 1, IN.instancePosition.z,
+        0, 0, 0, 1
+    };
 
-    OUT.Position = float4(IN.Position + IN.instancePosition, 1.0f);
+    float4x4 rotationX = {
+        cos(IN.rotationZ), -sin(IN.rotationZ), 0, 0,
+        sin(IN.rotationZ), cos(IN.rotationZ), 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+    };
+
+    float4x4 scale = {
+        IN.instanceSize.x, 0, 0, 0,
+        0, IN.instanceSize.y, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1,
+    };
+
+    float4x4 modelMatrix = mul(translation, mul(rotationX, scale));
+    OUT.Position = mul(modelMatrix, float4(IN.Position, 1));
     OUT.UV = IN.UV;
 
     return OUT;

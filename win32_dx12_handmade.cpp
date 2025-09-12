@@ -4,7 +4,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-
+#define PI 3.14159265358979323846
 bool USE_WARP = false;
 u32 CLIENT_WIDTH = 800;
 u32 CLIENT_HEIGHT = 600;
@@ -67,6 +67,21 @@ ColorRGBA HSVtoRGBA(float h, float s, float v)
 
     return { r + m, g + m, b + m, 1.0f};
 }
+
+mat4 orthograhpicProjection(float right, float left, float top, float bottom, float n, float f)
+{
+    mat4 m = {};
+    m.m[0][0] = 2.0f / (right - left);
+    m.m[1][1] = 2.0f / (top - bottom);
+    m.m[2][2] = 2.0f / (f - n);
+
+    m.m[0][3] = -((right + left)/(right - left));
+    m.m[1][3] = -((top + bottom)/(top - bottom));
+    m.m[2][3] = -((f + n)/(f - n));
+
+    m.m[3][3] = 1.0f;
+
+}                      
 
 ColorRGBA GetHSVSpectrumColor(float time, float speed = 1.0f)
 {
@@ -246,7 +261,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     DEBUG_FileResult vertexShaderSrc = DEBUG_PlatformReadEntireFile("../vertex.hlsl");
     DEBUG_FileResult pixelShaderSrc = DEBUG_PlatformReadEntireFile("../pixel.hlsl");
-    DEBUG_FileResult testPNG = DEBUG_PlatformReadEntireFile("../gdeasy.png");
+    DEBUG_FileResult testPNG = DEBUG_PlatformReadEntireFile("../gd_easy.png");
+
     int imgX;
     int imgY;
     int numComponents;
@@ -286,9 +302,9 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
                                    {{ 0.25, -0.25, 0.0}, {1.0, 1.0}}};   // Bottom Right (ylw)
 
     InstanceData2D instanceData[4] = {{{-0.5f, 0.0f, 0.0f}, {1.0f, 1.0f}, 0.0f},
-                                      {{ 0.0f, 0.5f, 0.0f}, {1.0f, 1.0f}, 90.0f},
-                                      {{ 0.0f,-0.5f, 0.0f}, {1.0f, 1.0f}, 180.0f},
-                                      {{ 0.5f, 0.0f, 0.0f}, {1.0f, 1.0f}, 240.0f}};
+                                      {{ 0.0f, 0.0f, 0.0f}, {1.0f, 1.0f}, PI/2.0f},
+                                      {{ 0.0f,-0.5f, 0.0f}, {1.0f, 1.0f}, PI},
+                                      {{ 0.5f, 0.0f, 0.0f}, {1.0f, 1.0f}, PI}};
 
     u16 quadIndices[6] = {0, 1, 2, 1, 3, 2};
 
@@ -311,14 +327,10 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ComPtr<ID3D12Resource> textureBuffer;
     ComPtr<ID3D12Resource> textureUploadBuffer;
 
-    ComPtr<ID3D12Resource> uploadBuffer;
-
     CreateBufferResource(RENDERER_STATE.device, &vertexBuffer, &vertexUploadBuffer, sizeof(quadVertices));
     CreateBufferResource(RENDERER_STATE.device, &indexBuffer, &indexUploadBuffer, sizeof(quadIndices));
     CreateBufferResource(RENDERER_STATE.device, &instanceBuffer, &instanceUploadBuffer, sizeof(instanceData));
     CreateTextureResource(RENDERER_STATE.device, &textureBuffer, &textureUploadBuffer, imgX, imgY, numComponents * imgX * imgY);
-    CreateUploadBufferResource(RENDERER_STATE.device, &uploadBuffer, sizeof(InstanceData2D) * 4096);
-
 
     vertexBuffer->SetName(L"Vertex Buffer");
     vertexUploadBuffer->SetName(L"Vertex Upload Buffer");
@@ -446,7 +458,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     RENDERER_STATE.device->CreateShaderResourceView(textureBuffer.Get(), &srvDesc, srvHeap->GetCPUDescriptorHandleForHeapStart());
 
-    float modelMatrix[4][4];
     float viewMatrix[4][4];
     float projectionMatrix[4][4];
 
@@ -460,7 +471,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     long long perfFrequency;
     QueryPerformanceFrequency(&perfFrequencyResult);
     perfFrequency = perfFrequencyResult.QuadPart;
-    LARGE_INTEGER lastCounter;
+    LARGE_INTEGER lastFrameStartCounter;
+    QueryPerformanceCounter(&lastFrameStartCounter);
     // ----------------------------
 
     float clearColor[4] = {0.2f, 0.2f, 0.3f, 1.0f};
@@ -470,20 +482,40 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ShowWindow(windowHandle, SW_SHOW);
     while (RUNNING)
     {
-        QueryPerformanceCounter(&lastCounter);
 
+        // Profiling
+        LARGE_INTEGER endCounter;
+        QueryPerformanceCounter(&endCounter);
+        int64_t counterElapsed = endCounter.QuadPart - lastFrameStartCounter.QuadPart;
+
+        u32 msPerFrame = (1000 * counterElapsed) / perfFrequency;
+        double deltaTime = (double)(counterElapsed) / (double)perfFrequency;
+        time += deltaTime;
+
+        u32 FPS = perfFrequency / counterElapsed;
+        lastFrameStartCounter = endCounter;
+        QueryPerformanceCounter(&lastFrameStartCounter);
+
+        // Update
         win32ProcessPendingMessages(windowHandle);
 
         ColorRGBA color = GetHSVSpectrumColor(time);
+        instanceData[0].position.x = sinf(time) * 0.5f;
+        instanceData[0].position.y = sinf(time) * 0.5f;
+        instanceData[1].scale.x = 1.0f + sinf(time) * 0.5f;
+        instanceData[1].scale.y = 1.0f + sinf(time) * 0.5f;
+        instanceData[2].rotation = fmod(time, 360.0);
+        // Render
 
         BeginFrame(RENDERER_STATE, clearColor);
+        DynamicUpdateBufferResource(instanceUploadBuffer.Get(), instanceBuffer.Get(), RENDERER_STATE.cmdList.Get(), sizeof(instanceData), instanceData);
 
         RENDERER_STATE.cmdList->SetPipelineState(pipelineState.Get());
         ID3D12DescriptorHeap * heaps[] = { srvHeap.Get() };
         RENDERER_STATE.cmdList->SetDescriptorHeaps(1, heaps);
 
         RENDERER_STATE.cmdList->SetGraphicsRootSignature(rootSignature.Get());
-        RENDERER_STATE.cmdList->SetGraphicsRoot32BitConstants(0, 16, &modelMatrix, 0);
+        RENDERER_STATE.cmdList->SetGraphicsRoot32BitConstants(0, 16, &viewMatrix, 0);
         RENDERER_STATE.cmdList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
 
         RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -497,16 +529,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         RENDERER_STATE.cmdList->DrawIndexedInstanced(6, 4, 0, 0, 0);
 
         EndFrame(RENDERER_STATE);
-        // Profiling
-        LARGE_INTEGER endCounter;
-        QueryPerformanceCounter(&endCounter);
-        int64_t counterElapsed = endCounter.QuadPart - lastCounter.QuadPart;
-        u32 msPerFrame = (1000 * counterElapsed) / perfFrequency;
-        double deltaTime = (double)(counterElapsed) / (double)perfFrequency;
-        time += deltaTime;
 
-        u32 FPS = perfFrequency / counterElapsed;
-        lastCounter = endCounter;
         
         char buffer[256];
         snprintf(buffer, 256, "MS/Frame: %dms FPS: %d Time: %lf", msPerFrame, FPS, time);
