@@ -417,6 +417,76 @@ void CreateTextureResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDest
     );
 }
 
+D3D12_GRAPHICS_PIPELINE_STATE_DESC 
+createQuadPipelineStateDesc(ID3D12RootSignature * rootSignature,
+                            D3D12_INPUT_ELEMENT_DESC * pInputElementDescs,
+                            u32 numDescs,
+                            D3D12_SHADER_BYTECODE vsByteCode,
+                            D3D12_SHADER_BYTECODE psByteCode) 
+{
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+  
+    desc.pRootSignature = rootSignature;
+    desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+    desc.InputLayout.pInputElementDescs = pInputElementDescs;
+    desc.InputLayout.NumElements = numDescs;
+
+    desc.VS = vsByteCode;
+    desc.PS = psByteCode;
+
+    desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // TODO: set this to back.
+    desc.RasterizerState.FrontCounterClockwise = FALSE;
+    desc.RasterizerState.DepthBias = 0;
+    desc.RasterizerState.DepthBiasClamp = 0.0f;
+    desc.RasterizerState.DepthClipEnable = FALSE;
+    desc.RasterizerState.MultisampleEnable = FALSE;
+    desc.RasterizerState.AntialiasedLineEnable = FALSE;
+    desc.RasterizerState.ForcedSampleCount = 0;
+    desc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+    desc.StreamOutput.NumEntries = 0;
+    desc.StreamOutput.NumStrides = 0;
+    desc.StreamOutput.pBufferStrides = nullptr;
+    desc.StreamOutput.pSODeclaration = nullptr;
+    desc.StreamOutput.RasterizedStream = 0;
+
+    desc.NumRenderTargets = 1;
+    desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+
+    desc.BlendState.AlphaToCoverageEnable = FALSE;
+    desc.BlendState.IndependentBlendEnable = FALSE;
+
+    desc.BlendState.RenderTarget[0].BlendEnable = TRUE;
+    desc.BlendState.RenderTarget[0].LogicOpEnable = FALSE;
+    desc.BlendState.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+
+    desc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+    desc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+    desc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+
+    desc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    desc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+    desc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
+
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    desc.DepthStencilState.DepthEnable = FALSE;
+    desc.DepthStencilState.StencilEnable = FALSE;
+    desc.SampleMask = 0xFFFFFFFF;
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0; 
+
+    desc.NodeMask = 0;
+    desc.CachedPSO.CachedBlobSizeInBytes = 0;
+    desc.CachedPSO.pCachedBlob = nullptr;
+    desc.NumRenderTargets = 1;
+    desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+
+    return desc;
+}
+
 ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
 {
     ComPtr<ID3D12RootSignature> rootSignature;

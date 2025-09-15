@@ -1,76 +1,54 @@
 #include "includes.h"
 #include "render.cpp"
+#include "tanksgame.cpp"
 #include <climits>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define PI 3.14159265358979323846
 bool USE_WARP = false;
-u32 CLIENT_WIDTH = 800;
-u32 CLIENT_HEIGHT = 600;
+static u32 CLIENT_WIDTH = 800;
+static u32 CLIENT_HEIGHT = 600;
 float ASPECT = (float)CLIENT_WIDTH / (float)CLIENT_HEIGHT;
 
 bool RUNNING = false;
+bool OS_RESIZING = false;
 RendererState RENDERER_STATE = {};
-
 
 void Resize(u32 width, u32 height, RendererState & state)
 {
-    if (CLIENT_WIDTH != width || CLIENT_HEIGHT != height)
+    width  < 1 ? 1 : width;
+    height < 1 ? 1 : height;
+
+    ASPECT = (float)width / (float)height;
+    Flush(state.cmdQueue, state.fence, &state.fenceValue, state.fenceEvent);
+    for (int i = 0; i < NUM_FRAMES; i++)
     {
-        CLIENT_WIDTH = std::max(1u, width);
-        CLIENT_HEIGHT = std::max(1u, height);
-        ASPECT = (float)CLIENT_WIDTH / (float)CLIENT_HEIGHT;
-        Flush(state.cmdQueue, state.fence, &state.fenceValue, state.fenceEvent);
-        for (int i = 0; i < NUM_FRAMES; i++)
-        {
-            state.backBuffers[i].Reset();
-            state.fenceValues[i] = state.fenceValues[state.backBufferIndex];
-        }
-
-        DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
-        AssertIfFailed(state.swapChain->GetDesc(&swapChainDesc));
-        AssertIfFailed(state.swapChain->ResizeBuffers(NUM_FRAMES, CLIENT_WIDTH, CLIENT_HEIGHT, swapChainDesc.BufferDesc.Format, swapChainDesc.Flags));
-
-        state.viewport.TopLeftX = 0;
-        state.viewport.TopLeftY = 0;
-        state.viewport.Width = CLIENT_WIDTH;
-        state.viewport.Height = CLIENT_HEIGHT;
-        state.viewport.MaxDepth = D3D12_MAX_DEPTH;
-        state.viewport.MinDepth = D3D12_MIN_DEPTH;
-        state.scissorRect.left = 0;
-        state.scissorRect.top = 0;
-        state.scissorRect.right = CLIENT_WIDTH;
-        state.scissorRect.bottom = CLIENT_HEIGHT;
-        state.backBufferIndex = state.swapChain->GetCurrentBackBufferIndex();
-
-        UpdateRenderTargetViews(state.device, state.swapChain, state.rtvDescHeap, state.backBuffers, NUM_FRAMES);
+        state.backBuffers[i].Reset();
+        state.fenceValues[i] = state.fenceValues[state.backBufferIndex];
     }
+
+    DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
+    AssertIfFailed(state.swapChain->GetDesc(&swapChainDesc));
+    AssertIfFailed(state.swapChain->ResizeBuffers(NUM_FRAMES, width, height, swapChainDesc.BufferDesc.Format, swapChainDesc.Flags));
+
+    state.viewport.TopLeftX = 0;
+    state.viewport.TopLeftY = 0;
+    state.viewport.Width = width;
+    state.viewport.Height = height;
+    state.viewport.MaxDepth = D3D12_MAX_DEPTH;
+    state.viewport.MinDepth = D3D12_MIN_DEPTH;
+    state.scissorRect.left = 0;
+    state.scissorRect.top = 0;
+    state.scissorRect.right = width;
+    state.scissorRect.bottom = height;
+    state.backBufferIndex = state.swapChain->GetCurrentBackBufferIndex();
+
+    UpdateRenderTargetViews(state.device, state.swapChain, state.rtvDescHeap, state.backBuffers, NUM_FRAMES);
 }
 
-typedef struct 
-{
-    float r, g, b, a;
-} ColorRGBA;
 
-ColorRGBA HSVtoRGBA(float h, float s, float v)
-{
-    float c = v * s;
-    float x = c * (1 - fabs(fmod(h / 60.0f, 2) - 1));
-    float m = v - c;
-
-    float r, g, b;
-    if (h < 60)      { r = c; g = x; b = 0; }
-    else if (h < 120){ r = x; g = c; b = 0; }
-    else if (h < 180){ r = 0; g = c; b = x; }
-    else if (h < 240){ r = 0; g = x; b = c; }
-    else if (h < 300){ r = x; g = 0; b = c; }
-    else             { r = c; g = 0; b = x; }
-
-    return { r + m, g + m, b + m, 1.0f};
-}
-
-mat4 orthograhpicProjection(float right, float left, float top, float bottom, float n, float f)
+mat4 orthographicProjection(float right, float left, float top, float bottom, float n, float f)
 {
     mat4 m = {};
     m.m[0][0] = 2.0f / (right - left);
@@ -85,11 +63,6 @@ mat4 orthograhpicProjection(float right, float left, float top, float bottom, fl
     return m;
 }                      
 
-ColorRGBA GetHSVSpectrumColor(float time, float speed = 1.0f)
-{
-    float hue = fmod(time * speed * 60.0f, 360.0f);
-    return HSVtoRGBA(hue, 1.0f, 1.0f);
-}
 
 void DEBUG_PlatformFreeFileMemory(void ** memory)
 {
@@ -147,33 +120,48 @@ void win32ProcessPendingMessages(HWND windowHandle)
     }
 }
 
+typedef struct
+{
+    void * Update;
+    void * Render;
+} win32GameCode;
+
+void win32LoadGameCode()
+{
+    win32GameCode result = {};
+    HMODULE gameDLL = LoadLibraryA("tanksgame.dll");
+    if (gameDLL)
+    {
+        result.Update = GetProcAddress(gameDLL, "update");
+        result.Render = nullptr;
+    }
+}
+
 LRESULT mainWindowCallback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     LRESULT result = 0;
     switch (msg)
     {
-        case WM_SIZE:
-        {
-            OutputDebugStringA("WM_SIZE\n");
-            RECT clientRect = {};
-            GetClientRect(window, &clientRect);
-            int width = clientRect.right - clientRect.left;
-            int height = clientRect.bottom - clientRect.top;
-            Resize(width, height, RENDERER_STATE);
-        } break;
         case WM_PAINT:
         {
-                PAINTSTRUCT ps;
-                BeginPaint(window, &ps);
-                // NOTE: Do nothing here (Rendering happens in the render loop).
-                EndPaint(window, &ps);
-        }break;
+            PAINTSTRUCT ps;
+            BeginPaint(window, &ps);
+            // NOTE: Do nothing here (Rendering happens in the render loop).
+            OutputDebugStringA("WM_PAINT\n");
+            EndPaint(window, &ps);
+        } break;
         case WM_DESTROY:
             OutputDebugStringA("WM_DESTROY\n");
             break;
         case WM_CLOSE:
             OutputDebugStringA("WM_CLOSE\n");
             RUNNING = false;
+            break;
+        case WM_ENTERSIZEMOVE:
+            OutputDebugStringA("WM_ENTERSIZEMOVE\n");
+            break;
+        case WM_EXITSIZEMOVE:
+            OutputDebugStringA("WM_EXITSIZEMOVE\n");
             break;
         case WM_ACTIVATEAPP:
             OutputDebugStringA("WM_ACTIVATEAPP\n");
@@ -303,12 +291,10 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
                                    {{-0.25, -0.25, 0.0}, {0.0, 1.0}},    // Bottom Left  (grn)
                                    {{ 0.25, -0.25, 0.0}, {1.0, 1.0}}};   // Bottom Right (ylw)
 
-    InstanceData2D instanceData[4] = {{{-0.5f, 0.0f, 0.0f}, {1.0f, 1.0f}, 0.0f},
-                                      {{ 0.0f, 0.0f, 0.0f}, {1.0f, 1.0f}, PI/2.0f},
-                                      {{ 0.0f,-0.5f, 0.0f}, {1.0f, 1.0f}, PI},
-                                      {{ 0.5f, 0.0f, 0.0f}, {1.0f, 1.0f}, PI}};
-
     u16 quadIndices[6] = {0, 1, 2, 1, 3, 2};
+
+    InstanceData2D dynamicInstanceData[32] = {};
+    InstanceBuffer instancePushBuffer = {dynamicInstanceData, 32, 0};
 
     RENDERER_STATE = InitializeRenderer(windowHandle, USE_WARP, false, CLIENT_WIDTH, CLIENT_HEIGHT);
     UpdateRenderTargetViews(RENDERER_STATE.device, RENDERER_STATE.swapChain, RENDERER_STATE.rtvDescHeap, RENDERER_STATE.backBuffers, NUM_FRAMES);
@@ -331,7 +317,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     CreateBufferResource(RENDERER_STATE.device, &vertexBuffer, &vertexUploadBuffer, sizeof(quadVertices));
     CreateBufferResource(RENDERER_STATE.device, &indexBuffer, &indexUploadBuffer, sizeof(quadIndices));
-    CreateBufferResource(RENDERER_STATE.device, &instanceBuffer, &instanceUploadBuffer, sizeof(instanceData));
+    CreateBufferResource(RENDERER_STATE.device, &instanceBuffer, &instanceUploadBuffer, sizeof(dynamicInstanceData));
     CreateTextureResource(RENDERER_STATE.device, &textureBuffer, &textureUploadBuffer, imgX, imgY, numComponents * imgX * imgY);
 
     vertexBuffer->SetName(L"Vertex Buffer");
@@ -347,7 +333,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     UpdateBufferResource(vertexUploadBuffer, vertexBuffer, RENDERER_STATE, sizeof(quadVertices), &quadVertices);
     UpdateBufferResource(indexUploadBuffer, indexBuffer, RENDERER_STATE, sizeof(quadIndices), &quadIndices);
-    UpdateBufferResource(instanceUploadBuffer, instanceBuffer, RENDERER_STATE, sizeof(instanceData), &instanceData);
     UpdateTextureResource(textureUploadBuffer, textureBuffer, RENDERER_STATE, imgX, imgY,bitmapSize, testBitmap);
 
     ComPtr<ID3D12Resource> depthBuffer;       // Depth Buffer
@@ -364,66 +349,9 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             { "InstanceSize",     0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
             { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = {};
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature.Get(), inputElementDescs, 5, vertexShaderBytecode, pixelShaderBytecode);
   
-    pipelineStateDesc.pRootSignature = rootSignature.Get();
-    pipelineStateDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-    pipelineStateDesc.InputLayout.pInputElementDescs = inputElementDescs;
-    pipelineStateDesc.InputLayout.NumElements = 5;
-
-    pipelineStateDesc.VS = vertexShaderBytecode;
-    pipelineStateDesc.PS = pixelShaderBytecode;
-
-    pipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    pipelineStateDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-    pipelineStateDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // TODO: set this to back.
-    pipelineStateDesc.RasterizerState.FrontCounterClockwise = FALSE;
-    pipelineStateDesc.RasterizerState.DepthBias = 0;
-    pipelineStateDesc.RasterizerState.DepthBiasClamp = 0.0f;
-    pipelineStateDesc.RasterizerState.DepthClipEnable = FALSE;
-    pipelineStateDesc.RasterizerState.MultisampleEnable = FALSE;
-    pipelineStateDesc.RasterizerState.AntialiasedLineEnable = FALSE;
-    pipelineStateDesc.RasterizerState.ForcedSampleCount = 0;
-    pipelineStateDesc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-    pipelineStateDesc.StreamOutput.NumEntries = 0;
-    pipelineStateDesc.StreamOutput.NumStrides = 0;
-    pipelineStateDesc.StreamOutput.pBufferStrides = nullptr;
-    pipelineStateDesc.StreamOutput.pSODeclaration = nullptr;
-    pipelineStateDesc.StreamOutput.RasterizedStream = 0;
-
-    pipelineStateDesc.NumRenderTargets = 1;
-    pipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-    pipelineStateDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
-
-    pipelineStateDesc.BlendState.AlphaToCoverageEnable = FALSE;
-    pipelineStateDesc.BlendState.IndependentBlendEnable = FALSE;
-
-    pipelineStateDesc.BlendState.RenderTarget[0].BlendEnable = TRUE;
-    pipelineStateDesc.BlendState.RenderTarget[0].LogicOpEnable = FALSE;
-    pipelineStateDesc.BlendState.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
-
-    pipelineStateDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-    pipelineStateDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-    pipelineStateDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-
-    pipelineStateDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-    pipelineStateDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-    pipelineStateDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
-
-    pipelineStateDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-    pipelineStateDesc.DepthStencilState.DepthEnable = FALSE;
-    pipelineStateDesc.DepthStencilState.StencilEnable = FALSE;
-    pipelineStateDesc.SampleMask = 0xFFFFFFFF;
-    pipelineStateDesc.SampleDesc.Count = 1;
-    pipelineStateDesc.SampleDesc.Quality = 0; 
-
-    pipelineStateDesc.NodeMask = 0;
-    pipelineStateDesc.CachedPSO.CachedBlobSizeInBytes = 0;
-    pipelineStateDesc.CachedPSO.pCachedBlob = nullptr;
-    pipelineStateDesc.NumRenderTargets = 1;
-    pipelineStateDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-
     ComPtr<ID3D12PipelineState> pipelineState;
     AssertIfFailed(RENDERER_STATE.device->CreateGraphicsPipelineState(&pipelineStateDesc, IID_PPV_ARGS(&pipelineState)));
 
@@ -437,7 +365,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     indexBufferView.Format = DXGI_FORMAT_R16_UINT; 
 
     instanceBufferView.BufferLocation = instanceBuffer->GetGPUVirtualAddress();
-    instanceBufferView.SizeInBytes = sizeof(instanceData);
+    instanceBufferView.SizeInBytes = sizeof(dynamicInstanceData);
     instanceBufferView.StrideInBytes = sizeof(InstanceData2D);
 
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
@@ -476,11 +404,19 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     QueryPerformanceCounter(&lastFrameStartCounter);
     // ----------------------------
 
-    float clearColor[4] = {0.2f, 0.2f, 0.3f, 1.0f};
-
     double time = 0.0f;
-    RUNNING = true;
+    double timer = 0.0f;
     ShowWindow(windowHandle, SW_SHOW);
+    vec2i prevResolution;
+
+    GameMemory gameMemory = {};
+    gameMemory.permStorage = VirtualAlloc(0, MB(2), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    gameMemory.permStorageSize = MB(2);
+
+    //----------------------
+    // Main Loop           |
+    // --------------------
+    RUNNING = true;
     while (RUNNING)
     {
         // Profiling
@@ -491,6 +427,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         u32 msPerFrame = (1000 * counterElapsed) / perfFrequency;
         double deltaTime = (double)(counterElapsed) / (double)perfFrequency;
         time += deltaTime;
+        timer += deltaTime;
 
         u32 FPS = perfFrequency / counterElapsed;
         lastFrameStartCounter = endCounter;
@@ -499,18 +436,26 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         // Update
         win32ProcessPendingMessages(windowHandle);
 
-        ColorRGBA color = GetHSVSpectrumColor(time);
-        mat4 projectionMatrix = orthograhpicProjection(ASPECT, -ASPECT, 1.0f, -1.0f, -0.01f, 100.0f);
-        instanceData[0].position.x = sinf(time) * 0.5f;
-        instanceData[0].position.y = sinf(time) * 0.5f;
-        instanceData[1].scale.x = 1.0f + sinf(time) * 0.5f;
-        instanceData[1].scale.y = 1.0f + sinf(time) * 0.5f;
-        instanceData[2].rotation = fmod(time, 360.0);
-        instanceData[3].position.x = cosf(time) * 0.5 + 0.25;
-        // Render
+        // Check for resize.
+        RECT currentClientRect;
+        GetClientRect(windowHandle, &currentClientRect);
+        vec2i resolution = {currentClientRect.right - currentClientRect.left, currentClientRect.bottom - currentClientRect.top};
+        if (resolution.x != prevResolution.x || resolution.y != prevResolution.y)
+        {
+            // Resize Swap Chain Frame Buffers
+            Resize(resolution.x, resolution.y, RENDERER_STATE);
+            prevResolution = resolution;
+        }
 
-        BeginFrame(RENDERER_STATE, clearColor);
-        DynamicUpdateBufferResource(instanceUploadBuffer.Get(), instanceBuffer.Get(), RENDERER_STATE.cmdList.Get(), sizeof(instanceData), instanceData);
+        update(&gameMemory, &instancePushBuffer, deltaTime);
+
+        GameState * gameState = (GameState*)gameMemory.permStorage;
+
+        mat4 projectionMatrix = orthographicProjection(ASPECT, -ASPECT, 1.0f, -1.0f, -0.01f, 100.0f);
+        
+        // Render
+        BeginFrame(RENDERER_STATE, (float*)&gameState->clearColor);
+        DynamicUpdateBufferResource(instanceUploadBuffer.Get(), instanceBuffer.Get(), RENDERER_STATE.cmdList.Get(), sizeof(dynamicInstanceData), dynamicInstanceData);
 
         RENDERER_STATE.cmdList->SetPipelineState(pipelineState.Get());
         ID3D12DescriptorHeap * heaps[] = { srvHeap.Get() };
@@ -528,12 +473,17 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         RENDERER_STATE.cmdList->RSSetViewports(1, &RENDERER_STATE.viewport);
         RENDERER_STATE.cmdList->RSSetScissorRects(1, &RENDERER_STATE.scissorRect);
 
-        RENDERER_STATE.cmdList->DrawIndexedInstanced(6, 4, 0, 0, 0);
+        RENDERER_STATE.cmdList->DrawIndexedInstanced(6, instancePushBuffer.instanceCount, 0, 0, 0);
 
         EndFrame(RENDERER_STATE);
         
         char buffer[256];
         snprintf(buffer, 256, "MS/Frame: %dms FPS: %d Time: %lf", msPerFrame, FPS, time);
+        if (timer>0.5f)
+        {
+            OutputDebugStringA(buffer);
+            timer = 0.0f;
+        }
         SetWindowTextA(windowHandle, buffer);
         // ---------------------------------
     }

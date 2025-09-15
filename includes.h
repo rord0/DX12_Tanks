@@ -13,11 +13,6 @@
 #include <math.h>
 #include <algorithm>
 
-typedef uint8_t   u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-typedef uint32_t b32; // 32-bit Boolean
 
 #include <wrl.h>
 using namespace Microsoft::WRL;
@@ -28,9 +23,20 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-//#define _DEBUG
+#define _DEBUG
+
+typedef uint8_t   u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+typedef uint32_t b32; // 32-bit Boolean
+
+#define KB(x) (x * 1024)
+#define MB(x) (KB(x) * 1024)
+#define GB(x) (MB(x) * 1024)
 
 const static UINT NUM_FRAMES = 2;
+
 typedef struct {
     ComPtr<IDXGIAdapter4> adapter;
     ComPtr<ID3D12Device2> device;
@@ -65,6 +71,17 @@ typedef union {
     };
 } vec3;
 
+typedef union {
+    float elements[4];
+    struct
+    {
+        union { float x, r; };
+        union { float y, g; };
+        union { float z, b; };
+        union { float w, a; };
+    };
+} vec4;
+
 typedef struct 
 {
     float m[4][4];
@@ -78,6 +95,15 @@ typedef union {
         union { float y, v; };
     };
 } vec2;
+
+typedef union {
+    int elements[2];
+    struct
+    {
+        union { int x, u; };
+        union { int y, v; };
+    };
+} vec2i;
 
 typedef struct {
     vec3 position;
@@ -94,5 +120,22 @@ typedef struct {
     void * data;
     u64 size;
 } DEBUG_FileResult;
+
+typedef struct {
+    void * permStorage;
+    u64 permStorageSize;
+} GameMemory;
+
+typedef struct {
+    double time;
+    vec4 clearColor;
+    mat4 projectionMatrix;
+} GameState;
+
+typedef struct {
+    InstanceData2D * data;
+    u32 maxInstances;
+    u32 instanceCount;
+} InstanceBuffer;
 
 #endif // INCLUDES_H
