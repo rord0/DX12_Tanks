@@ -1,4 +1,6 @@
-#include "includes.h"
+#include "core.h"
+
+#define EXPORT extern "C" __declspec(dllexport)
 
 vec4 HSVtoRGBA(float h, float s, float v)
 {
@@ -23,19 +25,23 @@ vec4 GetHSVSpectrumColor(float time, float speed = 1.0f)
     return HSVtoRGBA(hue, 1.0f, 1.0f);
 }
 
-void update(GameMemory * gameMemory, InstanceBuffer * instanceBuffer, double deltaTime)
+EXPORT GAME_UPDATE_FUNCTION(update)
 {
     // Update code here
     GameState * state = (GameState*)gameMemory->permStorage;
     state->time += deltaTime;
     double time = state->time;
 
+    state->tempPlayerPos.y += state->tempInput.y * deltaTime;
+    state->tempPlayerPos.x += state->tempInput.x * deltaTime;
+
     vec4 color = GetHSVSpectrumColor(time);
+    //color = {0.2f, 0.3f, 0.3f, 1.0f};
     state->clearColor = color;
 
-    instanceBuffer->data[0] = {{sinf(time) * 0.5f, sinf(time) * 0.5f, 0.0f}, {1.0f, 1.0f}, 0.0f};
+    instanceBuffer->data[0] = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0f}, {1.0f, 1.0f}, 0.0f};
     instanceBuffer->data[1] = {{0.5f, 0.0f}, {1.0f + sinf(time) * 0.5f, 1.0f + sinf(time) * 0.5f}, 1.57079633f};
-    instanceBuffer->data[2] = {{0.0f, -0.5f}, {1.0f, 1.0f}, (float)fmod(time, 360.0)};
-    instanceBuffer->data[3] = {{-0.5f, 0.0f}, {1.0f, 1.0f}, 0.0f};
+    instanceBuffer->data[2] = {{-0.0f, -0.5f}, {1.0f, 1.0f}, (float)fmod(time, 360.0)};
+    instanceBuffer->data[3] = {{-sinf(time) * 0.5f, cosf(time) * 0.5f, 0.0f}, {1.0f, 1.0f}, 0.0f};
     instanceBuffer->instanceCount = 4;
 }

@@ -1,11 +1,13 @@
 #include "includes.h"
 #include "render.cpp"
-#include "tanksgame.cpp"
 #include <climits>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define PI 3.14159265358979323846
+
+#define GAME_CODE_DLL "tanksgame.dll"
+
 bool USE_WARP = false;
 static u32 CLIENT_WIDTH = 800;
 static u32 CLIENT_HEIGHT = 600;
@@ -47,7 +49,6 @@ void Resize(u32 width, u32 height, RendererState & state)
     UpdateRenderTargetViews(state.device, state.swapChain, state.rtvDescHeap, state.backBuffers, NUM_FRAMES);
 }
 
-
 mat4 orthographicProjection(float right, float left, float top, float bottom, float n, float f)
 {
     mat4 m = {};
@@ -62,7 +63,6 @@ mat4 orthographicProjection(float right, float left, float top, float bottom, fl
     m.m[3][3] = 1.0f;
     return m;
 }                      
-
 
 void DEBUG_PlatformFreeFileMemory(void ** memory)
 {
@@ -105,13 +105,71 @@ DEBUG_FileResult DEBUG_PlatformReadEntireFile(const char * filenameASCII)
     return result;
 }
 
-void win32ProcessPendingMessages(HWND windowHandle)
+typedef struct
+{
+    bool isDown;
+    bool wasDown;
+} KeyInput;
+
+typedef struct
+{
+    KeyInput W;
+    KeyInput A;
+    KeyInput S;
+    KeyInput D;
+} InputState;
+
+void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
 {
     MSG msg = {};
     while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
     {
         switch (msg.message)
         {
+            case WM_KEYDOWN:
+                if (msg.wParam == 'W')
+                {
+                    inputState.W.isDown = true;
+                    inputState.W.wasDown = (msg.lParam & (1 << 30)) != 0;
+                }
+                if (msg.wParam == 'S')
+                {
+                    inputState.S.isDown = true;
+                    inputState.S.wasDown = (msg.lParam & (1 << 30)) != 0;
+                }
+                if (msg.wParam == 'A')
+                {
+                    inputState.A.isDown = true;
+                    inputState.A.wasDown = (msg.lParam & (1 << 30)) != 0;
+                }
+                if (msg.wParam == 'D')
+                {
+                    inputState.D.isDown = true;
+                    inputState.D.wasDown = (msg.lParam & (1 << 30)) != 0;
+                }
+                break;
+            case WM_KEYUP:
+                if (msg.wParam == 'W')
+                {
+                    inputState.W.isDown = false;
+                    inputState.W.wasDown = true;
+                }
+                if (msg.wParam == 'S')
+                {
+                    inputState.S.isDown = false;
+                    inputState.S.wasDown = true;
+                }
+                if (msg.wParam == 'A')
+                {
+                    inputState.A.isDown = false;
+                    inputState.A.wasDown = true;
+                }
+                if (msg.wParam == 'D')
+                {
+                    inputState.D.isDown = false;
+                    inputState.D.wasDown = true;
+                }
+                break;
             default:
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
@@ -120,22 +178,62 @@ void win32ProcessPendingMessages(HWND windowHandle)
     }
 }
 
-typedef struct
-{
-    void * Update;
-    void * Render;
-} win32GameCode;
 
-void win32LoadGameCode()
+GAME_UPDATE_FUNCTION(GameUpdateFunctionStub)
 {
-    win32GameCode result = {};
-    HMODULE gameDLL = LoadLibraryA("tanksgame.dll");
-    if (gameDLL)
-    {
-        result.Update = GetProcAddress(gameDLL, "update");
-        result.Render = nullptr;
-    }
+    // Do nothing...
 }
+
+
+FILETIME Win32GetLastFileWriteTime(const char * filename)
+{
+    FILETIME lastWriteTime = {};
+
+    WIN32_FILE_ATTRIBUTE_DATA fileAttributeData = {};
+    if (GetFileAttributesExA(filename, GetFileExInfoStandard, &fileAttributeData))
+    {
+        lastWriteTime = fileAttributeData.ftLastWriteTime;
+    }
+
+    return lastWriteTime;
+}
+
+Win32GameCode Win32LoadGameCode(const char * filename)
+{
+    Win32GameCode result = {};
+
+    // Create Copy and load DLL
+    const char * tempDLLName = "temp_game_code.dll";
+    CopyFileA(filename, tempDLLName, false);
+    result.DLL = LoadLibraryA(tempDLLName);
+
+    if (result.DLL)
+    {
+        result.Update = (GameUpdateFunction*)GetProcAddress(result.DLL, "update");
+        result.Render = nullptr;
+        result.isValid = result.Update;
+        result.lastWriteTime = Win32GetLastFileWriteTime(filename);
+    }
+
+    if (!result.isValid)
+    {
+        result.Render = GameUpdateFunctionStub;
+    }
+
+    return result;
+}
+
+void Win32UnloadGameCode(Win32GameCode * gameCode)
+{
+    if (gameCode->DLL)
+    {
+        FreeLibrary(gameCode->DLL);
+    }
+    gameCode->isValid = false;   
+    gameCode->Update = GameUpdateFunctionStub;
+    gameCode->Render = nullptr;
+}
+
 
 LRESULT mainWindowCallback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -393,8 +491,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     float cameraFov;
 
     bool contentLoaded = false;
+    ShowWindow(windowHandle, SW_SHOW);
     // -----------------------------------
-
     //             Profiling
     LARGE_INTEGER perfFrequencyResult;
     long long perfFrequency;
@@ -406,12 +504,14 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     double time = 0.0f;
     double timer = 0.0f;
-    ShowWindow(windowHandle, SW_SHOW);
-    vec2i prevResolution;
+    vec2i prevResolution = {};
+
+    Win32GameCode gameCode = Win32LoadGameCode(GAME_CODE_DLL);
 
     GameMemory gameMemory = {};
     gameMemory.permStorage = VirtualAlloc(0, MB(2), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
     gameMemory.permStorageSize = MB(2);
+    InputState inputState = {};
 
     //----------------------
     // Main Loop           |
@@ -432,9 +532,16 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         u32 FPS = perfFrequency / counterElapsed;
         lastFrameStartCounter = endCounter;
         QueryPerformanceCounter(&lastFrameStartCounter);
+        // Check for dll import
 
+        FILETIME newDLLWriteTime = Win32GetLastFileWriteTime(GAME_CODE_DLL);
+        if (CompareFileTime(&newDLLWriteTime, &gameCode.lastWriteTime))
+        {
+            Win32UnloadGameCode(&gameCode);
+            gameCode = Win32LoadGameCode(GAME_CODE_DLL);
+        }
         // Update
-        win32ProcessPendingMessages(windowHandle);
+        win32ProcessPendingMessages(windowHandle, inputState);
 
         // Check for resize.
         RECT currentClientRect;
@@ -446,15 +553,18 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             Resize(resolution.x, resolution.y, RENDERER_STATE);
             prevResolution = resolution;
         }
-
-        update(&gameMemory, &instancePushBuffer, deltaTime);
-
         GameState * gameState = (GameState*)gameMemory.permStorage;
+        gameState->tempInput.y = (float)inputState.W.isDown + -(float)(inputState.S.isDown); 
+        gameState->tempInput.x = (float)inputState.D.isDown + -(float)(inputState.A.isDown); 
+
+        gameCode.Update(&gameMemory, &instancePushBuffer, deltaTime);
+
 
         mat4 projectionMatrix = orthographicProjection(ASPECT, -ASPECT, 1.0f, -1.0f, -0.01f, 100.0f);
         
         // Render
         BeginFrame(RENDERER_STATE, (float*)&gameState->clearColor);
+
         DynamicUpdateBufferResource(instanceUploadBuffer.Get(), instanceBuffer.Get(), RENDERER_STATE.cmdList.Get(), sizeof(dynamicInstanceData), dynamicInstanceData);
 
         RENDERER_STATE.cmdList->SetPipelineState(pipelineState.Get());
@@ -478,7 +588,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         EndFrame(RENDERER_STATE);
         
         char buffer[256];
-        snprintf(buffer, 256, "MS/Frame: %dms FPS: %d Time: %lf", msPerFrame, FPS, time);
+        snprintf(buffer, 256, "MS/Frame: %dms FPS: %d Time: %lf\n", msPerFrame, FPS, time);
         if (timer>0.5f)
         {
             OutputDebugStringA(buffer);

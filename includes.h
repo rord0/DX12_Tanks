@@ -10,7 +10,6 @@
 #include <stdint.h>
 #include <mmeapi.h>
 #include <dsound.h>
-#include <math.h>
 #include <algorithm>
 
 
@@ -23,17 +22,18 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-#define _DEBUG
+//#define _DEBUG
 
-typedef uint8_t   u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-typedef uint32_t b32; // 32-bit Boolean
+#include "core.h"
 
-#define KB(x) (x * 1024)
-#define MB(x) (KB(x) * 1024)
-#define GB(x) (MB(x) * 1024)
+typedef struct
+{
+    GameUpdateFunction * Update;
+    HMODULE DLL;
+    void * Render;
+    bool isValid;
+    FILETIME lastWriteTime;
+} Win32GameCode;
 
 const static UINT NUM_FRAMES = 2;
 
@@ -61,81 +61,15 @@ typedef struct {
     bool vSyncEnabled;
 } RendererState;
 
-typedef union {
-    float elements[3];
-    struct
-    {
-        union { float x, r; };
-        union { float y, g; };
-        union { float z, b; };
-    };
-} vec3;
-
-typedef union {
-    float elements[4];
-    struct
-    {
-        union { float x, r; };
-        union { float y, g; };
-        union { float z, b; };
-        union { float w, a; };
-    };
-} vec4;
-
-typedef struct 
-{
-    float m[4][4];
-} mat4;
-
-typedef union {
-    float elements[2];
-    struct
-    {
-        union { float x, u; };
-        union { float y, v; };
-    };
-} vec2;
-
-typedef union {
-    int elements[2];
-    struct
-    {
-        union { int x, u; };
-        union { int y, v; };
-    };
-} vec2i;
-
 typedef struct {
     vec3 position;
     vec2 UV;
 } VertexPosUV;
 
 typedef struct {
-    vec3 position;
-    vec2 scale;
-    float rotation;
-} InstanceData2D;
-
-typedef struct {
     void * data;
     u64 size;
 } DEBUG_FileResult;
 
-typedef struct {
-    void * permStorage;
-    u64 permStorageSize;
-} GameMemory;
-
-typedef struct {
-    double time;
-    vec4 clearColor;
-    mat4 projectionMatrix;
-} GameState;
-
-typedef struct {
-    InstanceData2D * data;
-    u32 maxInstances;
-    u32 instanceCount;
-} InstanceBuffer;
 
 #endif // INCLUDES_H
