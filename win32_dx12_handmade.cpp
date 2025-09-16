@@ -349,13 +349,13 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     DEBUG_FileResult vertexShaderSrc = DEBUG_PlatformReadEntireFile("../vertex.hlsl");
     DEBUG_FileResult pixelShaderSrc = DEBUG_PlatformReadEntireFile("../pixel.hlsl");
-    DEBUG_FileResult testPNG = DEBUG_PlatformReadEntireFile("../gd_easy.png");
+    DEBUG_FileResult testPNG = DEBUG_PlatformReadEntireFile("../uv.png");
 
     int imgX;
     int imgY;
     int numComponents;
-    stbi_uc * testBitmap = stbi_load_from_memory((stbi_uc*)testPNG.data, testPNG.size, &imgX, &imgY, &numComponents, 0);
-    size_t bitmapSize = imgX * imgY * numComponents;
+    stbi_uc * testBitmap = stbi_load_from_memory((stbi_uc*)testPNG.data, testPNG.size, &imgX, &imgY, &numComponents, 4);
+    size_t bitmapSize = imgX * imgY * 4;
 
     ID3DBlob * vertexShaderBlob = nullptr;
     ID3DBlob * vertexShaderErrorBlob = nullptr;
@@ -416,7 +416,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     CreateBufferResource(RENDERER_STATE.device, &vertexBuffer, &vertexUploadBuffer, sizeof(quadVertices));
     CreateBufferResource(RENDERER_STATE.device, &indexBuffer, &indexUploadBuffer, sizeof(quadIndices));
     CreateBufferResource(RENDERER_STATE.device, &instanceBuffer, &instanceUploadBuffer, sizeof(dynamicInstanceData));
-    CreateTextureResource(RENDERER_STATE.device, &textureBuffer, &textureUploadBuffer, imgX, imgY, numComponents * imgX * imgY);
+    CreateTextureResource(RENDERER_STATE.device, &textureBuffer, &textureUploadBuffer, imgX, imgY, bitmapSize);
 
     vertexBuffer->SetName(L"Vertex Buffer");
     vertexUploadBuffer->SetName(L"Vertex Upload Buffer");
@@ -431,7 +431,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     UpdateBufferResource(vertexUploadBuffer, vertexBuffer, RENDERER_STATE, sizeof(quadVertices), &quadVertices);
     UpdateBufferResource(indexUploadBuffer, indexBuffer, RENDERER_STATE, sizeof(quadIndices), &quadIndices);
-    UpdateTextureResource(textureUploadBuffer, textureBuffer, RENDERER_STATE, imgX, imgY,bitmapSize, testBitmap);
+    UpdateTextureResource(textureUploadBuffer, textureBuffer, RENDERER_STATE, imgX, imgY, bitmapSize, testBitmap);
 
     ComPtr<ID3D12Resource> depthBuffer;       // Depth Buffer
     ComPtr<ID3D12DescriptorHeap> dsvHeapDesc; // Depth Stencil View Heap Desciptor

@@ -62,6 +62,12 @@ typedef union {
 } vec2i;
 
 typedef struct {
+    vec2 position;
+    vec2 scale;
+    u64 hash;
+} AtlasEntry;
+
+typedef struct {
     vec3 position;
     vec2 scale;
     float rotation;

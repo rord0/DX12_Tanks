@@ -37,6 +37,7 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
     vec4 color = GetHSVSpectrumColor(time);
     //color = {0.2f, 0.3f, 0.3f, 1.0f};
+    color = {0.0f, 0.5f, 0.5f, 1.0f};
     state->clearColor = color;
 
     instanceBuffer->data[0] = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0f}, {1.0f, 1.0f}, 0.0f};
