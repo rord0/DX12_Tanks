@@ -368,15 +368,8 @@ void CreateUploadBufferResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** 
     );
 }
 
-void CreateTextureResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDestinationResource, ID3D12Resource ** pIntermediateResource, u64 width, u64 height, size_t bufferSize)
+void CreateTextureResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDestinationResource, u64 width, u64 height, size_t bufferSize)
 {
-    D3D12_HEAP_PROPERTIES uploadHeapProperties = {};
-    uploadHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
-    uploadHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-    uploadHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-    uploadHeapProperties.CreationNodeMask = 1;
-    uploadHeapProperties.VisibleNodeMask = 1;
-
     D3D12_HEAP_PROPERTIES heapProperties = {};
     heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
     heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
@@ -396,22 +389,6 @@ void CreateTextureResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDest
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-    D3D12_RESOURCE_DESC resourceDescUpload = {};
-    resourceDescUpload.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resourceDescUpload.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-    resourceDescUpload.DepthOrArraySize = 1;
-    resourceDescUpload.Width = bufferSize;
-    resourceDescUpload.Height = 1;
-    resourceDescUpload.MipLevels = 1;
-    resourceDescUpload.Format = DXGI_FORMAT_UNKNOWN;
-    resourceDescUpload.SampleDesc.Count = 1;
-    resourceDescUpload.SampleDesc.Quality = 0;
-    resourceDescUpload.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    resourceDescUpload.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-    AssertIfFailed(
-        device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &resourceDescUpload, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(pIntermediateResource))
-    );
     AssertIfFailed(
         device->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(pDestinationResource))
     );
@@ -504,7 +481,6 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
         D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
 
     D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionRootSignatureDesc = {};
 

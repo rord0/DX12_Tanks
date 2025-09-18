@@ -105,6 +105,26 @@ DEBUG_FileResult DEBUG_PlatformReadEntireFile(const char * filenameASCII)
     return result;
 }
 
+ImageData LoadImageFromFile(const char * filename)
+{
+    ImageData data = {};
+    DEBUG_FileResult fileData = DEBUG_PlatformReadEntireFile(filename);
+    if (fileData.data)
+    {
+        stbi_uc * pBitmap = stbi_load_from_memory((stbi_uc*)fileData.data, fileData.size, &data.width, &data.height, &data.numComponents, 4);
+        if (pBitmap)
+        {
+            // NOTE(rordon): numComponts is forced to 4 in stb.
+            data.numComponents = 4;
+            data.size = data.width * data.height * data.numComponents;
+            data.memory = pBitmap;
+        }
+        DEBUG_PlatformFreeFileMemory(&fileData.data);
+    } 
+
+    return data;
+}
+
 typedef struct
 {
     bool isDown;
@@ -313,6 +333,7 @@ void EndFrame(RendererState& state)
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
+    
     WNDCLASS windowClass = {};
 
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
@@ -349,13 +370,10 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     DEBUG_FileResult vertexShaderSrc = DEBUG_PlatformReadEntireFile("../vertex.hlsl");
     DEBUG_FileResult pixelShaderSrc = DEBUG_PlatformReadEntireFile("../pixel.hlsl");
-    DEBUG_FileResult testPNG = DEBUG_PlatformReadEntireFile("../uv.png");
 
-    int imgX;
-    int imgY;
-    int numComponents;
-    stbi_uc * testBitmap = stbi_load_from_memory((stbi_uc*)testPNG.data, testPNG.size, &imgX, &imgY, &numComponents, 4);
-    size_t bitmapSize = imgX * imgY * 4;
+    ImageData gdNormalData = LoadImageFromFile("../uv.png");
+    ImageData gdEasyData = LoadImageFromFile("../gd_normal.png");
+    ImageData gdHardData = LoadImageFromFile("../gd_hard.png");
 
     ID3DBlob * vertexShaderBlob = nullptr;
     ID3DBlob * vertexShaderErrorBlob = nullptr;
@@ -396,6 +414,11 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     RENDERER_STATE = InitializeRenderer(windowHandle, USE_WARP, false, CLIENT_WIDTH, CLIENT_HEIGHT);
     UpdateRenderTargetViews(RENDERER_STATE.device, RENDERER_STATE.swapChain, RENDERER_STATE.rtvDescHeap, RENDERER_STATE.backBuffers, NUM_FRAMES);
+D3D12_FEATURE_DATA_SHADER_MODEL shaderModel = { D3D_SHADER_MODEL_6_0 };
+HRESULT hr = RENDERER_STATE.device->CheckFeatureSupport(
+    D3D12_FEATURE_SHADER_MODEL,
+    &shaderModel,
+    sizeof(shaderModel));
 
     ComPtr<ID3D12Resource> vertexBuffer;
     ComPtr<ID3D12Resource> vertexUploadBuffer;
@@ -411,12 +434,16 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     
     ComPtr<ID3D12Resource> textureBuffer;
+    ComPtr<ID3D12Resource> textureP2Buffer;
     ComPtr<ID3D12Resource> textureUploadBuffer;
 
-    CreateBufferResource(RENDERER_STATE.device, &vertexBuffer, &vertexUploadBuffer, sizeof(quadVertices));
-    CreateBufferResource(RENDERER_STATE.device, &indexBuffer, &indexUploadBuffer, sizeof(quadIndices));
-    CreateBufferResource(RENDERER_STATE.device, &instanceBuffer, &instanceUploadBuffer, sizeof(dynamicInstanceData));
-    CreateTextureResource(RENDERER_STATE.device, &textureBuffer, &textureUploadBuffer, imgX, imgY, bitmapSize);
+    CreateBufferResource(RENDERER_STATE.device,  &vertexBuffer,   &vertexUploadBuffer, sizeof(quadVertices));
+    CreateBufferResource(RENDERER_STATE.device,  &indexBuffer,    &indexUploadBuffer, sizeof(quadIndices));
+    CreateBufferResource(RENDERER_STATE.device,  &instanceBuffer, &instanceUploadBuffer, sizeof(dynamicInstanceData));
+
+    CreateUploadBufferResource(RENDERER_STATE.device, &textureUploadBuffer, gdNormalData.size + gdEasyData.size + gdHardData.size);
+    CreateTextureResource(RENDERER_STATE.device, &textureBuffer, gdNormalData.width, gdNormalData.height, gdNormalData.size);
+    CreateTextureResource(RENDERER_STATE.device, &textureP2Buffer, gdEasyData.width, gdEasyData.height, gdEasyData.size);
 
     vertexBuffer->SetName(L"Vertex Buffer");
     vertexUploadBuffer->SetName(L"Vertex Upload Buffer");
@@ -431,7 +458,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     UpdateBufferResource(vertexUploadBuffer, vertexBuffer, RENDERER_STATE, sizeof(quadVertices), &quadVertices);
     UpdateBufferResource(indexUploadBuffer, indexBuffer, RENDERER_STATE, sizeof(quadIndices), &quadIndices);
-    UpdateTextureResource(textureUploadBuffer, textureBuffer, RENDERER_STATE, imgX, imgY, bitmapSize, testBitmap);
+    UpdateTextureResource(textureUploadBuffer, textureBuffer, RENDERER_STATE, gdNormalData.width, gdNormalData.height, gdNormalData.size, gdNormalData.memory);
 
     ComPtr<ID3D12Resource> depthBuffer;       // Depth Buffer
     ComPtr<ID3D12DescriptorHeap> dsvHeapDesc; // Depth Stencil View Heap Desciptor
@@ -482,9 +509,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
 
     ComPtr<ID3D12DescriptorHeap> srvHeap;
+    ComPtr<ID3D12DescriptorHeap> srvHeap2;
     AssertIfFailed(RENDERER_STATE.device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap)));
+    AssertIfFailed(RENDERER_STATE.device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap2)));
 
     RENDERER_STATE.device->CreateShaderResourceView(textureBuffer.Get(), &srvDesc, srvHeap->GetCPUDescriptorHandleForHeapStart());
+    RENDERER_STATE.device->CreateShaderResourceView(textureP2Buffer.Get(), &srvDesc, srvHeap2->GetCPUDescriptorHandleForHeapStart());
 
     float viewMatrix[4][4];
 

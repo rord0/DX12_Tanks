@@ -22,7 +22,7 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-//#define _DEBUG
+#define _DEBUG
 
 #include "core.h"
 
@@ -70,6 +70,14 @@ typedef struct {
     void * data;
     u64 size;
 } DEBUG_FileResult;
+
+typedef struct {
+    int width;
+    int height;
+    int numComponents;
+    int size;
+    u8 * memory;
+} ImageData;
 
 
 #endif // INCLUDES_H
