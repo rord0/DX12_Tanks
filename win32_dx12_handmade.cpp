@@ -10,8 +10,8 @@
 #define GAME_CODE_DLL "tanksgame.dll"
 
 bool USE_WARP = false;
-const u32 CLIENT_WIDTH = 800;
-const u32 CLIENT_HEIGHT = 600;
+const u32 CLIENT_WIDTH = 200;
+const u32 CLIENT_HEIGHT = 200;
 float ASPECT = (float)CLIENT_WIDTH / (float)CLIENT_HEIGHT;
 
 bool RUNNING = false;

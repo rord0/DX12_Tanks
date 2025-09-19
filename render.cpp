@@ -450,12 +450,12 @@ createQuadPipelineStateDesc(ID3D12RootSignature * rootSignature,
     desc.BlendState.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
 
     desc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-    desc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+    desc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
     desc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
 
     desc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
     desc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-    desc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
+    desc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
 
     desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     desc.DepthStencilState.DepthEnable = FALSE;
@@ -615,15 +615,16 @@ void UpdateTextureResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Res
     D3D12_RANGE uploadRange;
     uploadRange.Begin = 0;
     uploadRange.End = (subResFP.Footprint.RowPitch * subResFP.Footprint.Height) - 1;
-    HRESULT result = uploadBuffer->Map(0, &uploadRange, &uploadBufferAddress);
+    HRESULT result = uploadBuffer->Map(0, nullptr, &uploadBufferAddress);
     AssertIfFailed(result);
 
-    for (int y = 0; y < subResFP.Footprint.Height; y++)
+    u32 srcRowPitch = img.width * img.numComponents;
+    u32 destRowPitch = subResFP.Footprint.RowPitch;
+    for (int y = 0; y < subResFP.Footprint.Height; ++y)
     {
-        u32 imageRowSize = img.width * img.numComponents;
-        u8 * destPadded = (u8*)uploadBufferAddress + (subResFP.Footprint.RowPitch * y);
-        u8 * srcPacked = img.memory + (imageRowSize * y);
-        memcpy(destPadded, srcPacked, imageRowSize);
+        u8 * destPadded = (u8*)uploadBufferAddress + (destRowPitch * y);
+        u8 * srcPacked =                img.memory +  (srcRowPitch * y);
+        memcpy(destPadded, srcPacked, srcRowPitch);
     }
 
     uploadBuffer->Unmap(0, &uploadRange);
@@ -642,7 +643,7 @@ void UpdateTextureResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Res
     textureSrc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     textureSrc.pResource = uploadBuffer.Get();
     textureSrc.SubresourceIndex = 0;
-    textureSrc.PlacedFootprint.Offset = 0;
+    textureSrc.PlacedFootprint.Offset = subResFP.Offset;
     textureSrc.PlacedFootprint.Footprint = subResFP.Footprint;
 
     D3D12_TEXTURE_COPY_LOCATION textureDest = {};
@@ -650,7 +651,7 @@ void UpdateTextureResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Res
     textureDest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     textureDest.SubresourceIndex = 0;
 
-    state.cmdList->CopyTextureRegion(&textureDest, 0, 0, 0, &textureSrc, nullptr);
+    state.cmdList->CopyTextureRegion(&textureDest, 0, 0, 0, &textureSrc, &textureSizeBox);
 
     D3D12_RESOURCE_BARRIER b = CreateTransitionBarrier(buffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     state.cmdList->ResourceBarrier(1, &b);

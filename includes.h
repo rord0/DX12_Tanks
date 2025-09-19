@@ -22,7 +22,7 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-#define _DEBUG
+//#define _DEBUG
 
 #include "core.h"
 

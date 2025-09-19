@@ -4,6 +4,8 @@
         "cstdio": "cpp",
         "algorithm": "cpp",
         "xmemory": "cpp",
-        "climits": "cpp"
+        "climits": "cpp",
+        "utility": "cpp",
+        "tanksgame.c": "cpp"
     }
 }
