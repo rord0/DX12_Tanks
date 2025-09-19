@@ -11,7 +11,7 @@ typedef uint16_t u16; // 16-bit unsigned int
 typedef uint32_t u32;
 typedef uint64_t u64;
 typedef uint32_t b32; // 32-bit Boolean
-
+typedef float f32;    // 32-bit Float
 
 #define KB(x) (x * 1024)
 #define MB(x) (KB(x) * 1024)
@@ -91,6 +91,9 @@ typedef struct {
     vec2 tempPlayerPos;
     vec2 tempInput;
 } GameState;
+
+#define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory)
+typedef GAME_START_FUNCTION(GameStartFunction);
 
 #define GAME_UPDATE_FUNCTION(name) void name(GameMemory * gameMemory, InstanceBuffer * instanceBuffer, double deltaTime)
 typedef GAME_UPDATE_FUNCTION(GameUpdateFunction);

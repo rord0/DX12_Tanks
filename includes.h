@@ -28,9 +28,9 @@ using namespace Microsoft::WRL;
 
 typedef struct
 {
-    GameUpdateFunction * Update;
     HMODULE DLL;
-    void * Render;
+    GameUpdateFunction * Update;
+    GameStartFunction * Start;
     bool isValid;
     FILETIME lastWriteTime;
 } Win32GameCode;

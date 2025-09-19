@@ -2,6 +2,43 @@
 
 #define EXPORT extern "C" __declspec(dllexport)
 
+const char * tankPartNames [36] = {
+    "Tank_Track_Type01_Dark_Blue", "Tank_Track_Type01_Green", "Tank_Track_Type01_Grey", "Tank_Track_Type01_Tan",
+    "Tank_Track_Type02_Dark_Blue", "Tank_Track_Type02_Green", "Tank_Track_Type02_Grey", "Tank_Track_Type02_Tan",
+    "Tank_Track_Type03_Dark_Blue", "Tank_Track_Type03_Green", "Tank_Track_Type03_Grey", "Tank_Track_Type03_Tan",
+    "Tank_Body_Type01_Dark_Blue", "Tank_Body_Type01_Green", "Tank_Body_Type01_Grey", "Tank_Body_Type01_Tan",
+    "Tank_Body_Type02_Dark_Blue", "Tank_Body_Type02_Green", "Tank_Body_Type02_Grey", "Tank_Body_Type02_Tan",
+    "Tank_Body_Type03_Dark_Blue", "Tank_Body_Type03_Green", "Tank_Body_Type03_Grey", "Tank_Body_Type03_Tan",
+    "Tank_Turret_Type01_Dark_Blue", "Tank_Turret_Type01_Green", "Tank_Turret_Type01_Grey", "Tank_Turret_Type01_Tan",
+    "Tank_Turret_Type02_Dark_Blue", "Tank_Turret_Type02_Green", "Tank_Turret_Type02_Grey", "Tank_Turret_Type02_Tan",
+    "Tank_Turret_Type03_Dark_Blue", "Tank_Turret_Type03_Green", "Tank_Turret_Type03_Grey", "Tank_Turret_Type03_Tan",
+};
+
+typedef struct {
+    u8 trackType;
+    u8 bodyType;
+    u8 turretType;
+    u8 colorID;
+} TankStyle;
+
+typedef struct
+{
+	u16 playerID;
+	vec2 position;
+	f32 rotation;
+	TankStyle style;
+} TankGFX;
+
+void DrawTank(vec2 position, TankStyle style)
+{
+    u32 trackIndex  =  0 + style.trackType * style.colorID;
+    u32 bodyIndex   = 12 + style.bodyType  * style.colorID;
+    u32 turretIndex = 24 + style.trackType * style.colorID;
+
+    //TODO(rordon): get uv coord of image from hashtable...
+    //TODO(rordon): instance draw tank.
+}
+
 vec4 HSVtoRGBA(float h, float s, float v)
 {
     float c = v * s;
@@ -23,6 +60,12 @@ vec4 GetHSVSpectrumColor(float time, float speed = 1.0f)
 {
     float hue = fmod(time * speed * 60.0f, 360.0f);
     return HSVtoRGBA(hue, 1.0f, 1.0f);
+}
+
+EXPORT GAME_START_FUNCTION(start)
+{
+    // TODO(rordon): load asset files
+    // TODO(rordon): create tank part uv coordinate hashmap.
 }
 
 EXPORT GAME_UPDATE_FUNCTION(update)

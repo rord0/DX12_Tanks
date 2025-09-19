@@ -368,7 +368,7 @@ void CreateUploadBufferResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** 
     );
 }
 
-void CreateTextureResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDestinationResource, u64 width, u64 height, size_t bufferSize)
+D3D12_PLACED_SUBRESOURCE_FOOTPRINT CreateTextureResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDestinationResource, u64 width, u64 height, size_t bufferSize)
 {
     D3D12_HEAP_PROPERTIES heapProperties = {};
     heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -388,10 +388,19 @@ void CreateTextureResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDest
     resourceDesc.SampleDesc.Quality = 0;
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+    
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout = {};
+    UINT64 totalBytes = 0;
+    UINT64 rowSizeInBytes = 0;
+    UINT rowCount = 0;
+
+    device->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &layout, &rowCount, &rowSizeInBytes, &totalBytes);
 
     AssertIfFailed(
         device->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(pDestinationResource))
     );
+
+    return layout;
 }
 
 D3D12_GRAPHICS_PIPELINE_STATE_DESC 
@@ -600,47 +609,48 @@ void DynamicUpdateBufferResource(ID3D12Resource * uploadBuffer, ID3D12Resource *
     cmdList->ResourceBarrier(1, &barrier);
 }
 
-void UpdateTextureResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Resource> buffer, RendererState & state, u64 width, u64 height, size_t bufferSize, const void * bufferData)
+void UpdateTextureResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Resource> buffer, RendererState & state, ImageData img, D3D12_PLACED_SUBRESOURCE_FOOTPRINT subResFP)
 {
     void * uploadBufferAddress;
     D3D12_RANGE uploadRange;
     uploadRange.Begin = 0;
-    uploadRange.End = bufferSize - 1;
+    uploadRange.End = (subResFP.Footprint.RowPitch * subResFP.Footprint.Height) - 1;
     HRESULT result = uploadBuffer->Map(0, &uploadRange, &uploadBufferAddress);
     AssertIfFailed(result);
-    memcpy(uploadBufferAddress, bufferData, bufferSize);
+
+    for (int y = 0; y < subResFP.Footprint.Height; y++)
+    {
+        u32 imageRowSize = img.width * img.numComponents;
+        u8 * destPadded = (u8*)uploadBufferAddress + (subResFP.Footprint.RowPitch * y);
+        u8 * srcPacked = img.memory + (imageRowSize * y);
+        memcpy(destPadded, srcPacked, imageRowSize);
+    }
+
     uploadBuffer->Unmap(0, &uploadRange);
 
     state.cmdList->Reset(state.cmdAllocators[0].Get(), nullptr);
 
     D3D12_BOX textureSizeBox = {};
     textureSizeBox.left = 0;
-    textureSizeBox.right = width;
+    textureSizeBox.right = img.width;
     textureSizeBox.top = 0;
-    textureSizeBox.bottom = height;
+    textureSizeBox.bottom = img.height;
     textureSizeBox.front = 0;
     textureSizeBox.back = 1;
-
-    D3D12_SUBRESOURCE_FOOTPRINT footprint;
-    footprint.Width = width;
-    footprint.Height = height;
-    footprint.Depth = 1;
-    footprint.RowPitch = width * 4;
-    footprint.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 
     D3D12_TEXTURE_COPY_LOCATION textureSrc;
     textureSrc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     textureSrc.pResource = uploadBuffer.Get();
     textureSrc.SubresourceIndex = 0;
     textureSrc.PlacedFootprint.Offset = 0;
-    textureSrc.PlacedFootprint.Footprint = footprint;
+    textureSrc.PlacedFootprint.Footprint = subResFP.Footprint;
 
-    D3D12_TEXTURE_COPY_LOCATION textureDest;
+    D3D12_TEXTURE_COPY_LOCATION textureDest = {};
     textureDest.pResource = buffer.Get();
     textureDest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     textureDest.SubresourceIndex = 0;
 
-    state.cmdList->CopyTextureRegion(&textureDest, 0, 0, 0, &textureSrc, &textureSizeBox);
+    state.cmdList->CopyTextureRegion(&textureDest, 0, 0, 0, &textureSrc, nullptr);
 
     D3D12_RESOURCE_BARRIER b = CreateTransitionBarrier(buffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     state.cmdList->ResourceBarrier(1, &b);
