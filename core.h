@@ -62,22 +62,32 @@ typedef union {
 } vec2i;
 
 typedef struct {
-    vec2 position;
-    vec2 scale;
-    u64 hash;
-} AtlasEntry;
-
-typedef struct {
     vec3 position;
     vec2 scale;
     float rotation;
 } InstanceData2D;
 
 typedef struct {
+    vec3 position;
+    vec2 scale;
+    vec3 color;
+    float rotation;
+    float fill;
+} DebugGeoInstanceData;
+
+typedef struct {
+    vec3 startPos;
+    vec3 endPos;
+    vec3 color;
+    float width;
+} DebugLineInstanceData;
+
+typedef struct {
     InstanceData2D * data;
     u32 maxInstances;
     u32 instanceCount;
 } InstanceBuffer;
+
 
 typedef struct {
     void * permStorage;

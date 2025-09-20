@@ -10,8 +10,8 @@
 #define GAME_CODE_DLL "tanksgame.dll"
 
 bool USE_WARP = false;
-const u32 CLIENT_WIDTH = 200;
-const u32 CLIENT_HEIGHT = 200;
+const u32 CLIENT_WIDTH = 800;
+const u32 CLIENT_HEIGHT = 600;
 float ASPECT = (float)CLIENT_WIDTH / (float)CLIENT_HEIGHT;
 
 bool RUNNING = false;
@@ -378,7 +378,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     DEBUG_FileResult vertexShaderSrc = DEBUG_PlatformReadEntireFile("../vertex.hlsl");
     DEBUG_FileResult pixelShaderSrc = DEBUG_PlatformReadEntireFile("../pixel.hlsl");
 
-    ImageData gdEasyData = LoadImageFromFile("../gd_easy.png");
+    ImageData gdEasyData = LoadImageFromFile("../tank_parts.png");
     ImageData gdNormalData = LoadImageFromFile("../gd_normal.png");
     ImageData gdHardData = LoadImageFromFile("../gd_hard.png");
     ImageData gdHarderData = LoadImageFromFile("../gd_harder.png");
