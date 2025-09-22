@@ -9,6 +9,7 @@
 #define PI 3.14159265358979323846
 
 #define GAME_CODE_DLL "tanksgame.dll"
+#define RESOURCES_PATH "../res/"
 
 bool USE_WARP = false;
 const u32 CLIENT_WIDTH = 800;
@@ -377,6 +378,23 @@ void EndFrame(RendererState& state)
     WaitForFenceValue(state.fence, state.fenceValue, state.fenceEvent); 
 }
 
+ID3DBlob * CompileShaderFromFile(const char * filepath, const char * name, const char * entry, const char * target)
+{
+    DEBUG_FileResult shaderSrc = DEBUG_PlatformReadEntireFile(filepath);
+    ID3DBlob * blob = nullptr;
+    if (shaderSrc.data)
+    {
+
+        blob = CompileShader(shaderSrc.data, shaderSrc.size, name, entry, target);
+        DEBUG_PlatformFreeFileMemory(&shaderSrc.data);
+    }
+    else
+    {
+        // TODO(rordon): warning here...
+    }
+    return blob;
+}
+
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
     WNDCLASS windowClass = {};
@@ -411,21 +429,22 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     if (!windowHandle) { return -1; }
 
+    //////////////////////
     // Shader Compilation
 
-    DEBUG_FileResult vertexShaderSrc = DEBUG_PlatformReadEntireFile("../vertex.hlsl");
-    DEBUG_FileResult pixelShaderSrc = DEBUG_PlatformReadEntireFile("../pixel.hlsl");
+    ID3DBlob * vertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/vertex.hlsl", "vertex.hlsl", "main", "vs_5_1");
+    ID3DBlob * pixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/pixel.hlsl", "pixel.hlsl", "main", "ps_5_1");
+
+    ID3DBlob * rectangleVertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/rectangle_vertex.hlsl", "rectangle_vertex.hlsl", "main", "vs_5_1");
+    ID3DBlob * rectanglePixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/rectangle_pixel.hlsl", "rectangle_pixel.hlsl", "main", "ps_5_1");
+
+    D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
+    D3D12_SHADER_BYTECODE pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
 
     ImageData gdEasyData = LoadImageFromFile("../gd_easy.png");
     ImageData gdNormalData = LoadImageFromFile("../gd_normal.png");
     ImageData gdHardData = LoadImageFromFile("../gd_hard.png");
     ImageData gdHarderData = LoadImageFromFile("../gd_harder.png");
-
-    ID3DBlob * vertexShaderBlob = CompileShader(vertexShaderSrc.data, vertexShaderSrc.size, "vertex.hlsl", "main", "vs_5_1");
-    ID3DBlob * pixelShaderBlob = CompileShader(pixelShaderSrc.data, pixelShaderSrc.size, "pixel.hlsl", "main", "ps_5_1");
-
-    D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
-    D3D12_SHADER_BYTECODE pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
 
     EnableDebugLayer();
 
@@ -433,69 +452,65 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
                                    {{ 0.25,  0.25, 0.0}, {1.0, 0.0}},    // Top Right    (red)
                                    {{-0.25, -0.25, 0.0}, {0.0, 1.0}},    // Bottom Left  (grn)
                                    {{ 0.25, -0.25, 0.0}, {1.0, 1.0}}};   // Bottom Right (ylw)
-
     u16 quadIndices[6] = {0, 1, 2, 1, 3, 2};
 
     InstanceData2D dynamicInstanceData[32] = {};
     InstanceBuffer instancePushBuffer = {dynamicInstanceData, 32, 0};
 
+    DebugGeoInstanceData rectangleInstanceData[32] = {};
+    u32 rectInstanceCount = 0;
+
     RENDERER_STATE = InitializeRenderer(windowHandle, USE_WARP, false, CLIENT_WIDTH, CLIENT_HEIGHT);
     UpdateRenderTargetViews(RENDERER_STATE.device, RENDERER_STATE.swapChain, RENDERER_STATE.rtvDescHeap, RENDERER_STATE.backBuffers, NUM_FRAMES);
 
     ComPtr<ID3D12Resource> vertexBuffer;
-    ComPtr<ID3D12Resource> vertexUploadBuffer;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
+
+    ComPtr<ID3D12Resource> indexBuffer;
+    D3D12_INDEX_BUFFER_VIEW indexBufferView = {};
 
     ComPtr<ID3D12Resource> instanceBuffer;
     ComPtr<ID3D12Resource> instanceUploadBuffer;
     D3D12_VERTEX_BUFFER_VIEW instanceBufferView = {};
 
-    ComPtr<ID3D12Resource> indexBuffer;
-    ComPtr<ID3D12Resource> indexUploadBuffer;
-    D3D12_INDEX_BUFFER_VIEW indexBufferView = {};
-
     ComPtr<ID3D12Resource> textureBuffer;
     ComPtr<ID3D12Resource> textureP2Buffer;
-    ComPtr<ID3D12Resource> textureUploadBuffer;
-    ComPtr<ID3D12Resource> textureP2UploadBuffer;
     ComPtr<ID3D12Resource> textureP3Buffer;
-    ComPtr<ID3D12Resource> textureP3UploadBuffer;
     ComPtr<ID3D12Resource> textureP4Buffer;
-    ComPtr<ID3D12Resource> textureP4UploadBuffer;
 
-    CreateBufferResource(RENDERER_STATE.device,  &vertexBuffer,   &vertexUploadBuffer, sizeof(quadVertices));
-    CreateBufferResource(RENDERER_STATE.device,  &indexBuffer,    &indexUploadBuffer, sizeof(quadIndices));
-    CreateBufferResource(RENDERER_STATE.device,  &instanceBuffer, &instanceUploadBuffer, sizeof(dynamicInstanceData));
+    UploadArena arena = UploadArenaAlloc(RENDERER_STATE.device, MB(10));
+
+    GPUAllocation vertexUpload = UploadArenaPush(&arena, sizeof(quadVertices), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+    GPUAllocation indexUpload = UploadArenaPush(&arena, sizeof(quadIndices), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+    CreateBufferResource(RENDERER_STATE.device,  &vertexBuffer, sizeof(quadVertices));
+    CreateBufferResource(RENDERER_STATE.device,  &indexBuffer, sizeof(quadIndices));
+
+    UpdateBufferResource(arena.resource, vertexUpload, vertexBuffer, RENDERER_STATE, sizeof(quadVertices), &quadVertices);
+    UpdateBufferResource(arena.resource, indexUpload, indexBuffer, RENDERER_STATE, sizeof(quadIndices), &quadIndices);
+
+    CreateBufferResource(RENDERER_STATE.device,  &instanceBuffer, sizeof(dynamicInstanceData));
+    CreateUploadBufferResource(RENDERER_STATE.device,  &instanceUploadBuffer, sizeof(dynamicInstanceData));
+
+    CreateTextureResource(RENDERER_STATE.device, &textureBuffer, gdEasyData.width, gdEasyData.height, gdEasyData.size);
+    CreateTextureResource(RENDERER_STATE.device, &textureP2Buffer, gdNormalData.width, gdNormalData.height, gdNormalData.size);
+    CreateTextureResource(RENDERER_STATE.device, &textureP3Buffer, gdHardData.width, gdHardData.height, gdHardData.size);
+    CreateTextureResource(RENDERER_STATE.device, &textureP4Buffer, gdHarderData.width, gdHarderData.height, gdHarderData.size);
 
 
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT subResFP = CreateTextureResource(RENDERER_STATE.device, &textureBuffer, gdEasyData.width, gdEasyData.height, gdEasyData.size);
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT subResFP2 = CreateTextureResource(RENDERER_STATE.device, &textureP2Buffer, gdNormalData.width, gdNormalData.height, gdNormalData.size);
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT subResFP3 = CreateTextureResource(RENDERER_STATE.device, &textureP3Buffer, gdHardData.width, gdHardData.height, gdHardData.size);
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT subResFP4 = CreateTextureResource(RENDERER_STATE.device, &textureP4Buffer, gdHarderData.width, gdHarderData.height, gdHarderData.size);
+    UpdateTextureResource(RENDERER_STATE, &arena, textureBuffer,   gdEasyData);
+    UpdateTextureResource(RENDERER_STATE, &arena, textureP2Buffer, gdNormalData);
+    UpdateTextureResource(RENDERER_STATE, &arena, textureP3Buffer, gdHardData);
+    UpdateTextureResource(RENDERER_STATE, &arena, textureP4Buffer, gdHarderData);
 
-    CreateUploadBufferResource(RENDERER_STATE.device, &textureUploadBuffer, subResFP.Footprint.RowPitch * subResFP.Footprint.Height);
-    CreateUploadBufferResource(RENDERER_STATE.device, &textureP2UploadBuffer, subResFP2.Footprint.RowPitch * subResFP2.Footprint.Height);
-    CreateUploadBufferResource(RENDERER_STATE.device, &textureP3UploadBuffer, subResFP3.Footprint.RowPitch * subResFP3.Footprint.Height);
-    CreateUploadBufferResource(RENDERER_STATE.device, &textureP4UploadBuffer, subResFP4.Footprint.RowPitch * subResFP4.Footprint.Height);
+    UploadArenaRelease(&arena);
 
     vertexBuffer->SetName(L"Vertex Buffer");
-    vertexUploadBuffer->SetName(L"Vertex Upload Buffer");
-    
     indexBuffer->SetName(L"Index Buffer");
-    indexUploadBuffer->SetName(L"Index Upload Buffer");
 
     instanceBuffer->SetName(L"Instance Buffer");
     instanceUploadBuffer->SetName(L"Instance Upload Buffer");
-    textureBuffer->SetName(L"Texture Buffer");
-    textureUploadBuffer->SetName(L"Texture Upload Buffer");
-
-    UpdateBufferResource(vertexUploadBuffer, vertexBuffer, RENDERER_STATE, sizeof(quadVertices), &quadVertices);
-    UpdateBufferResource(indexUploadBuffer, indexBuffer, RENDERER_STATE, sizeof(quadIndices), &quadIndices);
-
-    UpdateTextureResource(textureUploadBuffer, textureBuffer, RENDERER_STATE, gdEasyData, subResFP);
-    UpdateTextureResource(textureP2UploadBuffer, textureP2Buffer, RENDERER_STATE, gdNormalData, subResFP2);
-    UpdateTextureResource(textureP3UploadBuffer, textureP3Buffer, RENDERER_STATE, gdHardData, subResFP3);
-    UpdateTextureResource(textureP4UploadBuffer, textureP4Buffer, RENDERER_STATE, gdHarderData, subResFP4);
+    textureBuffer->SetName(L"Texture Buffer 1");
 
     ComPtr<ID3D12Resource> depthBuffer;       // Depth Buffer
     ComPtr<ID3D12DescriptorHeap> dsvHeapDesc; // Depth Stencil View Heap Desciptor
@@ -644,15 +659,25 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         // Render
         BeginFrame(RENDERER_STATE, (float*)&gameState->clearColor);
 
+        // Upload Instance Data
         DynamicUpdateBufferResource(instanceUploadBuffer.Get(), instanceBuffer.Get(), RENDERER_STATE.cmdList.Get(), sizeof(dynamicInstanceData), dynamicInstanceData);
         instancePushBuffer.instanceCount = 0;
 
-        RENDERER_STATE.cmdList->SetPipelineState(pipelineState.Get());
-        ID3D12DescriptorHeap * heaps[] = { srvHeap.Get() };
-        RENDERER_STATE.cmdList->SetDescriptorHeaps(1, heaps);
-
+        // NOTE(rordon): shouldn't change much....
         RENDERER_STATE.cmdList->SetGraphicsRootSignature(rootSignature.Get());
         RENDERER_STATE.cmdList->SetGraphicsRoot32BitConstants(0, 16, &projectionMatrix.m, 0);
+        ID3D12DescriptorHeap * heaps[] = { srvHeap.Get() };
+        RENDERER_STATE.cmdList->SetDescriptorHeaps(1, heaps);
+        RENDERER_STATE.cmdList->RSSetViewports(1, &RENDERER_STATE.viewport);
+        RENDERER_STATE.cmdList->RSSetScissorRects(1, &RENDERER_STATE.scissorRect);
+
+        // TODO(rordon): Render rectangles
+        // TODO(rordon): Render circles 
+        // TODO(rordon): Render lines??? 
+        // TODO(rordon): Render Textured Quads. 
+
+        // Get the frame upload arena, allocate enough for the instance data, create view for instance data, bind it
+        RENDERER_STATE.cmdList->SetPipelineState(pipelineState.Get());
         RENDERER_STATE.cmdList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
 
         RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -660,8 +685,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         RENDERER_STATE.cmdList->IASetVertexBuffers(1, 1, &instanceBufferView);
         RENDERER_STATE.cmdList->IASetIndexBuffer(&indexBufferView);
 
-        RENDERER_STATE.cmdList->RSSetViewports(1, &RENDERER_STATE.viewport);
-        RENDERER_STATE.cmdList->RSSetScissorRects(1, &RENDERER_STATE.scissorRect);
 
         D3D12_GPU_DESCRIPTOR_HANDLE handy = srvHeap->GetGPUDescriptorHandleForHeapStart();
         for (int i = 0; i < 4; i++)

@@ -22,7 +22,7 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-//#define _DEBUG
+#define _DEBUG
 
 #include "core.h"
 
@@ -60,6 +60,22 @@ typedef struct {
     bool tearingSupported;
     bool vSyncEnabled;
 } RendererState;
+
+typedef struct 
+{
+    ID3D12Resource * resource;
+    size_t size;
+    size_t index;
+    void * pCPU;
+    D3D12_GPU_VIRTUAL_ADDRESS pGPU;
+} UploadArena;
+
+typedef struct
+{
+    void * pCPU;
+    D3D12_GPU_VIRTUAL_ADDRESS pGPU;
+    u64 offset;
+} GPUAllocation;
 
 typedef struct {
     vec3 position;

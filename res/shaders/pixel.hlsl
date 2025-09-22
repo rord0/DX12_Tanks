@@ -32,6 +32,15 @@ float line2(float2 uv, float2 center, float radius)
     else return 0.0;
 }
 
+float rectangle(float2 uv, float w)
+{
+    float2 bl = step(float2(w, w), uv);
+    float pct = bl.x * bl.y;
+    float2 tr = step(float2(w, w), 1.0f - uv);
+    pct *= tr.x * tr.y;
+    return 1 - pct;
+}
+
 float4 main(PixelShaderInput IN) : SV_TARGET
 {
     float2 uv = IN.UV;
@@ -46,6 +55,7 @@ float4 main(PixelShaderInput IN) : SV_TARGET
     float3 color = {0.0f, 0.0f, 0.0f};
     // color += circle(uv, center, 0.5f) * float3(1.0f, 1.0f, 1.0f);
 
-    float4 pixelColor = {texel.rgba};
+    //float4 pixelColor = {1.0f, 1.0f, 1.0f,rectangle(uv, 0.05f)};
+    float4 pixelColor = texel;
     return pixelColor;
 }

@@ -303,16 +303,8 @@ void ExecuteCommandList(ComPtr<ID3D12CommandQueue> cmdQueue, ID3D12GraphicsComma
     cmdQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
 }
 
-void CreateBufferResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDestinationResource, ID3D12Resource ** pIntermediateResource, size_t bufferSize)
+void CreateBufferResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDestinationResource, size_t bufferSize)
 {
-
-    D3D12_HEAP_PROPERTIES uploadHeapProperties = {};
-    uploadHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
-    uploadHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-    uploadHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-    uploadHeapProperties.CreationNodeMask = 1;
-    uploadHeapProperties.VisibleNodeMask = 1;
-
     D3D12_HEAP_PROPERTIES heapProperties = {};
     heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
     heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
@@ -333,9 +325,6 @@ void CreateBufferResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDesti
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-    AssertIfFailed(
-        device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(pIntermediateResource))
-    );
     AssertIfFailed(
         device->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(pDestinationResource))
     );
@@ -368,7 +357,7 @@ void CreateUploadBufferResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** 
     );
 }
 
-D3D12_PLACED_SUBRESOURCE_FOOTPRINT CreateTextureResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDestinationResource, u64 width, u64 height, size_t bufferSize)
+void CreateTextureResource(ComPtr<ID3D12Device2> device, ID3D12Resource ** pDestinationResource, u64 width, u64 height, size_t bufferSize)
 {
     D3D12_HEAP_PROPERTIES heapProperties = {};
     heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -389,18 +378,9 @@ D3D12_PLACED_SUBRESOURCE_FOOTPRINT CreateTextureResource(ComPtr<ID3D12Device2> d
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
     
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout = {};
-    UINT64 totalBytes = 0;
-    UINT64 rowSizeInBytes = 0;
-    UINT rowCount = 0;
-
-    device->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &layout, &rowCount, &rowSizeInBytes, &totalBytes);
-
     AssertIfFailed(
         device->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(pDestinationResource))
     );
-
-    return layout;
 }
 
 ID3DBlob * CompileShader(void * src, size_t size, const char * name, const char * entry, const char * target)
@@ -590,19 +570,14 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
     return rootSignature;
 }
 
-void UpdateBufferResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Resource> buffer, RendererState & state, size_t bufferSize, const void * bufferData)
+void UpdateBufferResource(ComPtr<ID3D12Resource> uploadBuffer, GPUAllocation uploadAlloc, ComPtr<ID3D12Resource> buffer, RendererState & state, size_t bufferSize, const void * bufferData)
 {
-    void * uploadBufferAddress;
-    D3D12_RANGE uploadRange;
-    uploadRange.Begin = 0;
-    uploadRange.End = bufferSize - 1;
-    HRESULT result = uploadBuffer->Map(0, &uploadRange, &uploadBufferAddress);
-    AssertIfFailed(result);
-    memcpy(uploadBufferAddress, bufferData, bufferSize);
-    uploadBuffer->Unmap(0, &uploadRange);
+    // Copy data into upload buffer
+    memcpy(uploadAlloc.pCPU, bufferData, bufferSize);
 
+    // Copy from upload heap to default heap
     state.cmdList->Reset(state.cmdAllocators[0].Get(), nullptr);
-    state.cmdList->CopyBufferRegion(buffer.Get(), 0, uploadBuffer.Get(), 0, bufferSize);
+    state.cmdList->CopyBufferRegion(buffer.Get(), 0, uploadBuffer.Get(), uploadAlloc.offset, bufferSize);
 
     ExecuteCommandList(state.cmdQueue, state.cmdList.Get());
     int fenceValue = SignalCommandQueue(state.cmdQueue, state.fence, &state.fenceValue);
@@ -626,25 +601,88 @@ void DynamicUpdateBufferResource(ID3D12Resource * uploadBuffer, ID3D12Resource *
     cmdList->ResourceBarrier(1, &barrier);
 }
 
-void UpdateTextureResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Resource> buffer, RendererState & state, ImageData img, D3D12_PLACED_SUBRESOURCE_FOOTPRINT subResFP)
+UploadArena UploadArenaAlloc(ComPtr<ID3D12Device2> device, size_t size)
 {
-    void * uploadBufferAddress;
-    D3D12_RANGE uploadRange;
-    uploadRange.Begin = 0;
-    uploadRange.End = (subResFP.Footprint.RowPitch * subResFP.Footprint.Height) - 1;
-    HRESULT result = uploadBuffer->Map(0, nullptr, &uploadBufferAddress);
-    AssertIfFailed(result);
+    UploadArena arena = {};
+    arena.size = size;
+    CreateUploadBufferResource(device, &arena.resource, size);
+    arena.pGPU = arena.resource->GetGPUVirtualAddress();
+    HRESULT mapResult = arena.resource->Map(0, nullptr, &arena.pCPU);
+    AssertIfFailed(mapResult);
+    arena.index = 0;
+    return arena;
+}
 
-    u32 srcRowPitch = img.width * img.numComponents;
-    u32 destRowPitch = subResFP.Footprint.RowPitch;
-    for (int y = 0; y < subResFP.Footprint.Height; ++y)
+void UploadArenaClear(UploadArena * arena)
+{
+    arena->index = 0;
+}
+
+void UploadArenaRelease(UploadArena * arena)
+{
+    arena->resource->Unmap(0, nullptr);
+    arena->resource->Release();
+    arena->resource = nullptr;
+    arena->pCPU = nullptr;
+    arena->pGPU = D3D12_GPU_VIRTUAL_ADDRESS(0);
+    arena->size = 0;
+}
+
+inline size_t AlignPow2(size_t size, size_t alignment)
+{
+    return (size + alignment - 1) & ~(alignment - 1);
+}
+
+GPUAllocation UploadArenaPush(UploadArena * arena, size_t size, size_t alignment)
+{
+    GPUAllocation allocation = {};
+
+    size_t alignedSize = AlignPow2(size, alignment);
+    size_t alignedOffset = AlignPow2(arena->index, alignment);
+
+    // Check if arena has space for aligned memory
+    if (alignedOffset + alignedSize <= arena->size)
     {
-        u8 * destPadded = (u8*)uploadBufferAddress + (destRowPitch * y);
-        u8 * srcPacked =                img.memory +  (srcRowPitch * y);
+        allocation.pCPU = (u8*)arena->pCPU + alignedOffset;
+        allocation.pGPU = arena->pGPU + alignedOffset;
+        allocation.offset = alignedOffset;
+
+        arena->index += alignedSize;
+    }
+    return allocation;
+}
+
+void UploadArenaPop(UploadArena * arena, size_t size)
+{
+    if (size <= arena->index)
+    {
+        arena->index -= size;
+    }
+    else
+    {
+        // TODO(rordon): warning that user popped too much off stack.
+        arena->index = 0;
+    }
+}
+
+void UpdateTextureResource(RendererState & state, UploadArena * arena, ComPtr<ID3D12Resource> textureResource,ImageData img)
+{
+    D3D12_RESOURCE_DESC desc = textureResource->GetDesc();
+
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
+    UINT numRows;
+    UINT64 srcRowPitch;
+    UINT64 totalBytes;
+    state.device->GetCopyableFootprints(&desc, 0, 1, 0, &footprint, &numRows, &srcRowPitch, &totalBytes);
+
+    GPUAllocation allocation = UploadArenaPush(arena, totalBytes, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+
+    for (int y = 0; y < numRows; y++)
+    {
+        u8 * destPadded = (u8*)allocation.pCPU + (footprint.Footprint.RowPitch * y);
+        u8 * srcPacked =  img.memory +  (srcRowPitch * y);
         memcpy(destPadded, srcPacked, srcRowPitch);
     }
-
-    uploadBuffer->Unmap(0, &uploadRange);
 
     state.cmdList->Reset(state.cmdAllocators[0].Get(), nullptr);
 
@@ -658,24 +696,26 @@ void UpdateTextureResource(ComPtr<ID3D12Resource> uploadBuffer, ComPtr<ID3D12Res
 
     D3D12_TEXTURE_COPY_LOCATION textureSrc;
     textureSrc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    textureSrc.pResource = uploadBuffer.Get();
+    textureSrc.pResource = arena->resource;
     textureSrc.SubresourceIndex = 0;
-    textureSrc.PlacedFootprint.Offset = subResFP.Offset;
-    textureSrc.PlacedFootprint.Footprint = subResFP.Footprint;
+    textureSrc.PlacedFootprint.Offset = allocation.offset;
+    textureSrc.PlacedFootprint.Footprint = footprint.Footprint;
 
     D3D12_TEXTURE_COPY_LOCATION textureDest = {};
-    textureDest.pResource = buffer.Get();
+    textureDest.pResource = textureResource.Get();
     textureDest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     textureDest.SubresourceIndex = 0;
 
     state.cmdList->CopyTextureRegion(&textureDest, 0, 0, 0, &textureSrc, &textureSizeBox);
 
-    D3D12_RESOURCE_BARRIER b = CreateTransitionBarrier(buffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    D3D12_RESOURCE_BARRIER b = CreateTransitionBarrier(textureResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     state.cmdList->ResourceBarrier(1, &b);
 
     ExecuteCommandList(state.cmdQueue, state.cmdList.Get());
     int fenceValue = SignalCommandQueue(state.cmdQueue, state.fence, &state.fenceValue);
     WaitForFenceValue(state.fence, fenceValue, state.fenceEvent);
+
+    UploadArenaPop(arena, totalBytes);
 }
 
 RendererState InitializeRenderer(HWND windowHandle, bool useWARP, bool enableVSync, u32 width, u32 height)
