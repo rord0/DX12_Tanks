@@ -1,11 +1,14 @@
+#ifndef RENDER_ENTRY_H
+#define RENDER_ENTRY_H
+
 #include "core.h"
 
 typedef enum 
 {
-    RENDER_ENTRY_CLEAR,
-    RENDER_ENTRY_DEBUG_RECTANGLE,
-    RENDER_ENTRY_DEBUG_CIRCLE,
-    RENDER_ENTRY_TEXTURED_QUAD
+    RENDER_ENTRY_TYPE_CLEAR,
+    RENDER_ENTRY_TYPE_DEBUG_RECTANGLE,
+    RENDER_ENTRY_TYPE_DEBUG_CIRCLE,
+    RENDER_ENTRY_TYPE_TEXTURED_QUAD
 } RenderEntryType;
 
 typedef struct {
@@ -33,9 +36,4 @@ typedef struct {
     InstanceData2D instanceData;
 } RenderEntryTexturedQuad;
 
-typedef struct {
-    u32 entryCount;
-    u8 * memory;
-    size_t size;
-    size_t index;
-} RendererPushBuffer;
+#endif RENDER_ENTRY_H

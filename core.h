@@ -88,10 +88,18 @@ typedef struct {
     u32 instanceCount;
 } InstanceBuffer;
 
+typedef struct {
+    u32 entryCount;
+    u8 * memory;
+    size_t size;
+    size_t index;
+} RendererPushBuffer;
 
 typedef struct {
     void * permStorage;
     u64 permStorageSize;
+    void * transientStorage;
+    u64 transStorageSize;
 } GameMemory;
 
 typedef struct {
@@ -100,12 +108,13 @@ typedef struct {
     vec3 cameraPos;
     vec2 tempPlayerPos;
     vec2 tempInput;
+    RendererPushBuffer renderPB;
 } GameState;
 
 #define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory)
 typedef GAME_START_FUNCTION(GameStartFunction);
 
-#define GAME_UPDATE_FUNCTION(name) void name(GameMemory * gameMemory, InstanceBuffer * instanceBuffer, double deltaTime)
+#define GAME_UPDATE_FUNCTION(name) void name(GameMemory * gameMemory, double deltaTime)
 typedef GAME_UPDATE_FUNCTION(GameUpdateFunction);
 
 #endif // CORE_H

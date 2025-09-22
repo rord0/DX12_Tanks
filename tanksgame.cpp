@@ -1,4 +1,6 @@
 #include "core.h"
+#include "render_entry.h"
+#include "string.h"
 
 #define EXPORT extern "C" __declspec(dllexport)
 
@@ -62,8 +64,41 @@ vec4 GetHSVSpectrumColor(float time, float speed = 1.0f)
     return HSVtoRGBA(hue, 1.0f, 1.0f);
 }
 
+
+bool PushRenderEntryStruct(RendererPushBuffer * pb, void * entry, size_t entrySize)
+{
+    if (pb->index + entrySize < pb->size)
+    {
+        memcpy(pb->memory + pb->index, entry, entrySize);
+        pb->index += entrySize;
+        pb->entryCount++;
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+#define PushRenderEntry(pushBuffer, entry) PushRenderEntryStruct(pushBuffer, &entry, sizeof(entry));
+
+inline bool RendererPushImage(RendererPushBuffer * pb, u32 textureID, InstanceData2D instanceData)
+{
+    RenderEntryTexturedQuad entry = {RENDER_ENTRY_TYPE_TEXTURED_QUAD, textureID, instanceData};
+    return PushRenderEntry(pb, entry);
+}
+
+inline bool RendererPushRectangle(RendererPushBuffer * pb, DebugGeoInstanceData instanceData)
+{
+    RenderEntryDebugRectangle entry = {RENDER_ENTRY_TYPE_DEBUG_RECTANGLE, instanceData};
+    return PushRenderEntry(pb, entry);
+}
+
 EXPORT GAME_START_FUNCTION(start)
 {
+    GameState * state = (GameState*)gameMemory->permStorage;
+    state->renderPB.size = gameMemory->transStorageSize;
+    state->renderPB.memory = (u8*)gameMemory->transientStorage;
     // TODO(rordon): load asset files
     // TODO(rordon): create tank part uv coordinate hashmap.
 }
@@ -83,9 +118,16 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     color = {0.0f, 0.5f, 0.5f, 1.0f};
     state->clearColor = color;
 
-    instanceBuffer->data[0] = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0f}, {1.0f, 1.0f}, 0.0f};
-    instanceBuffer->data[1] = {{0.5f, 0.0f}, {1.0f + sinf(time) * 0.5f, 1.0f + sinf(time) * 0.5f}, 1.57079633f};
-    instanceBuffer->data[2] = {{-0.0f, -0.5f}, {1.0f, 1.0f}, (float)fmod(time, 360.0)};
-    instanceBuffer->data[3] = {{-sinf(time) * 0.5f, cosf(time) * 0.5f, 0.0f}, {1.0f, 1.0f}, 0.0f};
-    instanceBuffer->instanceCount = 4;
+    DebugGeoInstanceData debugRectangle = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, (float)fmod(time, 360.0)};
+    RendererPushRectangle(&state->renderPB, debugRectangle);
+
+    InstanceData2D gdEasy = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0f}, {1.0f, 1.0f}, 0.0f};
+    InstanceData2D gdNormal = {{0.5f, 0.0f}, {1.0f + sinf(time) * 0.5f, 1.0f + sinf(time) * 0.5f}, 1.57079633f};
+    InstanceData2D gdHard = {{-0.0f, -0.5f}, {1.0f, 1.0f}, (float)fmod(time, 360.0)};
+    InstanceData2D gdHarder = {{-sinf(time) * 0.5f, cosf(time) * 0.5f, 0.0f}, {1.0f, 1.0f}, 0.0f};
+
+    RendererPushImage(&state->renderPB, 0, gdEasy);
+    RendererPushImage(&state->renderPB, 1, gdNormal);
+    RendererPushImage(&state->renderPB, 2, gdHard);
+    RendererPushImage(&state->renderPB, 3, gdHarder);
 }

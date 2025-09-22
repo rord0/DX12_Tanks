@@ -1,5 +1,6 @@
 #include "includes.h"
 #include "render.cpp"
+#include "render_entry.h"
 #include <climits>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -299,6 +300,44 @@ LRESULT mainWindowCallback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
     return result;
 }
 
+void ProcessRenderPushBuffer(RendererPushBuffer * pb, InstanceBuffer * instanceBuf)
+{
+    size_t entryOffset = 0;
+    while (entryOffset < pb->index)
+    {
+        RenderEntryHeader * header = (RenderEntryHeader*)(pb->memory + entryOffset);
+        switch (header->type)
+        {
+            case RENDER_ENTRY_TYPE_CLEAR:
+                entryOffset += sizeof(RenderEntryClear);
+                break;
+            case RENDER_ENTRY_TYPE_DEBUG_RECTANGLE:
+                // TODO(rordon): copy instance data into buffer.
+                entryOffset += sizeof(RenderEntryDebugRectangle);
+                break;
+            case RENDER_ENTRY_TYPE_DEBUG_CIRCLE:
+                entryOffset += sizeof(RenderEntryDebugCircle);
+                break;
+            case RENDER_ENTRY_TYPE_TEXTURED_QUAD:
+            {
+                RenderEntryTexturedQuad * entry = (RenderEntryTexturedQuad*)header;
+                if (instanceBuf->instanceCount < instanceBuf->maxInstances)
+                {
+                    instanceBuf->data[instanceBuf->instanceCount] = entry->instanceData;
+                    instanceBuf->instanceCount++;
+                }
+                entryOffset += sizeof(RenderEntryTexturedQuad);
+            }   break;
+            default:
+                // Crashout.
+                break;
+        } 
+    }
+
+    pb->entryCount = 0;
+    pb->index = 0;
+}
+
 void BeginFrame(RendererState& state, float clearColor[4])
 {
     ComPtr<ID3D12CommandAllocator> cmdAllocator = state.cmdAllocators[state.backBufferIndex];
@@ -378,7 +417,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     DEBUG_FileResult vertexShaderSrc = DEBUG_PlatformReadEntireFile("../vertex.hlsl");
     DEBUG_FileResult pixelShaderSrc = DEBUG_PlatformReadEntireFile("../pixel.hlsl");
 
-    ImageData gdEasyData = LoadImageFromFile("../tank_parts.png");
+    ImageData gdEasyData = LoadImageFromFile("../gd_easy.png");
     ImageData gdNormalData = LoadImageFromFile("../gd_normal.png");
     ImageData gdHardData = LoadImageFromFile("../gd_hard.png");
     ImageData gdHarderData = LoadImageFromFile("../gd_harder.png");
@@ -564,6 +603,9 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     GameMemory gameMemory = {};
     gameMemory.permStorage = VirtualAlloc(0, MB(2), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
     gameMemory.permStorageSize = MB(2);
+    gameMemory.transientStorage = VirtualAlloc(0, MB(1), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    gameMemory.transStorageSize = MB(1);
+
     InputState inputState = {};
 
     gameCode.Start(&gameMemory);
@@ -612,15 +654,17 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         gameState->tempInput.y = (float)inputState.W.isDown + -(float)(inputState.S.isDown); 
         gameState->tempInput.x = (float)inputState.D.isDown + -(float)(inputState.A.isDown); 
 
-        gameCode.Update(&gameMemory, &instancePushBuffer, deltaTime);
-
+        gameCode.Update(&gameMemory, deltaTime);
 
         mat4 projectionMatrix = orthographicProjection(ASPECT, -ASPECT, 1.0f, -1.0f, -0.01f, 100.0f);
+
+        ProcessRenderPushBuffer(&gameState->renderPB, &instancePushBuffer);
         
         // Render
         BeginFrame(RENDERER_STATE, (float*)&gameState->clearColor);
 
         DynamicUpdateBufferResource(instanceUploadBuffer.Get(), instanceBuffer.Get(), RENDERER_STATE.cmdList.Get(), sizeof(dynamicInstanceData), dynamicInstanceData);
+        instancePushBuffer.instanceCount = 0;
 
         RENDERER_STATE.cmdList->SetPipelineState(pipelineState.Get());
         ID3D12DescriptorHeap * heaps[] = { srvHeap.Get() };
