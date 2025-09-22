@@ -403,6 +403,24 @@ D3D12_PLACED_SUBRESOURCE_FOOTPRINT CreateTextureResource(ComPtr<ID3D12Device2> d
     return layout;
 }
 
+ID3DBlob * CompileShader(void * src, size_t size, const char * name, const char * entry, const char * target)
+{
+    ID3DBlob * shaderBlob = nullptr;
+    ID3DBlob * errorBlob = nullptr;
+    UINT flags1 = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+
+    if (FAILED(D3DCompile(src, size, name, NULL, NULL, entry, target, flags1, 0, &shaderBlob, &errorBlob)))
+    {
+        if (errorBlob)
+        {
+            OutputDebugStringA(static_cast<char*>(errorBlob->GetBufferPointer()));
+            errorBlob->Release();
+        }
+    };
+
+    return shaderBlob;
+}
+
 D3D12_GRAPHICS_PIPELINE_STATE_DESC 
 createQuadPipelineStateDesc(ID3D12RootSignature * rootSignature,
                             D3D12_INPUT_ELEMENT_DESC * pInputElementDescs,
@@ -563,12 +581,11 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
         if (rootSignatureErrorBlob)
         {
             OutputDebugStringA(static_cast<char*>(rootSignatureErrorBlob->GetBufferPointer()));
+            rootSignatureErrorBlob->Release();
         }
     }
     AssertIfFailed(device->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(), rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature)));
-
     rootSignatureBlob->Release();
-    if (rootSignatureErrorBlob) rootSignatureErrorBlob->Release();
 
     return rootSignature;
 }

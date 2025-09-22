@@ -379,7 +379,6 @@ void EndFrame(RendererState& state)
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
-    
     WNDCLASS windowClass = {};
 
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
@@ -422,31 +421,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ImageData gdHardData = LoadImageFromFile("../gd_hard.png");
     ImageData gdHarderData = LoadImageFromFile("../gd_harder.png");
 
-    ID3DBlob * vertexShaderBlob = nullptr;
-    ID3DBlob * vertexShaderErrorBlob = nullptr;
-
-    ID3DBlob * pixelShaderBlob = nullptr;
-    ID3DBlob * pixelShaderErrorBlob = nullptr;
-
-    if (FAILED(D3DCompile(vertexShaderSrc.data, vertexShaderSrc.size, "vertex.hlsl", NULL, NULL,"main", "vs_5_1", D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0, &vertexShaderBlob, &vertexShaderErrorBlob)))
-    {
-        if (vertexShaderErrorBlob)
-        {
-            OutputDebugStringA(static_cast<char*>(vertexShaderErrorBlob->GetBufferPointer()));
-        }
-    };
-    if (FAILED(D3DCompile(pixelShaderSrc.data, pixelShaderSrc.size, "pixel.hlsl", NULL, NULL, "main", "ps_5_1", D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0, &pixelShaderBlob, &pixelShaderErrorBlob)))
-    {
-        if (pixelShaderErrorBlob)
-        {
-            OutputDebugStringA(static_cast<char*>(pixelShaderErrorBlob->GetBufferPointer()));
-        }
-    };
+    ID3DBlob * vertexShaderBlob = CompileShader(vertexShaderSrc.data, vertexShaderSrc.size, "vertex.hlsl", "main", "vs_5_1");
+    ID3DBlob * pixelShaderBlob = CompileShader(pixelShaderSrc.data, pixelShaderSrc.size, "pixel.hlsl", "main", "ps_5_1");
 
     D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
     D3D12_SHADER_BYTECODE pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
 
-    //                          DirectX12
     EnableDebugLayer();
 
     VertexPosUV quadVertices[4] = {{{-0.25,  0.25, 0.0}, {0.0, 0.0}},    // Top Left     (blk)
@@ -584,6 +564,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     bool contentLoaded = false;
     ShowWindow(windowHandle, SW_SHOW);
+
     // -----------------------------------
     //             Profiling
     LARGE_INTEGER perfFrequencyResult;
