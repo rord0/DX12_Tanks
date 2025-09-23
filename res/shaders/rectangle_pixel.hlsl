@@ -1,7 +1,8 @@
 struct PixelShaderInput
 {
     float2 UV : UV;
-    float3 COLOR: COLOR;
+    float3 color : COLOR;
+    float  fill : FILL;
 };
 
 float rectangle(float2 uv, float w)
@@ -15,6 +16,6 @@ float rectangle(float2 uv, float w)
 
 float4 main(PixelShaderInput IN) : SV_TARGET
 {
-    float4 pixelColor = {IN.COLOR.xyz, rectangle(IN.UV, 0.05f)};
+    float4 pixelColor = {IN.color.xyz, rectangle(IN.UV, 0.05f)};
     return pixelColor;
 }

@@ -10,15 +10,17 @@ struct VertexData
     float3 Position : Position;
     float2 UV : UV;
     float3 instancePosition : InstancePosition;
-    float3 instanceColor : InstanceColor;
     float2 instanceSize : InstanceSize;
+    float3 instanceColor : InstanceColor;
     float  rotationZ : InstanceRotZ;
+    float  instanceFill: InstanceFill;
 };
 
 struct VertexShaderOutput
 {
 	float2 UV : UV;
 	float3 Color : COLOR;
+    float Fill : FILL;
     float4 Position : SV_Position;
 };
 
@@ -50,7 +52,8 @@ VertexShaderOutput main(VertexData IN)
     float4x4 MVP = mul(ModelViewProjectionCB.MVP, modelMatrix);
     OUT.Position = mul(MVP, float4(IN.Position, 1));
     OUT.UV = IN.UV;
-    OUT.Color = IN.instancePosition;
+    OUT.Color = IN.instanceColor;
+    OUT.Fill = IN.instanceFill;
 
     return OUT;
 }

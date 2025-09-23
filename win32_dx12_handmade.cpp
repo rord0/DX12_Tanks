@@ -12,8 +12,8 @@
 #define RESOURCES_PATH "../res/"
 
 bool USE_WARP = false;
-const u32 CLIENT_WIDTH = 800;
-const u32 CLIENT_HEIGHT = 600;
+const u32 CLIENT_WIDTH = 1200;
+const u32 CLIENT_HEIGHT = 800;
 float ASPECT = (float)CLIENT_WIDTH / (float)CLIENT_HEIGHT;
 
 bool RUNNING = false;
@@ -301,8 +301,10 @@ LRESULT mainWindowCallback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
     return result;
 }
 
-void ProcessRenderPushBuffer(RendererPushBuffer * pb, InstanceBuffer * instanceBuf)
+void ProcessRenderPushBuffer(RendererPushBuffer * pb, InstanceBuffer * instanceBuf, DebugGeoInstanceData * rectInstanceData, u32 * rectCount, u32 maxRects)
 {
+    //NOTE(rordon): all the code is doing here is taking a struct with variable size instance data
+    //              then copying it into another buffer... Maybe there's a way to do this without writing code for each render command.
     size_t entryOffset = 0;
     while (entryOffset < pb->index)
     {
@@ -313,8 +315,15 @@ void ProcessRenderPushBuffer(RendererPushBuffer * pb, InstanceBuffer * instanceB
                 entryOffset += sizeof(RenderEntryClear);
                 break;
             case RENDER_ENTRY_TYPE_DEBUG_RECTANGLE:
-                // TODO(rordon): copy instance data into buffer.
+            {
+                RenderEntryDebugRectangle * entry = (RenderEntryDebugRectangle*)header;
+                if (*rectCount < maxRects)
+                {
+                    rectInstanceData[*rectCount] = entry->instanceData;
+                    *rectCount += 1;
+                }
                 entryOffset += sizeof(RenderEntryDebugRectangle);
+            }
                 break;
             case RENDER_ENTRY_TYPE_DEBUG_CIRCLE:
                 entryOffset += sizeof(RenderEntryDebugCircle);
@@ -324,8 +333,7 @@ void ProcessRenderPushBuffer(RendererPushBuffer * pb, InstanceBuffer * instanceB
                 RenderEntryTexturedQuad * entry = (RenderEntryTexturedQuad*)header;
                 if (instanceBuf->instanceCount < instanceBuf->maxInstances)
                 {
-                    instanceBuf->data[instanceBuf->instanceCount] = entry->instanceData;
-                    instanceBuf->instanceCount++;
+                    instanceBuf->data[instanceBuf->instanceCount++] = entry->instanceData;
                 }
                 entryOffset += sizeof(RenderEntryTexturedQuad);
             }   break;
@@ -397,6 +405,7 @@ ID3DBlob * CompileShaderFromFile(const char * filepath, const char * name, const
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
+    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     WNDCLASS windowClass = {};
 
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
@@ -441,6 +450,9 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
     D3D12_SHADER_BYTECODE pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
 
+    D3D12_SHADER_BYTECODE rectVertexShaderBytecode = {rectangleVertexShaderBlob->GetBufferPointer(), rectangleVertexShaderBlob->GetBufferSize()};
+    D3D12_SHADER_BYTECODE rectPixelShaderBytecode = {rectanglePixelShaderBlob->GetBufferPointer(), rectanglePixelShaderBlob->GetBufferSize()};
+
     ImageData gdEasyData = LoadImageFromFile("../gd_easy.png");
     ImageData gdNormalData = LoadImageFromFile("../gd_normal.png");
     ImageData gdHardData = LoadImageFromFile("../gd_hard.png");
@@ -459,6 +471,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     DebugGeoInstanceData rectangleInstanceData[32] = {};
     u32 rectInstanceCount = 0;
+    u32 maxRectInstances = sizeof(rectangleInstanceData)/sizeof(DebugGeoInstanceData);
 
     RENDERER_STATE = InitializeRenderer(windowHandle, USE_WARP, false, CLIENT_WIDTH, CLIENT_HEIGHT);
     UpdateRenderTargetViews(RENDERER_STATE.device, RENDERER_STATE.swapChain, RENDERER_STATE.rtvDescHeap, RENDERER_STATE.backBuffers, NUM_FRAMES);
@@ -472,6 +485,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ComPtr<ID3D12Resource> instanceBuffer;
     ComPtr<ID3D12Resource> instanceUploadBuffer;
     D3D12_VERTEX_BUFFER_VIEW instanceBufferView = {};
+
+    D3D12_VERTEX_BUFFER_VIEW rectInstanceBufferView = {};
 
     ComPtr<ID3D12Resource> textureBuffer;
     ComPtr<ID3D12Resource> textureP2Buffer;
@@ -527,10 +542,24 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
 
+    D3D12_INPUT_ELEMENT_DESC debugGeoElementDescs[] = {
+            { "Position",         0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "UV",               0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "InstancePosition", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceSize",     0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceColor",    0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceFill",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+    };
+
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature.Get(), inputElementDescs, 5, vertexShaderBytecode, pixelShaderBytecode);
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC debugGeoPSODesc = createQuadPipelineStateDesc(rootSignature.Get(), debugGeoElementDescs, _countof(debugGeoElementDescs), rectVertexShaderBytecode, rectPixelShaderBytecode);
   
     ComPtr<ID3D12PipelineState> pipelineState;
     AssertIfFailed(RENDERER_STATE.device->CreateGraphicsPipelineState(&pipelineStateDesc, IID_PPV_ARGS(&pipelineState)));
+
+    ComPtr<ID3D12PipelineState> rectPipelineState;
+    AssertIfFailed(RENDERER_STATE.device->CreateGraphicsPipelineState(&debugGeoPSODesc, IID_PPV_ARGS(&rectPipelineState)));
 
     // Input Assembler
     vertexBufferView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
@@ -544,6 +573,9 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     instanceBufferView.BufferLocation = instanceBuffer->GetGPUVirtualAddress();
     instanceBufferView.SizeInBytes = sizeof(dynamicInstanceData);
     instanceBufferView.StrideInBytes = sizeof(InstanceData2D);
+
+    rectInstanceBufferView.SizeInBytes = sizeof(rectangleInstanceData);
+    rectInstanceBufferView.StrideInBytes = sizeof(DebugGeoInstanceData);
 
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
     srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
@@ -573,9 +605,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     textDescHandle.ptr += srvHandleIncrementSize;
     RENDERER_STATE.device->CreateShaderResourceView(textureP4Buffer.Get(), &srvDesc, textDescHandle);
 
-    float viewMatrix[4][4];
-
-    float cameraFov;
+    UploadArena frameUploadArena = UploadArenaAlloc(RENDERER_STATE.device, KB(4));
 
     bool contentLoaded = false;
     ShowWindow(windowHandle, SW_SHOW);
@@ -654,13 +684,21 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
         mat4 projectionMatrix = orthographicProjection(ASPECT, -ASPECT, 1.0f, -1.0f, -0.01f, 100.0f);
 
-        ProcessRenderPushBuffer(&gameState->renderPB, &instancePushBuffer);
+        ProcessRenderPushBuffer(&gameState->renderPB, &instancePushBuffer, rectangleInstanceData, &rectInstanceCount, maxRectInstances);
         
         // Render
         BeginFrame(RENDERER_STATE, (float*)&gameState->clearColor);
 
         // Upload Instance Data
-        DynamicUpdateBufferResource(instanceUploadBuffer.Get(), instanceBuffer.Get(), RENDERER_STATE.cmdList.Get(), sizeof(dynamicInstanceData), dynamicInstanceData);
+        UploadArenaClear(&frameUploadArena);
+        GPUAllocation dynAlloc = UploadArenaPush(&frameUploadArena, sizeof(dynamicInstanceData), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        memcpy(dynAlloc.pCPU, dynamicInstanceData, sizeof(dynamicInstanceData));
+        instanceBufferView.BufferLocation = dynAlloc.pGPU;
+        GPUAllocation rectAlloc = UploadArenaPush(&frameUploadArena, sizeof(rectangleInstanceData), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        memcpy(rectAlloc.pCPU, rectangleInstanceData, sizeof(rectangleInstanceData));
+        rectInstanceBufferView.BufferLocation = rectAlloc.pGPU;
+        //DynamicUpdateBufferResource(instanceUploadBuffer.Get(), instanceBuffer.Get(), RENDERER_STATE.cmdList.Get(), sizeof(dynamicInstanceData), dynamicInstanceData);
+        // TODO: clear frame arena then copy instance buffers into it and recreate buffer views.
         instancePushBuffer.instanceCount = 0;
 
         // NOTE(rordon): shouldn't change much....
@@ -670,6 +708,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         RENDERER_STATE.cmdList->SetDescriptorHeaps(1, heaps);
         RENDERER_STATE.cmdList->RSSetViewports(1, &RENDERER_STATE.viewport);
         RENDERER_STATE.cmdList->RSSetScissorRects(1, &RENDERER_STATE.scissorRect);
+        RENDERER_STATE.cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);
+        RENDERER_STATE.cmdList->IASetIndexBuffer(&indexBufferView);
 
         // TODO(rordon): Render rectangles
         // TODO(rordon): Render circles 
@@ -681,10 +721,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         RENDERER_STATE.cmdList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
 
         RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        RENDERER_STATE.cmdList->IASetVertexBuffers(0, 1, &vertexBufferView);
         RENDERER_STATE.cmdList->IASetVertexBuffers(1, 1, &instanceBufferView);
-        RENDERER_STATE.cmdList->IASetIndexBuffer(&indexBufferView);
-
 
         D3D12_GPU_DESCRIPTOR_HANDLE handy = srvHeap->GetGPUDescriptorHandleForHeapStart();
         for (int i = 0; i < 4; i++)
@@ -694,8 +731,16 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             handy.ptr += srvHandleIncrementSize;
         }
 
+        RENDERER_STATE.cmdList->SetPipelineState(rectPipelineState.Get());
+        //RENDERER_STATE.cmdList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
+
+        RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        RENDERER_STATE.cmdList->IASetVertexBuffers(1, 1, &rectInstanceBufferView);
+        RENDERER_STATE.cmdList->DrawIndexedInstanced(6, rectInstanceCount, 0, 0, 0);
+
         EndFrame(RENDERER_STATE);
         
+        rectInstanceCount = 0;
         char buffer[256];
         snprintf(buffer, 256, "MS/Frame: %dms FPS: %d Time: %lf\n", msPerFrame, FPS, time);
         if (timer>0.5f)
