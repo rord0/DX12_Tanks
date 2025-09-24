@@ -118,9 +118,9 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     color = {0.0f, 0.5f, 0.5f, 1.0f};
     state->clearColor = color;
 
-    DebugGeoInstanceData debugRectangle = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, (float)fmod(time, 360.0), 1.0f};
-    DebugGeoInstanceData debugRectangle2 = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0}, {0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}, (float)fmod(time, 360.0), 1.0f};
-    DebugGeoInstanceData debugRectangle3 = {{state->tempPlayerPos.x + 0.25f, state->tempPlayerPos.y, 0.0}, {0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, (float)fmod(time, 360.0), 1.0f};
+    DebugGeoInstanceData debugRectangle = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, (float)fmod(time, 360.0), 0.25f};
+    DebugGeoInstanceData debugRectangle2 = {{state->tempPlayerPos.x, state->tempPlayerPos.y - 0.33f, 0.0}, {0.5f, 0.5f}, {0.0f, 1.0f, 1.0f}, (float)fmod(time, 360.0), 0.5f};
+    DebugGeoInstanceData debugRectangle3 = {{state->tempPlayerPos.x + 0.25f, state->tempPlayerPos.y, 0.0}, {0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, (float)fmod(time, 360.0), 0.75f};
     RendererPushRectangle(&state->renderPB, debugRectangle);
     RendererPushRectangle(&state->renderPB, debugRectangle2);
     RendererPushRectangle(&state->renderPB, debugRectangle3);

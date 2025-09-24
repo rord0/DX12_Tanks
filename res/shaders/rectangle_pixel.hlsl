@@ -16,6 +16,6 @@ float rectangle(float2 uv, float w)
 
 float4 main(PixelShaderInput IN) : SV_TARGET
 {
-    float4 pixelColor = {IN.color.xyz, rectangle(IN.UV, 0.05f)};
+    float4 pixelColor = {IN.color.xyz, rectangle(IN.UV, IN.fill/2)};
     return pixelColor;
 }
