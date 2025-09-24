@@ -444,8 +444,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ID3DBlob * vertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/vertex.hlsl", "vertex.hlsl", "main", "vs_5_1");
     ID3DBlob * pixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/pixel.hlsl", "pixel.hlsl", "main", "ps_5_1");
 
-    ID3DBlob * rectangleVertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/circle_vertex.hlsl", "rectangle_vertex.hlsl", "main", "vs_5_1");
-    ID3DBlob * rectanglePixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/circle_pixel.hlsl", "rectangle_pixel.hlsl", "main", "ps_5_1");
+    ID3DBlob * rectangleVertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/rectangle_vertex.hlsl", "rectangle_vertex.hlsl", "main", "vs_5_1");
+    ID3DBlob * rectanglePixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/rectangle_pixel.hlsl", "rectangle_pixel.hlsl", "main", "ps_5_1");
 
     D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
     D3D12_SHADER_BYTECODE pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
@@ -697,8 +697,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         GPUAllocation rectAlloc = UploadArenaPush(&frameUploadArena, sizeof(rectangleInstanceData), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
         memcpy(rectAlloc.pCPU, rectangleInstanceData, sizeof(rectangleInstanceData));
         rectInstanceBufferView.BufferLocation = rectAlloc.pGPU;
-        //DynamicUpdateBufferResource(instanceUploadBuffer.Get(), instanceBuffer.Get(), RENDERER_STATE.cmdList.Get(), sizeof(dynamicInstanceData), dynamicInstanceData);
-        // TODO: clear frame arena then copy instance buffers into it and recreate buffer views.
+
         instancePushBuffer.instanceCount = 0;
 
         // NOTE(rordon): shouldn't change much....

@@ -4,18 +4,6 @@
 
 #define EXPORT extern "C" __declspec(dllexport)
 
-const char * tankPartNames [36] = {
-    "Tank_Track_Type01_Dark_Blue", "Tank_Track_Type01_Green", "Tank_Track_Type01_Grey", "Tank_Track_Type01_Tan",
-    "Tank_Track_Type02_Dark_Blue", "Tank_Track_Type02_Green", "Tank_Track_Type02_Grey", "Tank_Track_Type02_Tan",
-    "Tank_Track_Type03_Dark_Blue", "Tank_Track_Type03_Green", "Tank_Track_Type03_Grey", "Tank_Track_Type03_Tan",
-    "Tank_Body_Type01_Dark_Blue", "Tank_Body_Type01_Green", "Tank_Body_Type01_Grey", "Tank_Body_Type01_Tan",
-    "Tank_Body_Type02_Dark_Blue", "Tank_Body_Type02_Green", "Tank_Body_Type02_Grey", "Tank_Body_Type02_Tan",
-    "Tank_Body_Type03_Dark_Blue", "Tank_Body_Type03_Green", "Tank_Body_Type03_Grey", "Tank_Body_Type03_Tan",
-    "Tank_Turret_Type01_Dark_Blue", "Tank_Turret_Type01_Green", "Tank_Turret_Type01_Grey", "Tank_Turret_Type01_Tan",
-    "Tank_Turret_Type02_Dark_Blue", "Tank_Turret_Type02_Green", "Tank_Turret_Type02_Grey", "Tank_Turret_Type02_Tan",
-    "Tank_Turret_Type03_Dark_Blue", "Tank_Turret_Type03_Green", "Tank_Turret_Type03_Grey", "Tank_Turret_Type03_Tan",
-};
-
 typedef struct {
     u8 trackType;
     u8 bodyType;
@@ -33,12 +21,13 @@ typedef struct
 
 void DrawTank(vec2 position, TankStyle style)
 {
-    u32 trackIndex  =  0 + style.trackType * style.colorID;
-    u32 bodyIndex   = 12 + style.bodyType  * style.colorID;
-    u32 turretIndex = 24 + style.trackType * style.colorID;
+    u32 trackIndex  =  0 + (3 * style.trackType) + style.colorID;
+    u32 bodyIndex   = 12 + (3 * style.bodyType ) + style.colorID;
+    u32 turretIndex = 24 + (3 * style.trackType) + style.colorID;
 
-    //TODO(rordon): get uv coord of image from hashtable...
-    //TODO(rordon): instance draw tank.
+    //TODO(rordon): assert that indexes are less than 36.
+    //TODO(rordon): get uv coord of image from array...
+    //TODO(rordon): issue draw calls for tank atlas.
 }
 
 vec4 HSVtoRGBA(float h, float s, float v)
@@ -99,8 +88,8 @@ EXPORT GAME_START_FUNCTION(start)
     GameState * state = (GameState*)gameMemory->permStorage;
     state->renderPB.size = gameMemory->transStorageSize;
     state->renderPB.memory = (u8*)gameMemory->transientStorage;
-    // TODO(rordon): load asset files
-    // TODO(rordon): create tank part uv coordinate hashmap.
+    // TODO(rordon): tank_parts.csv into array of uv atlas data. 
+    // TODO(rordon): get image handle for tank texture atlas.
 }
 
 EXPORT GAME_UPDATE_FUNCTION(update)
@@ -118,7 +107,7 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     color = {0.0f, 0.5f, 0.5f, 1.0f};
     state->clearColor = color;
 
-    DebugGeoInstanceData debugRectangle = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, (float)fmod(time, 360.0), 0.25f};
+    DebugGeoInstanceData debugRectangle = {{0.5, 0.25, 0.0}, {0.8f, 1.0f}, {0.0f, 1.0f, 0.0f}, 0, 0.05f};
     DebugGeoInstanceData debugRectangle2 = {{state->tempPlayerPos.x, state->tempPlayerPos.y - 0.33f, 0.0}, {0.5f, 0.5f}, {0.0f, 1.0f, 1.0f}, (float)fmod(time, 360.0), 0.5f};
     DebugGeoInstanceData debugRectangle3 = {{state->tempPlayerPos.x + 0.25f, state->tempPlayerPos.y, 0.0}, {0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, (float)fmod(time, 360.0), 0.75f};
     RendererPushRectangle(&state->renderPB, debugRectangle);
