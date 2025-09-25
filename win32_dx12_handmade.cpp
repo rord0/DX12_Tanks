@@ -67,6 +67,27 @@ mat4 orthographicProjection(float right, float left, float top, float bottom, fl
     return m;
 }                      
 
+void GenerateLineGeometry(vec3 ** vertices, u32 ** indices, u32 ** vertexCount, u32 ** indexCount, u32 resolution)
+{
+    size_t geometrySize = (resolution * sizeof(vec3) * 2) + (resolution * 3 * 4);
+    // TODO: allocate arena space for geomtry data.
+    for (int step = 0; step <= resolution; step++)
+    {
+        const float theta = (PI / 2) + ((step + 0) * PI) / resolution;
+        vec3 vertexL = {cosf(theta) * 0.5f, -sinf(theta) * 0.5f, 0.0f};
+        vec3 vertexR = {cosf(theta) * 0.5f + 1.0f, -sinf(theta) * 0.5f, 0.0f};
+
+        // TODO: copy vertex left into index step.
+        // TODO: copy vertex right into index step + resolution + 1
+    }
+
+    for (int step = 0; step < resolution; step++)
+    {
+        const float theta = (PI / 2) + ((step + 0) * PI) / resolution;
+        vec3 vertex = {cosf(theta) * 0.5f + 1.0f, -sinf(theta) * 0.5f, 0.0f};
+    }
+}
+
 void DEBUG_PlatformFreeFileMemory(void ** memory)
 {
     if (*memory)
@@ -550,6 +571,14 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             { "InstanceColor",    0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
             { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
             { "InstanceFill",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+    };
+
+    D3D12_INPUT_ELEMENT_DESC lineElementDescs[] = {
+            { "Position",      0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "StartPos",      0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 0},
+            { "EndPos",        0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 0},
+            { "InstanceColor", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 0},
+            { "InstanceWidth", 0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA}
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature.Get(), inputElementDescs, 5, vertexShaderBytecode, pixelShaderBytecode);
