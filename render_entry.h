@@ -8,6 +8,7 @@ typedef enum
     RENDER_ENTRY_TYPE_CLEAR,
     RENDER_ENTRY_TYPE_DEBUG_RECTANGLE,
     RENDER_ENTRY_TYPE_DEBUG_CIRCLE,
+    RENDER_ENTRY_TYPE_LINE,
     RENDER_ENTRY_TYPE_TEXTURED_QUAD
 } RenderEntryType;
 
@@ -29,6 +30,11 @@ typedef struct {
     RenderEntryHeader header;
     DebugGeoInstanceData instanceData;
 } RenderEntryDebugCircle;
+
+typedef struct {
+    RenderEntryHeader header;
+    LineInstanceData instanceData;
+} RenderEntryLine;
 
 typedef struct {
     RenderEntryHeader header;

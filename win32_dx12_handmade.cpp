@@ -67,7 +67,7 @@ mat4 orthographicProjection(float right, float left, float top, float bottom, fl
     return m;
 }                      
 
-void GenerateLineGeometry(vec3 ** vertices, u32 ** indices, u32 ** vertexCount, u32 ** indexCount, u32 resolution)
+void GenerateRoundCapLineGeometry(vec3 ** vertices, u32 ** indices, u32 ** vertexCount, u32 ** indexCount, u32 resolution)
 {
     size_t geometrySize = (resolution * sizeof(vec3) * 2) + (resolution * 3 * 4);
     // TODO: allocate arena space for geomtry data.
@@ -79,6 +79,21 @@ void GenerateLineGeometry(vec3 ** vertices, u32 ** indices, u32 ** vertexCount, 
 
         // TODO: copy vertex left into index step.
         // TODO: copy vertex right into index step + resolution + 1
+    }
+
+    // Generate indices
+    for (int i = 0; i < resolution; i++)
+    {
+        // Left Semicircle
+        u32 l1 = 0;
+        u32 l2 = i + 1;
+        u32 l3 = i + 2;
+
+        // Right Semicircle
+        const u32 offset = resolution + 1;
+        u32 r1 = offset;
+        u32 r2 = i + offset + 1;
+        u32 r3 = i + offset + 2;
     }
 
     for (int step = 0; step < resolution; step++)
@@ -358,6 +373,11 @@ void ProcessRenderPushBuffer(RendererPushBuffer * pb, InstanceBuffer * instanceB
                 }
                 entryOffset += sizeof(RenderEntryTexturedQuad);
             }   break;
+            case RENDER_ENTRY_TYPE_LINE:
+            {
+                RenderEntryLine * entry = (RenderEntryLine*)header;
+                entryOffset += sizeof(RenderEntryLine);
+            }   break;
             default:
                 // Crashout.
                 break;
@@ -467,6 +487,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     ID3DBlob * rectangleVertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/rectangle_vertex.hlsl", "rectangle_vertex.hlsl", "main", "vs_5_1");
     ID3DBlob * rectanglePixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/rectangle_pixel.hlsl", "rectangle_pixel.hlsl", "main", "ps_5_1");
+
+    ID3DBlob * lineVertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/line_vertex.hlsl", "line_vertex.hlsl", "main", "vs_5_1");
+    ID3DBlob * linePixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/line_pixel.hlsl", "line_pixel.hlsl", "main", "ps_5_1");
+
+    D3D12_SHADER_BYTECODE lineVertexShaderBytecode = {lineVertexShaderBlob->GetBufferPointer(), lineVertexShaderBlob->GetBufferSize()};
+    D3D12_SHADER_BYTECODE linePixelShaderBytecode = {linePixelShaderBlob->GetBufferPointer(), linePixelShaderBlob->GetBufferSize()};
 
     D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
     D3D12_SHADER_BYTECODE pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
@@ -581,14 +607,19 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             { "InstanceWidth", 0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA}
     };
 
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature.Get(), inputElementDescs, 5, vertexShaderBytecode, pixelShaderBytecode);
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature.Get(), inputElementDescs, _countof(inputElementDescs), vertexShaderBytecode, pixelShaderBytecode);
     D3D12_GRAPHICS_PIPELINE_STATE_DESC debugGeoPSODesc = createQuadPipelineStateDesc(rootSignature.Get(), debugGeoElementDescs, _countof(debugGeoElementDescs), rectVertexShaderBytecode, rectPixelShaderBytecode);
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC linePSODesc = createQuadPipelineStateDesc(rootSignature.Get(), lineElementDescs, _countof(lineElementDescs), lineVertexShaderBytecode, linePixelShaderBytecode);
   
     ComPtr<ID3D12PipelineState> pipelineState;
     AssertIfFailed(RENDERER_STATE.device->CreateGraphicsPipelineState(&pipelineStateDesc, IID_PPV_ARGS(&pipelineState)));
 
     ComPtr<ID3D12PipelineState> rectPipelineState;
     AssertIfFailed(RENDERER_STATE.device->CreateGraphicsPipelineState(&debugGeoPSODesc, IID_PPV_ARGS(&rectPipelineState)));
+    
+    ComPtr<ID3D12PipelineState> linePSO;
+    AssertIfFailed(RENDERER_STATE.device->CreateGraphicsPipelineState(&linePSODesc, IID_PPV_ARGS(&linePSO)));
+
 
     // Input Assembler
     vertexBufferView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();

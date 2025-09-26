@@ -83,6 +83,12 @@ inline bool RendererPushRectangle(RendererPushBuffer * pb, DebugGeoInstanceData 
     return PushRenderEntry(pb, entry);
 }
 
+inline bool RendererPushLine(RendererPushBuffer * pb, LineInstanceData instanceData)
+{
+    RenderEntryLine entry = {RENDER_ENTRY_TYPE_LINE, instanceData};
+    return PushRenderEntry(pb, entry);
+}
+
 EXPORT GAME_START_FUNCTION(start)
 {
     GameState * state = (GameState*)gameMemory->permStorage;

@@ -80,7 +80,7 @@ typedef struct {
     vec3 endPos;
     vec3 color;
     float width;
-} DebugLineInstanceData;
+} LineInstanceData;
 
 typedef struct {
     InstanceData2D * data;
