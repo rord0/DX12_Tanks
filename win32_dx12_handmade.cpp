@@ -3,6 +3,8 @@
 #include "render_entry.h"
 #include <climits>
 
+#include "array.cpp"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -67,40 +69,79 @@ mat4 orthographicProjection(float right, float left, float top, float bottom, fl
     return m;
 }                      
 
-void GenerateRoundCapLineGeometry(vec3 ** vertices, u32 ** indices, u32 ** vertexCount, u32 ** indexCount, u32 resolution)
+void GenerateRoundCapLineGeometry(vec3 * vertexBuffer, u16 * indexBuffer, u32 * vertexCount, u16 * indexCount, u32 resolution)
 {
+    // TODO: assert that resolution is greater than one.
+
     size_t geometrySize = (resolution * sizeof(vec3) * 2) + (resolution * 3 * 4);
+    
+    Array vertices = {sizeof(vec3), 64, 0, vertexBuffer};
+    Array indices = {sizeof(u16), 64, 0, indexBuffer};
+
+    vec3 leftCenter = {0.0f, 0.0f, 0.0f};
+    ArrayPush(&vertices, &leftCenter);
+
     // TODO: allocate arena space for geomtry data.
+
+    // Left Semicircle Vertices
     for (int step = 0; step <= resolution; step++)
     {
         const float theta = (PI / 2) + ((step + 0) * PI) / resolution;
         vec3 vertexL = {cosf(theta) * 0.5f, -sinf(theta) * 0.5f, 0.0f};
-        vec3 vertexR = {cosf(theta) * 0.5f + 1.0f, -sinf(theta) * 0.5f, 0.0f};
-
-        // TODO: copy vertex left into index step.
-        // TODO: copy vertex right into index step + resolution + 1
+        ArrayPush(&vertices, &vertexL);
     }
 
-    // Generate indices
-    for (int i = 0; i < resolution; i++)
-    {
-        // Left Semicircle
-        u32 l1 = 0;
-        u32 l2 = i + 1;
-        u32 l3 = i + 2;
-
-        // Right Semicircle
-        const u32 offset = resolution + 1;
-        u32 r1 = offset;
-        u32 r2 = i + offset + 1;
-        u32 r3 = i + offset + 2;
-    }
-
-    for (int step = 0; step < resolution; step++)
+    // Right Semicircle Vertices
+    vec3 rightCenter = {0.0f, 0.0f, 1.0f};
+    ArrayPush(&vertices, &rightCenter);
+    for (int step = 0; step <= resolution; step++)
     {
         const float theta = (PI / 2) + ((step + 0) * PI) / resolution;
-        vec3 vertex = {cosf(theta) * 0.5f + 1.0f, -sinf(theta) * 0.5f, 0.0f};
+        vec3 vertexR = {(-cosf(theta) * 0.5f), sinf(theta) * 0.5f, 1.0f};
+        ArrayPush(&vertices, &vertexR);
     }
+
+    // Indices
+    if (resolution > 1)
+    {
+        for (int step = 0; step < resolution; step++)
+        {
+            u16 l0 = 0; // Center Left Vertex
+            u16 l1 = step + 1;
+            u16 l2 = step + 2;
+
+            ArrayPush(&indices, &l0);
+            ArrayPush(&indices, &l1);
+            ArrayPush(&indices, &l2);
+
+            u16 offset = resolution + 2;
+            u16 r0 = offset + 0; // Center Right Vertex
+            u16 r1 = offset + step + 1;
+            u16 r2 = offset + step + 2;
+
+            ArrayPush(&indices, &r0);
+            ArrayPush(&indices, &r1);
+            ArrayPush(&indices, &r2);
+        }
+    }
+    
+    // Middle Triangle Indices
+    u16 m0 = 1;
+    u16 m1 = resolution + 1;
+    u16 m2 = (resolution + 1) + 2;
+    u16 m3 = (2*resolution + 1) + 2;
+
+    ArrayPush(&indices, &m0);
+    ArrayPush(&indices, &m1);
+    ArrayPush(&indices, &m2);
+
+    ArrayPush(&indices, &m2);
+    ArrayPush(&indices, &m3);
+    ArrayPush(&indices, &m0);
+
+    // Generate Indices
+    *vertexCount = vertices.count;
+    *indexCount = indices.count;
 }
 
 void DEBUG_PlatformFreeFileMemory(void ** memory)
@@ -337,10 +378,8 @@ LRESULT mainWindowCallback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
     return result;
 }
 
-void ProcessRenderPushBuffer(RendererPushBuffer * pb, InstanceBuffer * instanceBuf, DebugGeoInstanceData * rectInstanceData, u32 * rectCount, u32 maxRects)
+void ProcessRenderPushBuffer(RendererPushBuffer * pb, Array * quadInstances, Array * rectInstances, Array * lineInstances)
 {
-    //NOTE(rordon): all the code is doing here is taking a struct with variable size instance data
-    //              then copying it into another buffer... Maybe there's a way to do this without writing code for each render command.
     size_t entryOffset = 0;
     while (entryOffset < pb->index)
     {
@@ -348,39 +387,40 @@ void ProcessRenderPushBuffer(RendererPushBuffer * pb, InstanceBuffer * instanceB
         switch (header->type)
         {
             case RENDER_ENTRY_TYPE_CLEAR:
+            {
                 entryOffset += sizeof(RenderEntryClear);
-                break;
+            } break;
+
             case RENDER_ENTRY_TYPE_DEBUG_RECTANGLE:
             {
                 RenderEntryDebugRectangle * entry = (RenderEntryDebugRectangle*)header;
-                if (*rectCount < maxRects)
-                {
-                    rectInstanceData[*rectCount] = entry->instanceData;
-                    *rectCount += 1;
-                }
+                ArrayPush(rectInstances, &entry->instanceData);
                 entryOffset += sizeof(RenderEntryDebugRectangle);
-            }
-                break;
+            } break;
+
             case RENDER_ENTRY_TYPE_DEBUG_CIRCLE:
+            {
                 entryOffset += sizeof(RenderEntryDebugCircle);
-                break;
+            } break;
+
             case RENDER_ENTRY_TYPE_TEXTURED_QUAD:
             {
                 RenderEntryTexturedQuad * entry = (RenderEntryTexturedQuad*)header;
-                if (instanceBuf->instanceCount < instanceBuf->maxInstances)
-                {
-                    instanceBuf->data[instanceBuf->instanceCount++] = entry->instanceData;
-                }
+                ArrayPush(quadInstances, &entry->instanceData);
                 entryOffset += sizeof(RenderEntryTexturedQuad);
-            }   break;
+            } break;
+
             case RENDER_ENTRY_TYPE_LINE:
             {
                 RenderEntryLine * entry = (RenderEntryLine*)header;
+                ArrayPush(lineInstances, &entry->instanceData);
                 entryOffset += sizeof(RenderEntryLine);
-            }   break;
+            } break;
+
             default:
-                // Crashout.
-                break;
+            {
+                // TODO: crashout here...
+            } break;
         } 
     }
 
@@ -513,12 +553,21 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
                                    {{ 0.25, -0.25, 0.0}, {1.0, 1.0}}};   // Bottom Right (ylw)
     u16 quadIndices[6] = {0, 1, 2, 1, 3, 2};
 
-    InstanceData2D dynamicInstanceData[32] = {};
-    InstanceBuffer instancePushBuffer = {dynamicInstanceData, 32, 0};
+    vec3 lineVertices[128] = {};
+    u16 lineIndices[128] = {};
 
+    u32 lineVertexCount = 0;
+    u16 lineIndexCount = 0;
+
+    GenerateRoundCapLineGeometry(lineVertices, lineIndices, &lineVertexCount, &lineIndexCount, 6);
+
+    InstanceData2D quadInstanceData[32] = {};
     DebugGeoInstanceData rectangleInstanceData[32] = {};
-    u32 rectInstanceCount = 0;
-    u32 maxRectInstances = sizeof(rectangleInstanceData)/sizeof(DebugGeoInstanceData);
+    LineInstanceData lineInstanceData[32] = {};
+
+    Array quadInstances = {sizeof(InstanceData2D), sizeof(quadInstanceData), 0, (void*)quadInstanceData};
+    Array rectangleInstances = {sizeof(DebugGeoInstanceData), sizeof(rectangleInstanceData)/sizeof(DebugGeoInstanceData), 0, (void*)rectangleInstanceData};
+    Array lineInstances = {sizeof(LineInstanceData), sizeof(lineInstanceData)/sizeof(LineInstanceData), 0, (void*)lineInstanceData};
 
     RENDERER_STATE = InitializeRenderer(windowHandle, USE_WARP, false, CLIENT_WIDTH, CLIENT_HEIGHT);
     UpdateRenderTargetViews(RENDERER_STATE.device, RENDERER_STATE.swapChain, RENDERER_STATE.rtvDescHeap, RENDERER_STATE.backBuffers, NUM_FRAMES);
@@ -529,11 +578,15 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ComPtr<ID3D12Resource> indexBuffer;
     D3D12_INDEX_BUFFER_VIEW indexBufferView = {};
 
-    ComPtr<ID3D12Resource> instanceBuffer;
-    ComPtr<ID3D12Resource> instanceUploadBuffer;
-    D3D12_VERTEX_BUFFER_VIEW instanceBufferView = {};
+    ComPtr<ID3D12Resource> lineVertexBuffer;
+    D3D12_VERTEX_BUFFER_VIEW lineVertexBufferView = {};
 
+    ComPtr<ID3D12Resource> lineIndexBuffer;
+    D3D12_INDEX_BUFFER_VIEW lineIndexBufferView = {};
+
+    D3D12_VERTEX_BUFFER_VIEW instanceBufferView = {};
     D3D12_VERTEX_BUFFER_VIEW rectInstanceBufferView = {};
+    D3D12_VERTEX_BUFFER_VIEW lineInstanceBufferView = {};
 
     ComPtr<ID3D12Resource> textureBuffer;
     ComPtr<ID3D12Resource> textureP2Buffer;
@@ -544,6 +597,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     GPUAllocation vertexUpload = UploadArenaPush(&arena, sizeof(quadVertices), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
     GPUAllocation indexUpload = UploadArenaPush(&arena, sizeof(quadIndices), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+    GPUAllocation lineVertexUpload = UploadArenaPush(&arena, sizeof(vec3) * lineVertexCount, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+    GPUAllocation lineIndexUpload = UploadArenaPush(&arena, sizeof(u16) * lineIndexCount, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 
     CreateBufferResource(RENDERER_STATE.device,  &vertexBuffer, sizeof(quadVertices));
     CreateBufferResource(RENDERER_STATE.device,  &indexBuffer, sizeof(quadIndices));
@@ -551,14 +606,16 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     UpdateBufferResource(arena.resource, vertexUpload, vertexBuffer, RENDERER_STATE, sizeof(quadVertices), &quadVertices);
     UpdateBufferResource(arena.resource, indexUpload, indexBuffer, RENDERER_STATE, sizeof(quadIndices), &quadIndices);
 
-    CreateBufferResource(RENDERER_STATE.device,  &instanceBuffer, sizeof(dynamicInstanceData));
-    CreateUploadBufferResource(RENDERER_STATE.device,  &instanceUploadBuffer, sizeof(dynamicInstanceData));
+    CreateBufferResource(RENDERER_STATE.device,  &lineVertexBuffer, sizeof(vec3) * lineVertexCount);
+    CreateBufferResource(RENDERER_STATE.device,  &lineIndexBuffer, sizeof(u16) * lineIndexCount);
+
+    UpdateBufferResource(arena.resource, lineVertexUpload, lineVertexBuffer, RENDERER_STATE, sizeof(vec3) * lineVertexCount, &lineVertices);
+    UpdateBufferResource(arena.resource, lineIndexUpload, lineIndexBuffer, RENDERER_STATE, sizeof(u16) * lineIndexCount, &lineIndices);
 
     CreateTextureResource(RENDERER_STATE.device, &textureBuffer, gdEasyData.width, gdEasyData.height, gdEasyData.size);
     CreateTextureResource(RENDERER_STATE.device, &textureP2Buffer, gdNormalData.width, gdNormalData.height, gdNormalData.size);
     CreateTextureResource(RENDERER_STATE.device, &textureP3Buffer, gdHardData.width, gdHardData.height, gdHardData.size);
     CreateTextureResource(RENDERER_STATE.device, &textureP4Buffer, gdHarderData.width, gdHarderData.height, gdHarderData.size);
-
 
     UpdateTextureResource(RENDERER_STATE, &arena, textureBuffer,   gdEasyData);
     UpdateTextureResource(RENDERER_STATE, &arena, textureP2Buffer, gdNormalData);
@@ -569,9 +626,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     vertexBuffer->SetName(L"Vertex Buffer");
     indexBuffer->SetName(L"Index Buffer");
-
-    instanceBuffer->SetName(L"Instance Buffer");
-    instanceUploadBuffer->SetName(L"Instance Upload Buffer");
+    lineIndexBuffer->SetName(L"Line Index Buffer");
+    lineVertexBuffer->SetName(L"Line Vertex Buffer");
     textureBuffer->SetName(L"Texture Buffer 1");
 
     ComPtr<ID3D12Resource> depthBuffer;       // Depth Buffer
@@ -601,10 +657,10 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     D3D12_INPUT_ELEMENT_DESC lineElementDescs[] = {
             { "Position",      0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "StartPos",      0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 0},
-            { "EndPos",        0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 0},
-            { "InstanceColor", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 0},
-            { "InstanceWidth", 0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA}
+            { "StartPos",      0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "EndPos",        0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceColor", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceWidth", 0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1}
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature.Get(), inputElementDescs, _countof(inputElementDescs), vertexShaderBytecode, pixelShaderBytecode);
@@ -620,7 +676,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     ComPtr<ID3D12PipelineState> linePSO;
     AssertIfFailed(RENDERER_STATE.device->CreateGraphicsPipelineState(&linePSODesc, IID_PPV_ARGS(&linePSO)));
 
-
     // Input Assembler
     vertexBufferView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
     vertexBufferView.SizeInBytes = sizeof(quadVertices);
@@ -630,12 +685,23 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     indexBufferView.SizeInBytes = sizeof(quadIndices);
     indexBufferView.Format = DXGI_FORMAT_R16_UINT; 
 
-    instanceBufferView.BufferLocation = instanceBuffer->GetGPUVirtualAddress();
-    instanceBufferView.SizeInBytes = sizeof(dynamicInstanceData);
+    lineVertexBufferView.BufferLocation = lineVertexBuffer->GetGPUVirtualAddress();
+    lineVertexBufferView.SizeInBytes = sizeof(vec3) * lineVertexCount;
+    lineVertexBufferView.StrideInBytes = sizeof(vec3);
+
+    lineIndexBufferView.BufferLocation = lineIndexBuffer->GetGPUVirtualAddress();
+    lineIndexBufferView.SizeInBytes = sizeof(u16) * lineIndexCount;
+    lineIndexBufferView.Format = DXGI_FORMAT_R16_UINT; 
+
+    instanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
+    instanceBufferView.SizeInBytes = sizeof(quadInstanceData);
     instanceBufferView.StrideInBytes = sizeof(InstanceData2D);
 
     rectInstanceBufferView.SizeInBytes = sizeof(rectangleInstanceData);
     rectInstanceBufferView.StrideInBytes = sizeof(DebugGeoInstanceData);
+
+    lineInstanceBufferView.SizeInBytes = sizeof(lineInstanceData);
+    lineInstanceBufferView.StrideInBytes = sizeof(LineInstanceData);
 
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
     srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
@@ -666,6 +732,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     RENDERER_STATE.device->CreateShaderResourceView(textureP4Buffer.Get(), &srvDesc, textDescHandle);
 
     UploadArena frameUploadArena = UploadArenaAlloc(RENDERER_STATE.device, KB(4));
+    frameUploadArena.resource->SetName(L"Frame Upload Resource");
 
     bool contentLoaded = false;
     ShowWindow(windowHandle, SW_SHOW);
@@ -744,21 +811,25 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
         mat4 projectionMatrix = orthographicProjection(ASPECT, -ASPECT, 1.0f, -1.0f, -0.01f, 100.0f);
 
-        ProcessRenderPushBuffer(&gameState->renderPB, &instancePushBuffer, rectangleInstanceData, &rectInstanceCount, maxRectInstances);
+        ProcessRenderPushBuffer(&gameState->renderPB, &quadInstances, &rectangleInstances, &lineInstances);
         
         // Render
         BeginFrame(RENDERER_STATE, (float*)&gameState->clearColor);
 
         // Upload Instance Data
         UploadArenaClear(&frameUploadArena);
-        GPUAllocation dynAlloc = UploadArenaPush(&frameUploadArena, sizeof(dynamicInstanceData), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-        memcpy(dynAlloc.pCPU, dynamicInstanceData, sizeof(dynamicInstanceData));
+
+        GPUAllocation dynAlloc = UploadArenaPush(&frameUploadArena, sizeof(quadInstanceData), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        memcpy(dynAlloc.pCPU, quadInstanceData, sizeof(quadInstanceData));
         instanceBufferView.BufferLocation = dynAlloc.pGPU;
+
         GPUAllocation rectAlloc = UploadArenaPush(&frameUploadArena, sizeof(rectangleInstanceData), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
         memcpy(rectAlloc.pCPU, rectangleInstanceData, sizeof(rectangleInstanceData));
         rectInstanceBufferView.BufferLocation = rectAlloc.pGPU;
 
-        instancePushBuffer.instanceCount = 0;
+        GPUAllocation lineAlloc = UploadArenaPush(&frameUploadArena, sizeof(lineInstanceData), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        memcpy(lineAlloc.pCPU, lineInstanceData, sizeof(lineInstanceData));
+        lineInstanceBufferView.BufferLocation = lineAlloc.pGPU;
 
         // NOTE(rordon): shouldn't change much....
         RENDERER_STATE.cmdList->SetGraphicsRootSignature(rootSignature.Get());
@@ -778,7 +849,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         // Get the frame upload arena, allocate enough for the instance data, create view for instance data, bind it
         RENDERER_STATE.cmdList->SetPipelineState(pipelineState.Get());
         RENDERER_STATE.cmdList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
-
         RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         RENDERER_STATE.cmdList->IASetVertexBuffers(1, 1, &instanceBufferView);
 
@@ -790,16 +860,25 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             handy.ptr += srvHandleIncrementSize;
         }
 
+        // Draw Rectangle Instances
         RENDERER_STATE.cmdList->SetPipelineState(rectPipelineState.Get());
-        //RENDERER_STATE.cmdList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
-
         RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         RENDERER_STATE.cmdList->IASetVertexBuffers(1, 1, &rectInstanceBufferView);
-        RENDERER_STATE.cmdList->DrawIndexedInstanced(6, rectInstanceCount, 0, 0, 0);
+        RENDERER_STATE.cmdList->DrawIndexedInstanced(6, rectangleInstances.count, 0, 0, 0);
 
+        // Draw Line Instances
+        RENDERER_STATE.cmdList->SetPipelineState(linePSO.Get());
+        RENDERER_STATE.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        RENDERER_STATE.cmdList->IASetVertexBuffers(0, 1, &lineVertexBufferView);
+        RENDERER_STATE.cmdList->IASetVertexBuffers(1, 1, &lineInstanceBufferView);
+        RENDERER_STATE.cmdList->IASetIndexBuffer(&lineIndexBufferView);
+        RENDERER_STATE.cmdList->DrawIndexedInstanced(lineIndexCount, lineInstances.count, 0, 0, 0);
         EndFrame(RENDERER_STATE);
         
-        rectInstanceCount = 0;
+        rectangleInstances.count = 0;
+        quadInstances.count = 0;
+        lineInstances.count = 0;
+
         char buffer[256];
         snprintf(buffer, 256, "MS/Frame: %dms FPS: %d Time: %lf\n", msPerFrame, FPS, time);
         if (timer>0.5f)

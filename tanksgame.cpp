@@ -83,8 +83,9 @@ inline bool RendererPushRectangle(RendererPushBuffer * pb, DebugGeoInstanceData 
     return PushRenderEntry(pb, entry);
 }
 
-inline bool RendererPushLine(RendererPushBuffer * pb, LineInstanceData instanceData)
+inline bool RendererPushLine(RendererPushBuffer * pb, vec3 startPos, vec3 endPos, vec3 color, float width)
 {
+    LineInstanceData instanceData = {startPos, endPos, color, width};
     RenderEntryLine entry = {RENDER_ENTRY_TYPE_LINE, instanceData};
     return PushRenderEntry(pb, entry);
 }
@@ -129,4 +130,7 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     RendererPushImage(&state->renderPB, 1, gdNormal);
     RendererPushImage(&state->renderPB, 2, gdHard);
     RendererPushImage(&state->renderPB, 3, gdHarder);
+
+    RendererPushLine(&state->renderPB, debugRectangle3.position,debugRectangle2.position, {0.196f, 0.04f, 0.6f}, 0.01f);
+    RendererPushLine(&state->renderPB, debugRectangle3.position,gdHard.position, {1.0f, 0.8f, 0.8f}, 0.01f);
 }

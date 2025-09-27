@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <math.h>
+#include <string.h>
 
 typedef uint8_t   u8; // 8-bit unsigned int
 typedef uint16_t u16; // 16-bit unsigned int
@@ -81,12 +82,6 @@ typedef struct {
     vec3 color;
     float width;
 } LineInstanceData;
-
-typedef struct {
-    InstanceData2D * data;
-    u32 maxInstances;
-    u32 instanceCount;
-} InstanceBuffer;
 
 typedef struct {
     u32 entryCount;
