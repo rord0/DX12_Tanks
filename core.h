@@ -18,6 +18,9 @@ typedef float f32;    // 32-bit Float
 #define MB(x) (KB(x) * 1024)
 #define GB(x) (MB(x) * 1024)
 
+#define RESOURCES_PATH "../res/"
+#define PI 3.14159265358979323846
+
 typedef union {
     float elements[3];
     struct
@@ -71,6 +74,13 @@ typedef struct {
 typedef struct {
     vec3 position;
     vec2 scale;
+    vec4 textureCoords;
+    float rotation;
+} SubTextureInstanceData;
+
+typedef struct {
+    vec3 position;
+    vec2 scale;
     vec3 color;
     float rotation;
     float fill;
@@ -90,11 +100,17 @@ typedef struct {
     size_t index;
 } RendererPushBuffer;
 
+////////////////////
+// Function Typedefs
+#define PLATFORM_LOAD_TEXTURE(name) u32 name(const char * textureName)
+typedef PLATFORM_LOAD_TEXTURE(PlatformLoadTextureFunction);
+
 typedef struct {
     void * permStorage;
     u64 permStorageSize;
     void * transientStorage;
     u64 transStorageSize;
+    PlatformLoadTextureFunction * platformLoadTexture;
 } GameMemory;
 
 typedef struct {

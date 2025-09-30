@@ -1,5 +1,3 @@
-#include "includes.h"
-
 inline void AssertIfFailed(HRESULT hr)
 {
     if (FAILED(hr))
@@ -403,7 +401,7 @@ ID3DBlob * CompileShader(void * src, size_t size, const char * name, const char 
 
 D3D12_GRAPHICS_PIPELINE_STATE_DESC 
 createQuadPipelineStateDesc(ID3D12RootSignature * rootSignature,
-                            D3D12_INPUT_ELEMENT_DESC * pInputElementDescs,
+                            const D3D12_INPUT_ELEMENT_DESC * pInputElementDescs,
                             u32 numDescs,
                             D3D12_SHADER_BYTECODE vsByteCode,
                             D3D12_SHADER_BYTECODE psByteCode) 
@@ -601,6 +599,23 @@ void DynamicUpdateBufferResource(ID3D12Resource * uploadBuffer, ID3D12Resource *
     cmdList->ResourceBarrier(1, &barrier);
 }
 
+ID3DBlob * CompileShaderFromFile(const char * filepath, const char * name, const char * entry, const char * target)
+{
+    DEBUG_FileResult shaderSrc = DEBUG_PlatformReadEntireFile(filepath);
+    ID3DBlob * blob = nullptr;
+    if (shaderSrc.data)
+    {
+
+        blob = CompileShader(shaderSrc.data, shaderSrc.size, name, entry, target);
+        DEBUG_PlatformFreeFileMemory(&shaderSrc.data);
+    }
+    else
+    {
+        // TODO(rordon): warning here...
+    }
+    return blob;
+}
+
 UploadArena UploadArenaAlloc(ComPtr<ID3D12Device2> device, size_t size)
 {
     UploadArena arena = {};
@@ -718,8 +733,10 @@ void UpdateTextureResource(RendererState & state, UploadArena * arena, ComPtr<ID
     UploadArenaPop(arena, totalBytes);
 }
 
-RendererState InitializeRenderer(HWND windowHandle, bool useWARP, bool enableVSync, u32 width, u32 height)
+RendererState DX12_InitializeRenderer(HWND windowHandle, bool useWARP, bool enableVSync, u32 width, u32 height)
 {
+    EnableDebugLayer();
+
     RendererState state = {};
     state.adapter = GetAdapter(useWARP);
     state.device = CreateDevice(state.adapter);
@@ -728,6 +745,7 @@ RendererState InitializeRenderer(HWND windowHandle, bool useWARP, bool enableVSy
     state.swapChain = CreateSwapChain(windowHandle, state.cmdQueue, width, height, NUM_FRAMES);
     state.rtvDescHeap = CreateDescriptorHeap(state.device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NUM_FRAMES);
     state.rtvDescSize = state.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    state.srvDescSize = state.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     state.dsvDescHeap = CreateDescriptorHeap(state.device, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1);
     state.backBufferIndex = state.swapChain->GetCurrentBackBufferIndex();
 
@@ -752,5 +770,6 @@ RendererState InitializeRenderer(HWND windowHandle, bool useWARP, bool enableVSy
     state.fenceEvent = CreateFenceEventHandle();
     state.vSyncEnabled = enableVSync;
 
+    UpdateRenderTargetViews(state.device, state.swapChain, state.rtvDescHeap, state.backBuffers, NUM_FRAMES);
     return state;
 }

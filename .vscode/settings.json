@@ -6,6 +6,8 @@
         "xmemory": "cpp",
         "climits": "cpp",
         "utility": "cpp",
-        "tanksgame.c": "cpp"
+        "tanksgame.c": "cpp",
+        "vector": "cpp",
+        "xutility": "cpp"
     }
 }

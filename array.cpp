@@ -1,12 +1,6 @@
 #include "core.h"
 
-typedef struct
-{
-    size_t elementSize;
-    size_t capacity;
-    size_t count;
-    void * elements;
-} Array;
+#include "array.h"
 
 bool ArrayPush(Array * array, void * element)
 {

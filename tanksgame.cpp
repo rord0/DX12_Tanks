@@ -95,6 +95,7 @@ EXPORT GAME_START_FUNCTION(start)
     GameState * state = (GameState*)gameMemory->permStorage;
     state->renderPB.size = gameMemory->transStorageSize;
     state->renderPB.memory = (u8*)gameMemory->transientStorage;
+    u32 tankAtlasHandle = gameMemory->platformLoadTexture("tank_parts.png");
     // TODO(rordon): tank_parts.csv into array of uv atlas data. 
     // TODO(rordon): get image handle for tank texture atlas.
 }
@@ -111,7 +112,7 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
     vec4 color = GetHSVSpectrumColor(time);
     //color = {0.2f, 0.3f, 0.3f, 1.0f};
-    color = {0.0f, 0.5f, 0.5f, 1.0f};
+    color = {0.765f, 0.714f, 0.486f, 1.0f};
     state->clearColor = color;
 
     DebugGeoInstanceData debugRectangle = {{0.5, 0.25, 0.0}, {0.8f, 1.0f}, {0.0f, 1.0f, 0.0f}, 0, 0.05f};
