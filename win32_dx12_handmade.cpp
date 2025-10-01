@@ -282,9 +282,9 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     InputState inputState = {};
 
-    gameCode.Start(&gameMemory);
-
     InitializeRenderer(windowHandle, false, CLIENT_WIDTH, CLIENT_HEIGHT);
+
+    gameCode.Start(&gameMemory);
 
     ShowWindow(windowHandle, SW_SHOW);
     //----------------------

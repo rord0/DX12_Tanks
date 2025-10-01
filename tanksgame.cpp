@@ -95,7 +95,7 @@ EXPORT GAME_START_FUNCTION(start)
     GameState * state = (GameState*)gameMemory->permStorage;
     state->renderPB.size = gameMemory->transStorageSize;
     state->renderPB.memory = (u8*)gameMemory->transientStorage;
-    u32 tankAtlasHandle = gameMemory->platformLoadTexture("tank_parts.png");
+    state->tankAtlasHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"tank_parts.png");
     // TODO(rordon): tank_parts.csv into array of uv atlas data. 
     // TODO(rordon): get image handle for tank texture atlas.
 }

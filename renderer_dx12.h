@@ -97,8 +97,11 @@ typedef struct {
     D3D12_VERTEX_BUFFER_VIEW lineInstanceBufferView;
 
 
+    // TODO(get rid of this abomination): create a renderer arena and make this a SLL.
     ComPtr<ID3D12DescriptorHeap> textureSRVHeap;
-    ComPtr<ID3D12Resource> textureResources[4];
+    u32 textureCount;
+    u32 maxTexures;
+    ComPtr<ID3D12Resource> textureResources[32];
 
     // Instance Data Arrays
     Array quadInstances;

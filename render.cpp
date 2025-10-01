@@ -680,22 +680,29 @@ void UploadArenaPop(UploadArena * arena, size_t size)
     }
 }
 
-void UpdateTextureResource(RendererState & state, UploadArena * arena, ComPtr<ID3D12Resource> textureResource,ImageData img)
-{
-    D3D12_RESOURCE_DESC desc = textureResource->GetDesc();
+void UpdateTextureResource(RendererState & state, ComPtr<ID3D12Resource> textureResource, const ImageData * img)
+{ 
 
+    // Get aligned resource size in bytes.
+    D3D12_RESOURCE_DESC desc = textureResource->GetDesc();
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
     UINT numRows;
     UINT64 srcRowPitch;
     UINT64 totalBytes;
     state.device->GetCopyableFootprints(&desc, 0, 1, 0, &footprint, &numRows, &srcRowPitch, &totalBytes);
 
-    GPUAllocation allocation = UploadArenaPush(arena, totalBytes, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+    // Create a staging buffer for texture data.
+    ID3D12Resource * uploadResource;
+    CreateUploadBufferResource(state.device, &uploadResource, totalBytes);
+    D3D12_GPU_VIRTUAL_ADDRESS pGPU = uploadResource->GetGPUVirtualAddress();
+    void * pCPU = nullptr;
+    HRESULT mapResult = uploadResource->Map(0, nullptr, &pCPU);
+    AssertIfFailed(mapResult);
 
     for (int y = 0; y < numRows; y++)
     {
-        u8 * destPadded = (u8*)allocation.pCPU + (footprint.Footprint.RowPitch * y);
-        u8 * srcPacked =  img.memory +  (srcRowPitch * y);
+        u8 * destPadded = (u8*)pCPU + (footprint.Footprint.RowPitch * y);
+        u8 * srcPacked =  img->memory +  (srcRowPitch * y);
         memcpy(destPadded, srcPacked, srcRowPitch);
     }
 
@@ -703,17 +710,17 @@ void UpdateTextureResource(RendererState & state, UploadArena * arena, ComPtr<ID
 
     D3D12_BOX textureSizeBox = {};
     textureSizeBox.left = 0;
-    textureSizeBox.right = img.width;
+    textureSizeBox.right = img->width;
     textureSizeBox.top = 0;
-    textureSizeBox.bottom = img.height;
+    textureSizeBox.bottom = img->height;
     textureSizeBox.front = 0;
     textureSizeBox.back = 1;
 
     D3D12_TEXTURE_COPY_LOCATION textureSrc;
     textureSrc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    textureSrc.pResource = arena->resource;
+    textureSrc.pResource = uploadResource;
     textureSrc.SubresourceIndex = 0;
-    textureSrc.PlacedFootprint.Offset = allocation.offset;
+    textureSrc.PlacedFootprint.Offset = 0;
     textureSrc.PlacedFootprint.Footprint = footprint.Footprint;
 
     D3D12_TEXTURE_COPY_LOCATION textureDest = {};
@@ -730,7 +737,8 @@ void UpdateTextureResource(RendererState & state, UploadArena * arena, ComPtr<ID
     int fenceValue = SignalCommandQueue(state.cmdQueue, state.fence, &state.fenceValue);
     WaitForFenceValue(state.fence, fenceValue, state.fenceEvent);
 
-    UploadArenaPop(arena, totalBytes);
+    uploadResource->Unmap(0, nullptr);
+    uploadResource->Release();
 }
 
 RendererState DX12_InitializeRenderer(HWND windowHandle, bool useWARP, bool enableVSync, u32 width, u32 height)

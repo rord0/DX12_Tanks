@@ -120,6 +120,7 @@ typedef struct {
     vec2 tempPlayerPos;
     vec2 tempInput;
     RendererPushBuffer renderPB;
+    u32 tankAtlasHandle;
 } GameState;
 
 #define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory)

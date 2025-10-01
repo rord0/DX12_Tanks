@@ -7,7 +7,7 @@
 
 #include "render.cpp"
 
-ImageData LoadImageFromFile(const char * o);
+int DX12_RendererCreateTexture(const ImageData * image, RendererState & state, RendererResourcesDX12  & res);
 
 void GenerateRoundCapLineGeometry(vec3 * vertexBuffer, u16 * indexBuffer, u32 * vertexCount, u16 * indexCount, u32 resolution)
 {
@@ -160,46 +160,29 @@ void InitRendererResources(RendererResourcesDX12 & res, RendererState & state)
     //////////////////////////////////
     // Create and upload texture data
 
-    ImageData gdEasyData = LoadImageFromFile(RESOURCES_PATH"gd_easy.png");
-    ImageData gdNormalData = LoadImageFromFile(RESOURCES_PATH"gd_normal.png");
-    ImageData gdHardData = LoadImageFromFile(RESOURCES_PATH"gd_hard.png");
-    ImageData gdHarderData = LoadImageFromFile(RESOURCES_PATH"gd_harder.png");
+    res.textureCount = 0;
+    res.maxTexures = 32;
 
-    CreateTextureResource(state.device, &res.textureResources[0], gdEasyData.width, gdEasyData.height, gdEasyData.size);
-    CreateTextureResource(state.device, &res.textureResources[1], gdNormalData.width, gdNormalData.height, gdNormalData.size);
-    CreateTextureResource(state.device, &res.textureResources[2], gdHardData.width, gdHardData.height, gdHardData.size);
-    CreateTextureResource(state.device, &res.textureResources[3], gdHarderData.width, gdHarderData.height, gdHarderData.size);
-
-    UpdateTextureResource(state, &tempUploadArena, res.textureResources[0], gdEasyData);
-    UpdateTextureResource(state, &tempUploadArena, res.textureResources[1], gdNormalData);
-    UpdateTextureResource(state, &tempUploadArena, res.textureResources[2], gdHardData);
-    UpdateTextureResource(state, &tempUploadArena, res.textureResources[3], gdHarderData);
 
     D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
     srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     srvHeapDesc.NodeMask = 0;
     srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    srvHeapDesc.NumDescriptors = 8;
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.Texture2D.MipLevels = 1;
-    srvDesc.Texture2D.MostDetailedMip = 0;
-    srvDesc.Texture2D.PlaneSlice = 0;
-    srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+    srvHeapDesc.NumDescriptors = res.maxTexures;
     AssertIfFailed(state.device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&res.textureSRVHeap)));
 
     D3D12_CPU_DESCRIPTOR_HANDLE textDescHandle = res.textureSRVHeap->GetCPUDescriptorHandleForHeapStart();
     UINT srvHandleIncrementSize = state.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    // Create SRVs for each texture.
-    for (int i = 0; i < 4; i++)
-    {
-        state.device->CreateShaderResourceView(res.textureResources[i].Get(), &srvDesc, textDescHandle);
-        textDescHandle.ptr += srvHandleIncrementSize;
-    }
+    ImageData gdEasyData = LoadImageFromFile(RESOURCES_PATH"gd_easy.png");
+    ImageData gdNormalData = LoadImageFromFile(RESOURCES_PATH"gd_normal.png");
+    ImageData gdHardData = LoadImageFromFile(RESOURCES_PATH"gd_hard.png");
+    ImageData gdHarderData = LoadImageFromFile(RESOURCES_PATH"gd_harder.png");
+
+    DX12_RendererCreateTexture(&gdEasyData, state, res);
+    DX12_RendererCreateTexture(&gdNormalData, state, res);
+    DX12_RendererCreateTexture(&gdHardData, state, res);
+    DX12_RendererCreateTexture(&gdHarderData, state, res);
 
     FreeImage(&gdEasyData);
     FreeImage(&gdNormalData);
@@ -387,12 +370,13 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
     state.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     state.cmdList->IASetVertexBuffers(1, 1, &res.textureInstanceBufferView);
 
-    D3D12_GPU_DESCRIPTOR_HANDLE handy = res.textureSRVHeap->GetGPUDescriptorHandleForHeapStart();
-    for (int i = 0; i < 4; i++)
+    D3D12_GPU_DESCRIPTOR_HANDLE textureHeapStart = res.textureSRVHeap->GetGPUDescriptorHandleForHeapStart();
+    for (int i = 1; i < 5; i++)
     {
-        state.cmdList->SetGraphicsRootDescriptorTable(1, handy);
-        state.cmdList->DrawIndexedInstanced(6, 1, 0, 0, i);
-        handy.ptr += state.srvDescSize;
+        D3D12_GPU_DESCRIPTOR_HANDLE textureDesc = textureHeapStart; 
+        textureDesc.ptr = textureHeapStart.ptr + state.srvDescSize * i;
+        state.cmdList->SetGraphicsRootDescriptorTable(1, textureDesc);
+        state.cmdList->DrawIndexedInstanced(6, 1, 0, 0, i - 1);
     }
 
     // Draw Rectangle Instances
@@ -491,6 +475,32 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, Array * quadInstanc
     pb->index = 0;
 }
 
+int DX12_RendererCreateTexture(const ImageData * image, RendererState & state, RendererResourcesDX12  & res)
+{
+    u32 textureIndex = res.textureCount;
+
+    CreateTextureResource(state.device, &res.textureResources[textureIndex], image->width, image->height, image->size);
+    UpdateTextureResource(state, res.textureResources[textureIndex], image);
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Texture2D.MipLevels = 1;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Texture2D.PlaneSlice = 0;
+    srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+
+    D3D12_CPU_DESCRIPTOR_HANDLE textDescHandle = res.textureSRVHeap->GetCPUDescriptorHandleForHeapStart();
+    UINT srvHandleIncrementSize = state.srvDescSize;
+    textDescHandle.ptr += srvHandleIncrementSize * textureIndex;
+
+    state.device->CreateShaderResourceView(res.textureResources[textureIndex].Get(), &srvDesc, textDescHandle);
+
+    res.textureCount++;
+    return textureIndex;
+}
+
 void InitializeRenderer(HWND windowHandle, bool enableVSync, u32 width, u32 height)
 {
     RENDERER_STATE = DX12_InitializeRenderer(windowHandle, USE_WARP, enableVSync, width, height);
@@ -502,9 +512,9 @@ float RendererResizeFramebuffers(u32 width, u32 height)
     return DX12_RendererResizeFrameBuffers(width, height, RENDERER_STATE);
 }
 
-int RendererCreateTexture(ImageData * image)
+int RendererCreateTexture(const ImageData * image)
 {
-    return 67;
+    return DX12_RendererCreateTexture(image, RENDERER_STATE, RENDERER_PIPELINE);
 }
 
 void RendererProcessPushBuffer(RendererPushBuffer * pb)
