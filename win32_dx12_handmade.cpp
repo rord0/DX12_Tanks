@@ -208,12 +208,14 @@ LRESULT mainWindowCallback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 PLATFORM_LOAD_TEXTURE(PlatformLoadTexture)
 {
     ImageData image = LoadImageFromFile(textureName);
+    int textureHandle = -1;
     if (image.memory)
     {
-
+        textureHandle = RendererCreateTexture(&image);
         stbi_image_free(image.memory);
     }
-    return 67;      
+
+    return textureHandle;
 }
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)

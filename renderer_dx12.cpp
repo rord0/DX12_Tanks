@@ -502,6 +502,11 @@ float RendererResizeFramebuffers(u32 width, u32 height)
     return DX12_RendererResizeFrameBuffers(width, height, RENDERER_STATE);
 }
 
+int RendererCreateTexture(ImageData * image)
+{
+    return 67;
+}
+
 void RendererProcessPushBuffer(RendererPushBuffer * pb)
 {
     DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.quadInstances, &RENDERER_PIPELINE.rectangleInstances, &RENDERER_PIPELINE.lineInstances, &RENDERER_PIPELINE.subTextureInstances);
