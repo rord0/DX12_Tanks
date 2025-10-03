@@ -74,8 +74,16 @@ typedef struct {
 typedef struct {
     vec3 position;
     vec2 scale;
+    float rotation;
+    u32 textureIndex;
+} TextureInstanceData;
+
+typedef struct {
+    vec3 position;
+    vec2 scale;
     vec4 textureCoords;
     float rotation;
+    u32 textureID;
 } SubTextureInstanceData;
 
 typedef struct {
@@ -121,6 +129,7 @@ typedef struct {
     vec2 tempInput;
     RendererPushBuffer renderPB;
     u32 tankAtlasHandle;
+    u32 extraTextureHandle;
 } GameState;
 
 #define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory)

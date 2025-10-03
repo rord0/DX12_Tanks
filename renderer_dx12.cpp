@@ -91,6 +91,7 @@ const D3D12_INPUT_ELEMENT_DESC texureInputElementDescs[] = {
         { "InstancePosition", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "InstanceSize",     0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceTextureID",0, DXGI_FORMAT_R32_UINT,        1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
 };
 
 const D3D12_INPUT_ELEMENT_DESC rectInputElementDescs[] = {
@@ -174,16 +175,32 @@ void InitRendererResources(RendererResourcesDX12 & res, RendererState & state)
     D3D12_CPU_DESCRIPTOR_HANDLE textDescHandle = res.textureSRVHeap->GetCPUDescriptorHandleForHeapStart();
     UINT srvHandleIncrementSize = state.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
+    for (int i = 0; i < res.maxTexures; i++)
+    {
+        D3D12_SHADER_RESOURCE_VIEW_DESC nullDesc = {};
+
+        nullDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        nullDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        nullDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        nullDesc.Texture2D.MipLevels = 1;
+        state.device->CreateShaderResourceView(nullptr, &nullDesc, textDescHandle);
+        textDescHandle.ptr += srvHandleIncrementSize;
+
+    }
+
+    ImageData invalidTexture = LoadImageFromFile(RESOURCES_PATH"world_eater.jpg");
     ImageData gdEasyData = LoadImageFromFile(RESOURCES_PATH"gd_easy.png");
     ImageData gdNormalData = LoadImageFromFile(RESOURCES_PATH"gd_normal.png");
     ImageData gdHardData = LoadImageFromFile(RESOURCES_PATH"gd_hard.png");
     ImageData gdHarderData = LoadImageFromFile(RESOURCES_PATH"gd_harder.png");
 
+    DX12_RendererCreateTexture(&invalidTexture, state, res);
     DX12_RendererCreateTexture(&gdEasyData, state, res);
     DX12_RendererCreateTexture(&gdNormalData, state, res);
     DX12_RendererCreateTexture(&gdHardData, state, res);
     DX12_RendererCreateTexture(&gdHarderData, state, res);
 
+    FreeImage(&invalidTexture);
     FreeImage(&gdEasyData);
     FreeImage(&gdNormalData);
     FreeImage(&gdHardData);
@@ -210,7 +227,7 @@ void InitRendererResources(RendererResourcesDX12 & res, RendererState & state)
 
     res.textureInstanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
     res.textureInstanceBufferView.SizeInBytes = sizeof(quadInstanceData);
-    res.textureInstanceBufferView.StrideInBytes = sizeof(InstanceData2D);
+    res.textureInstanceBufferView.StrideInBytes = sizeof(TextureInstanceData);
 
     res.rectInstanceBufferView.SizeInBytes = sizeof(rectangleInstanceData);
     res.rectInstanceBufferView.StrideInBytes = sizeof(DebugGeoInstanceData);
@@ -220,7 +237,7 @@ void InitRendererResources(RendererResourcesDX12 & res, RendererState & state)
 
     // Free temp upload arena.
 
-    res.quadInstances = {sizeof(InstanceData2D), sizeof(quadInstanceData), 0, (void*)quadInstanceData};
+    res.quadInstances = {sizeof(TextureInstanceData), sizeof(quadInstanceData), 0, (void*)quadInstanceData};
     res.rectangleInstances = {sizeof(DebugGeoInstanceData), sizeof(rectangleInstanceData)/sizeof(DebugGeoInstanceData), 0, (void*)rectangleInstanceData};
     res.lineInstances = {sizeof(LineInstanceData), sizeof(lineInstanceData)/sizeof(LineInstanceData), 0, (void*)lineInstanceData};
     res.subTextureInstances = {sizeof(SubTextureInstanceData), sizeof(subTextureInstanceData)/sizeof(SubTextureInstanceData), 0, (void*)subTextureInstanceData};
@@ -375,7 +392,7 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
     {
         D3D12_GPU_DESCRIPTOR_HANDLE textureDesc = textureHeapStart; 
         textureDesc.ptr = textureHeapStart.ptr + state.srvDescSize * i;
-        state.cmdList->SetGraphicsRootDescriptorTable(1, textureDesc);
+        //state.cmdList->SetGraphicsRootDescriptorTable(1, textureDesc);
         state.cmdList->DrawIndexedInstanced(6, 1, 0, 0, i - 1);
     }
 
@@ -447,8 +464,18 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, Array * quadInstanc
             case RENDER_ENTRY_TYPE_TEXTURED_QUAD:
             {
                 RenderEntryTexturedQuad * entry = (RenderEntryTexturedQuad*)header;
-                ArrayPush(quadInstances, &entry->instanceData);
+                TextureInstanceData instanceData = {};
+                instanceData.position = entry->instanceData.position;
+                instanceData.rotation = entry->instanceData.rotation;
+                instanceData.scale = entry->instanceData.scale;
+                instanceData.textureIndex = entry->textureID;
+                ArrayPush(quadInstances, &instanceData);
                 entryOffset += sizeof(RenderEntryTexturedQuad);
+
+                // TODO(render sorting): instead of directly adding instance data directly to staging buffer.
+                //                       Add a sort entry to an array that contais texture + layer info and the instance data offset into the push buffer.
+                //                       then sort each entry in the sort entry array.
+                //                       Then copy from the push buffer at the offset into the instance data buffer.
             } break;
 
             case RENDER_ENTRY_TYPE_LINE:

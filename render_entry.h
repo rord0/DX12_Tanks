@@ -47,4 +47,10 @@ typedef struct {
     SubTextureInstanceData instanceData;
 } RenderEntrySubTexture;
 
+typedef struct {
+    u32 textureID;
+    u32 layer;
+    u64 pushBufferOffset;
+} RenderSortEntry;
+
 #endif // RENDER_ENTRY_H

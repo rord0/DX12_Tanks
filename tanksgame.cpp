@@ -5,6 +5,13 @@
 #define EXPORT extern "C" __declspec(dllexport)
 
 typedef struct {
+    u32 x;
+    u32 y;
+    u32 width;
+    u32 height;
+} AtlasEntry;
+
+typedef struct {
     u8 trackType;
     u8 bodyType;
     u8 turretType;
@@ -96,6 +103,7 @@ EXPORT GAME_START_FUNCTION(start)
     state->renderPB.size = gameMemory->transStorageSize;
     state->renderPB.memory = (u8*)gameMemory->transientStorage;
     state->tankAtlasHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"tank_parts.png");
+    state->extraTextureHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"world_eater.jpg");
     // TODO(rordon): tank_parts.csv into array of uv atlas data. 
     // TODO(rordon): get image handle for tank texture atlas.
 }
@@ -125,12 +133,12 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     InstanceData2D gdEasy = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0f}, {1.0f, 1.0f}, 0.0f};
     InstanceData2D gdNormal = {{0.5f, 0.0f}, {1.0f + sinf(time) * 0.5f, 1.0f + sinf(time) * 0.5f}, 1.57079633f};
     InstanceData2D gdHard = {{-0.0f, -0.5f}, {1.0f, 1.0f}, (float)fmod(time, 360.0)};
-    InstanceData2D gdHarder = {{-sinf(time) * 0.5f, cosf(time) * 0.5f, 0.0f}, {1.0f, 1.0f}, 0.0f};
+    InstanceData2D gdHarder = {{-sinf(time) * 0.5f, cosf(time) * 0.5f, 0.0f}, {2.0f, 2.0f}, fmod(time/2,360.0)};
 
     RendererPushImage(&state->renderPB, 0, gdEasy);
     RendererPushImage(&state->renderPB, 1, gdNormal);
     RendererPushImage(&state->renderPB, 2, gdHard);
-    RendererPushImage(&state->renderPB, 3, gdHarder);
+    RendererPushImage(&state->renderPB, state->extraTextureHandle, gdHarder);
 
     RendererPushLine(&state->renderPB, debugRectangle3.position,debugRectangle2.position, {0.196f, 0.04f, 0.6f}, 0.01f);
     RendererPushLine(&state->renderPB, debugRectangle3.position,gdHard.position, {1.0f, 0.8f, 0.8f}, 0.01f);

@@ -118,7 +118,7 @@ RendererState RENDERER_STATE = {};
 RendererResourcesDX12 RENDERER_PIPELINE = {};
 const bool USE_WARP = false;
 
-InstanceData2D quadInstanceData[32] = {};
+TextureInstanceData quadInstanceData[32] = {};
 DebugGeoInstanceData rectangleInstanceData[32] = {};
 LineInstanceData lineInstanceData[32] = {};
 SubTextureInstanceData subTextureInstanceData[32] = {};

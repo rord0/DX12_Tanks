@@ -492,7 +492,7 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
     versionRootSignatureDesc.Version = featureData.HighestVersion;
 
     D3D12_DESCRIPTOR_RANGE1 descRange1 = {};
-    descRange1.NumDescriptors = 1;
+    descRange1.NumDescriptors = 32;
     descRange1.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descRange1.BaseShaderRegister = 0;
     descRange1.RegisterSpace = 0;

@@ -12,11 +12,13 @@ struct VertexData
     float3 instancePosition : InstancePosition;
     float2 instanceSize : InstanceSize;
     float  rotationZ : InstanceRotZ;
+    uint   instanceTextureID : InstanceTextureID;
 };
 
 struct VertexShaderOutput
 {
 	float2 UV : UV;
+    uint instanceTextureID: InstanceTextureID;
     float4 Position : SV_Position;
 };
 
@@ -48,6 +50,7 @@ VertexShaderOutput main(VertexData IN)
     float4x4 MVP = mul(ModelViewProjectionCB.MVP, modelMatrix);
     OUT.Position = mul(MVP, float4(IN.Position, 1));
     OUT.UV = IN.UV;
+    OUT.instanceTextureID = IN.instanceTextureID;
 
     return OUT;
 }
