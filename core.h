@@ -7,6 +7,7 @@
 #include <math.h>
 #include <string.h>
 
+
 typedef uint8_t   u8; // 8-bit unsigned int
 typedef uint16_t u16; // 16-bit unsigned int
 typedef uint32_t u32;
@@ -101,12 +102,7 @@ typedef struct {
     float width;
 } LineInstanceData;
 
-typedef struct {
-    u32 entryCount;
-    u8 * memory;
-    size_t size;
-    size_t index;
-} RendererPushBuffer;
+#include "render_entry.h"
 
 ////////////////////
 // Function Typedefs

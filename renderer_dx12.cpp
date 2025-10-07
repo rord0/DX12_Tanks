@@ -241,6 +241,7 @@ void InitRendererResources(RendererResourcesDX12 & res, RendererState & state)
     res.rectangleInstances = {sizeof(DebugGeoInstanceData), sizeof(rectangleInstanceData)/sizeof(DebugGeoInstanceData), 0, (void*)rectangleInstanceData};
     res.lineInstances = {sizeof(LineInstanceData), sizeof(lineInstanceData)/sizeof(LineInstanceData), 0, (void*)lineInstanceData};
     res.subTextureInstances = {sizeof(SubTextureInstanceData), sizeof(subTextureInstanceData)/sizeof(SubTextureInstanceData), 0, (void*)subTextureInstanceData};
+    res.instanceDrawCMDs = {sizeof(DrawInstanceCMD), sizeof(INSTANCE_DRAW_CMDS)/sizeof(DrawInstanceCMD), 0, (void*)INSTANCE_DRAW_CMDS};
     res.lineIndexCount = lineIndexCount;
 
     UploadArenaRelease(&tempUploadArena);
@@ -387,13 +388,22 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
     state.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     state.cmdList->IASetVertexBuffers(1, 1, &res.textureInstanceBufferView);
 
-    D3D12_GPU_DESCRIPTOR_HANDLE textureHeapStart = res.textureSRVHeap->GetGPUDescriptorHandleForHeapStart();
+    for (int i = 0; i < res.instanceDrawCMDs.count; i++)
+    {
+        DrawInstanceCMD * cmd = (DrawInstanceCMD*)(res.instanceDrawCMDs.elements) + i;
+        switch (cmd->instanceID)
+        {
+            case 4:
+            {
+                state.cmdList->DrawIndexedInstanced(6, cmd->count, 0, 0, cmd->offset);
+            } break;
+            
+            default:
+                break;
+        }
+    }
     for (int i = 1; i < 5; i++)
     {
-        D3D12_GPU_DESCRIPTOR_HANDLE textureDesc = textureHeapStart; 
-        textureDesc.ptr = textureHeapStart.ptr + state.srvDescSize * i;
-        //state.cmdList->SetGraphicsRootDescriptorTable(1, textureDesc);
-        state.cmdList->DrawIndexedInstanced(6, 1, 0, 0, i - 1);
     }
 
     // Draw Rectangle Instances
@@ -414,6 +424,7 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
     res.rectangleInstances.count = 0;
     res.quadInstances.count = 0;
     res.lineInstances.count = 0;
+    res.instanceDrawCMDs.count = 0;
 }
 
 void DX12_EndFrame(RendererState & state)
@@ -436,60 +447,84 @@ void DX12_EndFrame(RendererState & state)
     WaitForFenceValue(state.fence, state.fenceValue, state.fenceEvent); 
 }
 
-void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, Array * quadInstances, Array * rectInstances, Array * lineInstances, Array * subTextureInstances)
+void InsertionSortRenderEntries(RenderSortEntry * entries, size_t numEntries)
 {
-    size_t entryOffset = 0;
-    while (entryOffset < pb->index)
+    for (int i = 1; i < numEntries; i++)
     {
-        RenderEntryHeader * header = (RenderEntryHeader*)(pb->memory + entryOffset);
-        switch (header->type)
+        RenderSortEntry key = entries[i];
+        int j = i - 1;
+        while (j >= 0 && entries[j].layer > key.layer)
+        {
+            entries[j + 1]  = entries[j];
+            j = j - 1;
+        }
+        entries[j + 1] = key;
+    }
+}
+
+
+void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, Array * quadInstances, Array * rectInstances, Array * lineInstances, Array * subTextureInstances, Array * drawCMDs)
+{
+    InsertionSortRenderEntries(pb->sortEntries, pb->sortEntryCount);
+
+    // Start at layer zero and 
+    u32 totalQuads = 0;
+    u32 currentQuadLayer = 0;
+    u32 quadCount = 0;
+    for (int i = 0; i < pb->entryCount; i++)
+    {
+        RenderSortEntry sortEntry = pb->sortEntries[i];
+        switch (sortEntry.type)
         {
             case RENDER_ENTRY_TYPE_CLEAR:
             {
-                entryOffset += sizeof(RenderEntryClear);
             } break;
 
             case RENDER_ENTRY_TYPE_DEBUG_RECTANGLE:
             {
-                RenderEntryDebugRectangle * entry = (RenderEntryDebugRectangle*)header;
+                RenderEntryDebugRectangle * entry = (RenderEntryDebugRectangle*)(pb->memory + sortEntry.pushBufferOffset);
                 ArrayPush(rectInstances, &entry->instanceData);
-                entryOffset += sizeof(RenderEntryDebugRectangle);
             } break;
 
             case RENDER_ENTRY_TYPE_DEBUG_CIRCLE:
             {
-                entryOffset += sizeof(RenderEntryDebugCircle);
             } break;
 
             case RENDER_ENTRY_TYPE_TEXTURED_QUAD:
             {
-                RenderEntryTexturedQuad * entry = (RenderEntryTexturedQuad*)header;
+                RenderEntryTexturedQuad * entry = (RenderEntryTexturedQuad*)(pb->memory + sortEntry.pushBufferOffset);
                 TextureInstanceData instanceData = {};
                 instanceData.position = entry->instanceData.position;
                 instanceData.rotation = entry->instanceData.rotation;
                 instanceData.scale = entry->instanceData.scale;
                 instanceData.textureIndex = entry->textureID;
                 ArrayPush(quadInstances, &instanceData);
-                entryOffset += sizeof(RenderEntryTexturedQuad);
 
-                // TODO(render sorting): instead of directly adding instance data directly to staging buffer.
-                //                       Add a sort entry to an array that contais texture + layer info and the instance data offset into the push buffer.
-                //                       then sort each entry in the sort entry array.
-                //                       Then copy from the push buffer at the offset into the instance data buffer.
+                if (currentQuadLayer != sortEntry.layer)
+                {
+                    if (quadCount > 0)
+                    {
+                        DrawInstanceCMD cmd = {RENDER_ENTRY_TYPE_TEXTURED_QUAD, quadCount, totalQuads};
+                        ArrayPush(drawCMDs, &cmd);
+                        totalQuads += quadCount;
+                        quadCount = 0;
+                    }
+                    // Add a draw call for quadCount number of quads.
+                    currentQuadLayer = sortEntry.layer;
+                }
+                quadCount++;
             } break;
 
             case RENDER_ENTRY_TYPE_LINE:
             {
-                RenderEntryLine * entry = (RenderEntryLine*)header;
+                RenderEntryLine * entry = (RenderEntryLine*)(pb->memory + sortEntry.pushBufferOffset);
                 ArrayPush(lineInstances, &entry->instanceData);
-                entryOffset += sizeof(RenderEntryLine);
             } break;
 
             case RENDER_ENTRY_TYPE_SUB_TEXTURE:
             {
-                RenderEntrySubTexture * entry = (RenderEntrySubTexture*)header;
+                RenderEntrySubTexture * entry = (RenderEntrySubTexture*)(pb->memory + sortEntry.pushBufferOffset);
                 ArrayPush(subTextureInstances, &entry->instanceData);
-                entryOffset += sizeof(RenderEntrySubTexture);
             }
             default:
             {
@@ -498,7 +533,14 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, Array * quadInstanc
         } 
     }
 
+    if (quadCount > 0)
+    {
+        DrawInstanceCMD cmd = {RENDER_ENTRY_TYPE_TEXTURED_QUAD, quadCount, totalQuads};
+        ArrayPush(drawCMDs, &cmd);
+    }
+
     pb->entryCount = 0;
+    pb->sortEntryCount = 0;
     pb->index = 0;
 }
 
@@ -546,7 +588,7 @@ int RendererCreateTexture(const ImageData * image)
 
 void RendererProcessPushBuffer(RendererPushBuffer * pb)
 {
-    DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.quadInstances, &RENDERER_PIPELINE.rectangleInstances, &RENDERER_PIPELINE.lineInstances, &RENDERER_PIPELINE.subTextureInstances);
+    DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.quadInstances, &RENDERER_PIPELINE.rectangleInstances, &RENDERER_PIPELINE.lineInstances, &RENDERER_PIPELINE.subTextureInstances, &RENDERER_PIPELINE.instanceDrawCMDs);
 }
 
 void BeginFrame(float clearColor[4], mat4 projectionMatrix)

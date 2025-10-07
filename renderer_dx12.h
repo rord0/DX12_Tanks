@@ -12,7 +12,7 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-#define _DEBUG
+//#define _DEBUG
 
 const static UINT NUM_FRAMES = 2;
 
@@ -40,6 +40,13 @@ typedef struct {
     bool tearingSupported;
     bool vSyncEnabled;
 } RendererState;
+
+typedef struct 
+{
+    u32 instanceID;
+    u32 count;
+    u32 offset;
+} DrawInstanceCMD;
 
 typedef struct 
 {
@@ -108,6 +115,7 @@ typedef struct {
     Array rectangleInstances;
     Array lineInstances;
     Array subTextureInstances;
+    Array instanceDrawCMDs;
 
     // Matrices
     mat4 projection;
@@ -122,5 +130,6 @@ TextureInstanceData quadInstanceData[32] = {};
 DebugGeoInstanceData rectangleInstanceData[32] = {};
 LineInstanceData lineInstanceData[32] = {};
 SubTextureInstanceData subTextureInstanceData[32] = {};
+DrawInstanceCMD INSTANCE_DRAW_CMDS[64] = {};
 
 #endif // RENDERER_DX12_H

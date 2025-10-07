@@ -276,8 +276,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     GameMemory gameMemory = {};
     gameMemory.permStorage = VirtualAlloc(0, MB(2), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
     gameMemory.permStorageSize = MB(2);
-    gameMemory.transientStorage = VirtualAlloc(0, MB(1), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-    gameMemory.transStorageSize = MB(1);
+    gameMemory.transientStorage = VirtualAlloc(0, MB(2), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    gameMemory.transStorageSize = MB(2);
     gameMemory.platformLoadTexture = &PlatformLoadTexture;
 
     InputState inputState = {};
@@ -314,6 +314,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             Win32UnloadGameCode(&gameCode);
             gameCode = Win32LoadGameCode(GAME_CODE_DLL);
         }
+
         // Update
         win32ProcessPendingMessages(windowHandle, inputState);
 
