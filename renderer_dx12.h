@@ -87,9 +87,6 @@ typedef struct
 
 typedef struct {
     // Shaders
-    ID3DBlob * rectangleVertexShaderBlob;
-    ID3DBlob * rectanglePixelShaderBlob;
-
     ID3DBlob * lineVertexShaderBlob;
     ID3DBlob * linePixelShaderBlob;
 
@@ -97,7 +94,6 @@ typedef struct {
     ComPtr<ID3D12RootSignature> rootSignature;
 
     // Pipeline State Objects
-    ComPtr<ID3D12PipelineState> rectPSO;
     ComPtr<ID3D12PipelineState> linePSO;
 
     // Allocators
@@ -116,7 +112,6 @@ typedef struct {
 
     u16 lineIndexCount;
 
-    D3D12_VERTEX_BUFFER_VIEW rectInstanceBufferView;
     D3D12_VERTEX_BUFFER_VIEW lineInstanceBufferView;
 
 
@@ -127,7 +122,6 @@ typedef struct {
     ComPtr<ID3D12Resource> textureResources[32];
 
     // Instance Data Arrays
-    Array rectangleInstances;
     Array lineInstances;
     Array subTextureInstances;
     Array instanceDrawCMDs;
@@ -143,11 +137,12 @@ RendererState RENDERER_STATE = {};
 RendererResourcesDX12 RENDERER_PIPELINE = {};
 const bool USE_WARP = false;
 
-TextureInstanceData TEXTURE_INSTANCE_DATA[64] = {};
+DrawInstanceCMD INSTANCE_DRAW_CMDS[64] = {};
 
-DebugGeoInstanceData rectangleInstanceData[32] = {};
+TextureInstanceData TEXTURE_INSTANCE_DATA[64] = {};
+DebugGeoInstanceData RECTANGLE_INSTANCE_DATA[32] = {};
+
 LineInstanceData lineInstanceData[32] = {};
 SubTextureInstanceData subTextureInstanceData[32] = {};
-DrawInstanceCMD INSTANCE_DRAW_CMDS[64] = {};
 
 #endif // RENDERER_DX12_H
