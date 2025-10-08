@@ -16,3 +16,13 @@ bool ArrayPush(Array * array, void * element)
         return false;
     }
 }
+
+Array ArrayInit(size_t elementSize, size_t capacity, void * elements)
+{
+    Array array = {};
+    array.capacity = capacity;
+    array.elementSize = elementSize;
+    array.elements = elements;
+    array.count = 0;
+    return array;
+}

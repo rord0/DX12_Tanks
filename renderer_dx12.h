@@ -12,7 +12,7 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-//#define _DEBUG
+#define _DEBUG
 
 const static UINT NUM_FRAMES = 2;
 
@@ -64,11 +64,29 @@ typedef struct
     u64 offset;
 } GPUAllocation;
 
+typedef struct 
+{
+    u32 totalInstances;
+    u16 currentLayer;
+    u32 layerInstanceCount;
+} TEMP_Frame_Instance_Counter;
+
+typedef struct 
+{
+    ComPtr<ID3D12PipelineState> PSO;
+
+    D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
+    D3D12_VERTEX_BUFFER_VIEW instanceBufferView;
+    D3D12_INDEX_BUFFER_VIEW indexBufferView;
+
+    u32 indexCountPerInstance;
+
+    TEMP_Frame_Instance_Counter frameInstanceCounter;
+    Array instanceData;
+} InstanceRenderData;
+
 typedef struct {
     // Shaders
-    ID3DBlob * textureVertexShaderBlob;
-    ID3DBlob * texturePixelShaderBlob;
-
     ID3DBlob * rectangleVertexShaderBlob;
     ID3DBlob * rectanglePixelShaderBlob;
 
@@ -79,7 +97,6 @@ typedef struct {
     ComPtr<ID3D12RootSignature> rootSignature;
 
     // Pipeline State Objects
-    ComPtr<ID3D12PipelineState> texturePSO;
     ComPtr<ID3D12PipelineState> rectPSO;
     ComPtr<ID3D12PipelineState> linePSO;
 
@@ -93,13 +110,12 @@ typedef struct {
     D3D12_INDEX_BUFFER_VIEW textureIndexBufferView;
 
     ComPtr<ID3D12Resource> lineVertexBuffer;
-    D3D12_VERTEX_BUFFER_VIEW lineVertexBufferView;
-
     ComPtr<ID3D12Resource> lineIndexBuffer;
+    D3D12_VERTEX_BUFFER_VIEW lineVertexBufferView;
     D3D12_INDEX_BUFFER_VIEW lineIndexBufferView;
+
     u16 lineIndexCount;
 
-    D3D12_VERTEX_BUFFER_VIEW textureInstanceBufferView;
     D3D12_VERTEX_BUFFER_VIEW rectInstanceBufferView;
     D3D12_VERTEX_BUFFER_VIEW lineInstanceBufferView;
 
@@ -111,11 +127,12 @@ typedef struct {
     ComPtr<ID3D12Resource> textureResources[32];
 
     // Instance Data Arrays
-    Array quadInstances;
     Array rectangleInstances;
     Array lineInstances;
     Array subTextureInstances;
     Array instanceDrawCMDs;
+
+    InstanceRenderData IRD[5];
 
     // Matrices
     mat4 projection;
@@ -126,7 +143,8 @@ RendererState RENDERER_STATE = {};
 RendererResourcesDX12 RENDERER_PIPELINE = {};
 const bool USE_WARP = false;
 
-TextureInstanceData quadInstanceData[32] = {};
+TextureInstanceData TEXTURE_INSTANCE_DATA[64] = {};
+
 DebugGeoInstanceData rectangleInstanceData[32] = {};
 LineInstanceData lineInstanceData[32] = {};
 SubTextureInstanceData subTextureInstanceData[32] = {};

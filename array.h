@@ -10,5 +10,6 @@ typedef struct
 } Array;
 
 bool ArrayPush(Array * array, void * element);
+Array ArrayInit(size_t elementSize, size_t capacity, void * elements);
 
 #endif // ARRAY_H

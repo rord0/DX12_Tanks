@@ -113,6 +113,44 @@ const D3D12_INPUT_ELEMENT_DESC lineElementDescs[] = {
 };
 
 
+void InitTextureInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView)
+{
+    ID3DBlob * vertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/vertex.hlsl", "vertex.hlsl", "main", "vs_5_1");
+    ID3DBlob * pixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/pixel.hlsl", "pixel.hlsl", "main", "ps_5_1");
+
+    D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
+    D3D12_SHADER_BYTECODE  pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
+
+    const D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+            { "Position",          0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "UV",                0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "InstancePosition",  0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceSize",      0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceRotZ",      0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceTextureID", 0, DXGI_FORMAT_R32_UINT,        1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+    };
+
+    // Create Pipeline State Object
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature, inputElementDescs, _countof(inputElementDescs), vertexShaderBytecode, pixelShaderBytecode);
+    AssertIfFailed(device->CreateGraphicsPipelineState(&pipelineStateDesc, IID_PPV_ARGS(&data->PSO)));
+
+
+    // Initalize Buffer Views
+    data->vertexBufferView = vertexBufferView;
+    data->indexBufferView = indexBufferView;
+    data->indexCountPerInstance = 6;
+
+    data->instanceBufferView.StrideInBytes = sizeof(TextureInstanceData);
+    data->instanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
+    data->instanceBufferView.SizeInBytes = sizeof(TEXTURE_INSTANCE_DATA);
+
+    // TODO: Use Arena to allocate CPU instance data staging buffer
+    data->instanceData = ArrayInit(sizeof(TextureInstanceData), sizeof(TEXTURE_INSTANCE_DATA) / sizeof(TextureInstanceData), (void*)&TEXTURE_INSTANCE_DATA);
+
+    vertexShaderBlob->Release();
+    pixelShaderBlob->Release();
+}
+
 void InitRendererResources(RendererResourcesDX12 & res, RendererState & state)
 {
     ////////////
@@ -185,7 +223,6 @@ void InitRendererResources(RendererResourcesDX12 & res, RendererState & state)
         nullDesc.Texture2D.MipLevels = 1;
         state.device->CreateShaderResourceView(nullptr, &nullDesc, textDescHandle);
         textDescHandle.ptr += srvHandleIncrementSize;
-
     }
 
     ImageData invalidTexture = LoadImageFromFile(RESOURCES_PATH"world_eater.jpg");
@@ -225,10 +262,6 @@ void InitRendererResources(RendererResourcesDX12 & res, RendererState & state)
     res.lineIndexBufferView.SizeInBytes = sizeof(u16) * lineIndexCount;
     res.lineIndexBufferView.Format = DXGI_FORMAT_R16_UINT; 
 
-    res.textureInstanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
-    res.textureInstanceBufferView.SizeInBytes = sizeof(quadInstanceData);
-    res.textureInstanceBufferView.StrideInBytes = sizeof(TextureInstanceData);
-
     res.rectInstanceBufferView.SizeInBytes = sizeof(rectangleInstanceData);
     res.rectInstanceBufferView.StrideInBytes = sizeof(DebugGeoInstanceData);
 
@@ -237,7 +270,6 @@ void InitRendererResources(RendererResourcesDX12 & res, RendererState & state)
 
     // Free temp upload arena.
 
-    res.quadInstances = {sizeof(TextureInstanceData), sizeof(quadInstanceData), 0, (void*)quadInstanceData};
     res.rectangleInstances = {sizeof(DebugGeoInstanceData), sizeof(rectangleInstanceData)/sizeof(DebugGeoInstanceData), 0, (void*)rectangleInstanceData};
     res.lineInstances = {sizeof(LineInstanceData), sizeof(lineInstanceData)/sizeof(LineInstanceData), 0, (void*)lineInstanceData};
     res.subTextureInstances = {sizeof(SubTextureInstanceData), sizeof(subTextureInstanceData)/sizeof(SubTextureInstanceData), 0, (void*)subTextureInstanceData};
@@ -252,8 +284,6 @@ RendererResourcesDX12 InitRendererPipeline(RendererState & state)
     RendererResourcesDX12 res = {};
     //////////////////////
     // Shader Compilation
-    res.textureVertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/vertex.hlsl", "vertex.hlsl", "main", "vs_5_1");
-    res.texturePixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/pixel.hlsl", "pixel.hlsl", "main", "ps_5_1");
 
     res.rectangleVertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/rectangle_vertex.hlsl", "rectangle_vertex.hlsl", "main", "vs_5_1");
     res.rectanglePixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/rectangle_pixel.hlsl", "rectangle_pixel.hlsl", "main", "ps_5_1");
@@ -270,29 +300,26 @@ RendererResourcesDX12 InitRendererPipeline(RendererState & state)
     D3D12_SHADER_BYTECODE lineVertexShaderBytecode = {res.lineVertexShaderBlob->GetBufferPointer(), res.lineVertexShaderBlob->GetBufferSize()};
     D3D12_SHADER_BYTECODE linePixelShaderBytecode = {res.linePixelShaderBlob->GetBufferPointer(), res.linePixelShaderBlob->GetBufferSize()};
 
-    D3D12_SHADER_BYTECODE textureVertexShaderBytecode = {res.textureVertexShaderBlob->GetBufferPointer(), res.textureVertexShaderBlob->GetBufferSize()};
-    D3D12_SHADER_BYTECODE texturePixelShaderBytecode = {res.texturePixelShaderBlob->GetBufferPointer(), res.texturePixelShaderBlob->GetBufferSize()};
-
     D3D12_SHADER_BYTECODE rectVertexShaderBytecode = {res.rectangleVertexShaderBlob->GetBufferPointer(), res.rectangleVertexShaderBlob->GetBufferSize()};
     D3D12_SHADER_BYTECODE rectPixelShaderBytecode = {res.rectanglePixelShaderBlob->GetBufferPointer(), res.rectanglePixelShaderBlob->GetBufferSize()};
 
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC texturePipelineStateDesc = createQuadPipelineStateDesc(res.rootSignature.Get(), texureInputElementDescs, _countof(texureInputElementDescs), textureVertexShaderBytecode, texturePixelShaderBytecode);
     D3D12_GRAPHICS_PIPELINE_STATE_DESC rectPipelineStateDesc = createQuadPipelineStateDesc(res.rootSignature.Get(), rectInputElementDescs, _countof(rectInputElementDescs), rectVertexShaderBytecode, rectPixelShaderBytecode);
     D3D12_GRAPHICS_PIPELINE_STATE_DESC linePipelineStateDesc = createQuadPipelineStateDesc(res.rootSignature.Get(), lineElementDescs, _countof(lineElementDescs), lineVertexShaderBytecode, linePixelShaderBytecode);
 
-    AssertIfFailed(state.device->CreateGraphicsPipelineState(&texturePipelineStateDesc, IID_PPV_ARGS(&res.texturePSO)));
     AssertIfFailed(state.device->CreateGraphicsPipelineState(&rectPipelineStateDesc, IID_PPV_ARGS(&res.rectPSO)));
     AssertIfFailed(state.device->CreateGraphicsPipelineState(&linePipelineStateDesc, IID_PPV_ARGS(&res.linePSO)));
 
     /////////////////////
     // Create Allocators
-    res.frameUploadArena = UploadArenaAlloc(state.device, KB(4));
+    res.frameUploadArena = UploadArenaAlloc(state.device, KB(6));
     res.frameUploadArena.resource->SetName(L"Frame Upload Resource");
 
 
     ////////////////////
     // Create Resources
     InitRendererResources(res, state);
+
+    InitTextureInstanceRenderData(&res.IRD[0], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView);
 
     return res;
 }
@@ -355,9 +382,9 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
     // Upload Instance Data
     UploadArenaClear(&res.frameUploadArena);
 
-    GPUAllocation dynAlloc = UploadArenaPush(&res.frameUploadArena, sizeof(quadInstanceData), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-    memcpy(dynAlloc.pCPU, quadInstanceData, sizeof(quadInstanceData));
-    res.textureInstanceBufferView.BufferLocation = dynAlloc.pGPU;
+    GPUAllocation dynAlloc = UploadArenaPush(&res.frameUploadArena, sizeof(TEXTURE_INSTANCE_DATA), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+    memcpy(dynAlloc.pCPU, TEXTURE_INSTANCE_DATA, sizeof(TEXTURE_INSTANCE_DATA));
+    res.IRD[0].instanceBufferView.BufferLocation = dynAlloc.pGPU;
 
     GPUAllocation rectAlloc = UploadArenaPush(&res.frameUploadArena, sizeof(rectangleInstanceData), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
     memcpy(rectAlloc.pCPU, rectangleInstanceData, sizeof(rectangleInstanceData));
@@ -376,17 +403,15 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
     state.cmdList->RSSetScissorRects(1, &state.scissorRect);
     state.cmdList->IASetVertexBuffers(0, 1, &res.textureVertexBufferView);
     state.cmdList->IASetIndexBuffer(&res.textureIndexBufferView);
+    state.cmdList->SetGraphicsRootDescriptorTable(1, res.textureSRVHeap->GetGPUDescriptorHandleForHeapStart());
 
+    state.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     // TODO(rordon): Render rectangles
     // TODO(rordon): Render circles 
     // TODO(rordon): Render lines??? 
     // TODO(rordon): Render Textured Quads. 
 
     // Get the frame upload arena, allocate enough for the instance data, create view for instance data, bind it
-    state.cmdList->SetPipelineState(res.texturePSO.Get());
-    state.cmdList->SetGraphicsRootDescriptorTable(1, res.textureSRVHeap->GetGPUDescriptorHandleForHeapStart());
-    state.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    state.cmdList->IASetVertexBuffers(1, 1, &res.textureInstanceBufferView);
 
     for (int i = 0; i < res.instanceDrawCMDs.count; i++)
     {
@@ -395,15 +420,16 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
         {
             case 4:
             {
-                state.cmdList->DrawIndexedInstanced(6, cmd->count, 0, 0, cmd->offset);
+                state.cmdList->SetPipelineState(res.IRD[0].PSO.Get());
+                state.cmdList->IASetVertexBuffers(0, 1, &res.IRD[0].vertexBufferView);
+                state.cmdList->IASetIndexBuffer(&res.IRD[0].indexBufferView);
+                state.cmdList->IASetVertexBuffers(1, 1, &res.IRD[0].instanceBufferView);
+                state.cmdList->DrawIndexedInstanced(res.IRD[0].indexCountPerInstance, cmd->count, 0, 0, cmd->offset);
             } break;
             
             default:
                 break;
         }
-    }
-    for (int i = 1; i < 5; i++)
-    {
     }
 
     // Draw Rectangle Instances
@@ -422,7 +448,6 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
     state.cmdList->DrawIndexedInstanced(res.lineIndexCount, res.lineInstances.count, 0, 0, 0);
 
     res.rectangleInstances.count = 0;
-    res.quadInstances.count = 0;
     res.lineInstances.count = 0;
     res.instanceDrawCMDs.count = 0;
 }
@@ -462,15 +487,48 @@ void InsertionSortRenderEntries(RenderSortEntry * entries, size_t numEntries)
     }
 }
 
-
-void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, Array * quadInstances, Array * rectInstances, Array * lineInstances, Array * subTextureInstances, Array * drawCMDs)
+void RendererPushInstance(InstanceRenderData * renderData, Array * drawCMDs, void * instanceData, u16 layer, u32 type)
 {
+    ArrayPush(&renderData->instanceData, instanceData);
+
+    if (renderData->frameInstanceCounter.currentLayer != layer)
+    {
+        if (renderData->frameInstanceCounter.layerInstanceCount > 0)
+        {
+            DrawInstanceCMD cmd = {type, renderData->frameInstanceCounter.layerInstanceCount, renderData->frameInstanceCounter.totalInstances};
+            ArrayPush(drawCMDs, &cmd);
+            renderData->frameInstanceCounter.totalInstances += renderData->frameInstanceCounter.layerInstanceCount;
+            renderData->frameInstanceCounter.layerInstanceCount = 0;
+        }
+        // Add a draw call for quadCount number of quads.
+        renderData->frameInstanceCounter.currentLayer = layer;
+    }
+    renderData->frameInstanceCounter.layerInstanceCount++;
+}
+
+void RendererFlushInstances(InstanceRenderData * renderData, Array * drawCMDs, u32 type)
+{
+    if (renderData->frameInstanceCounter.layerInstanceCount > 0)
+    {
+        DrawInstanceCMD cmd = {type, renderData->frameInstanceCounter.layerInstanceCount, renderData->frameInstanceCounter.totalInstances};
+        ArrayPush(drawCMDs, &cmd);
+    }
+}
+
+void RendererClearInstances(InstanceRenderData * renderData)
+{
+    renderData->frameInstanceCounter.currentLayer = 0;
+    renderData->frameInstanceCounter.layerInstanceCount = 0;
+    renderData->frameInstanceCounter.totalInstances = 0;
+    renderData->instanceData.count = 0;
+}
+
+void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData * textureRenderData, Array * rectInstances, Array * lineInstances, Array * subTextureInstances, Array * drawCMDs)
+{
+    RendererClearInstances(textureRenderData);
+
     InsertionSortRenderEntries(pb->sortEntries, pb->sortEntryCount);
 
-    // Start at layer zero and 
-    u32 totalQuads = 0;
-    u32 currentQuadLayer = 0;
-    u32 quadCount = 0;
     for (int i = 0; i < pb->entryCount; i++)
     {
         RenderSortEntry sortEntry = pb->sortEntries[i];
@@ -498,21 +556,7 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, Array * quadInstanc
                 instanceData.rotation = entry->instanceData.rotation;
                 instanceData.scale = entry->instanceData.scale;
                 instanceData.textureIndex = entry->textureID;
-                ArrayPush(quadInstances, &instanceData);
-
-                if (currentQuadLayer != sortEntry.layer)
-                {
-                    if (quadCount > 0)
-                    {
-                        DrawInstanceCMD cmd = {RENDER_ENTRY_TYPE_TEXTURED_QUAD, quadCount, totalQuads};
-                        ArrayPush(drawCMDs, &cmd);
-                        totalQuads += quadCount;
-                        quadCount = 0;
-                    }
-                    // Add a draw call for quadCount number of quads.
-                    currentQuadLayer = sortEntry.layer;
-                }
-                quadCount++;
+                RendererPushInstance(textureRenderData, drawCMDs, &instanceData, sortEntry.layer, 4);
             } break;
 
             case RENDER_ENTRY_TYPE_LINE:
@@ -533,11 +577,7 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, Array * quadInstanc
         } 
     }
 
-    if (quadCount > 0)
-    {
-        DrawInstanceCMD cmd = {RENDER_ENTRY_TYPE_TEXTURED_QUAD, quadCount, totalQuads};
-        ArrayPush(drawCMDs, &cmd);
-    }
+    RendererFlushInstances(textureRenderData, drawCMDs, 4);
 
     pb->entryCount = 0;
     pb->sortEntryCount = 0;
@@ -588,7 +628,7 @@ int RendererCreateTexture(const ImageData * image)
 
 void RendererProcessPushBuffer(RendererPushBuffer * pb)
 {
-    DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.quadInstances, &RENDERER_PIPELINE.rectangleInstances, &RENDERER_PIPELINE.lineInstances, &RENDERER_PIPELINE.subTextureInstances, &RENDERER_PIPELINE.instanceDrawCMDs);
+    DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.IRD[0], &RENDERER_PIPELINE.rectangleInstances, &RENDERER_PIPELINE.lineInstances, &RENDERER_PIPELINE.subTextureInstances, &RENDERER_PIPELINE.instanceDrawCMDs);
 }
 
 void BeginFrame(float clearColor[4], mat4 projectionMatrix)
