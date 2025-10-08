@@ -129,9 +129,9 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     InstanceData2D gdHard = {{-0.0f, -0.5f}, {1.0f, 1.0f}, (float)fmod(time, 360.0)};
     InstanceData2D gdHarder = {{-sinf(time) * 0.5f, cosf(time) * 0.5f, 0.0f}, {2.0f, 2.0f}, (float)fmod(time/2,360.0)};
 
-    RendererPushImage(&state->renderPB, 1, gdEasy, 20);
-    RendererPushImage(&state->renderPB, 2, gdNormal, 19);
-    RendererPushImage(&state->renderPB, 3, gdHard, 1);
+    RendererPushImage(&state->renderPB, 1, gdEasy, 2);
+    RendererPushImage(&state->renderPB, 2, gdNormal, 2);
+    RendererPushImage(&state->renderPB, 3, gdHard, 2);
     RendererPushImage(&state->renderPB, 4, gdHarder, 2);
 
     RendererPushLine(&state->renderPB, gdEasy.position, gdHard.position, {0.0f, 0.0f, 1.0f}, 0.01f, 0);

@@ -184,7 +184,7 @@ void InitRendererResources(RendererResourcesDX12 & res, RendererState & state)
 {
     ////////////
     // Geometry
-    const VertexPosUV quadVertices[4] = {{{-0.25,  0.25, 0.0}, {0.0, 0.0}},    // Top Left     (0,0)---(1,0)
+    const VertexPosUV quadVertices[4] = {{{-0.25,  0.25, 0.0}, {0.0, 0.0}},   // Top Left      (0,0)---(1,0)
                                         {{ 0.25,  0.25, 0.0}, {1.0, 0.0}},    // Top Right       |    /  |
                                         {{-0.25, -0.25, 0.0}, {0.0, 1.0}},    // Bottom Left     |  /    |
                                         {{ 0.25, -0.25, 0.0}, {1.0, 1.0}}};   // Bottom Right  (0,1)---(1,1)
@@ -290,7 +290,6 @@ void InitRendererResources(RendererResourcesDX12 & res, RendererState & state)
     res.lineIndexBufferView.BufferLocation = res.lineIndexBuffer->GetGPUVirtualAddress();
     res.lineIndexBufferView.SizeInBytes = sizeof(u16) * lineIndexCount;
     res.lineIndexBufferView.Format = DXGI_FORMAT_R16_UINT; 
-
 
     res.lineInstanceBufferView.SizeInBytes = sizeof(lineInstanceData);
     res.lineInstanceBufferView.StrideInBytes = sizeof(LineInstanceData);
@@ -437,7 +436,7 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
                 state.cmdList->SetPipelineState(res.IRD[1].PSO.Get());
                 state.cmdList->IASetVertexBuffers(0, 1, &res.IRD[1].vertexBufferView);
                 state.cmdList->IASetVertexBuffers(1, 1, &res.IRD[1].instanceBufferView);
-                state.cmdList->IASetIndexBuffer(&res.IRD[0].indexBufferView);
+                state.cmdList->IASetIndexBuffer(&res.IRD[1].indexBufferView);
                 state.cmdList->DrawIndexedInstanced(res.IRD[1].indexCountPerInstance, cmd->count, 0, 0, cmd->offset);
             } break;
             case 4:
@@ -528,6 +527,8 @@ void RendererFlushInstances(InstanceRenderData * renderData, Array * drawCMDs, u
     {
         DrawInstanceCMD cmd = {type, renderData->frameInstanceCounter.layerInstanceCount, renderData->frameInstanceCounter.totalInstances};
         ArrayPush(drawCMDs, &cmd);
+        renderData->frameInstanceCounter.totalInstances += renderData->frameInstanceCounter.layerInstanceCount;
+        renderData->frameInstanceCounter.layerInstanceCount = 0;
     }
 }
 
@@ -546,9 +547,15 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
 
     InsertionSortRenderEntries(pb->sortEntries, pb->sortEntryCount);
 
+    u16 currentLayer = 0;
     for (int i = 0; i < pb->entryCount; i++)
     {
         RenderSortEntry sortEntry = pb->sortEntries[i];
+        if (currentLayer != sortEntry.layer)
+        {
+            RendererFlushInstances(rectangleRenderData, drawCMDs, 3);
+            RendererFlushInstances(textureRenderData, drawCMDs, 4);
+        }
         switch (sortEntry.type)
         {
             case RENDER_ENTRY_TYPE_CLEAR:

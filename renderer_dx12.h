@@ -12,7 +12,7 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-#define _DEBUG
+//#define _DEBUG
 
 const static UINT NUM_FRAMES = 2;
 
@@ -113,7 +113,6 @@ typedef struct {
     u16 lineIndexCount;
 
     D3D12_VERTEX_BUFFER_VIEW lineInstanceBufferView;
-
 
     // TODO(get rid of this abomination): create a renderer arena and make this a SLL.
     ComPtr<ID3D12DescriptorHeap> textureSRVHeap;
