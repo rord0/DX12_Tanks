@@ -93,9 +93,6 @@ typedef struct {
     // Root Signatures
     ComPtr<ID3D12RootSignature> rootSignature;
 
-    // Pipeline State Objects
-    ComPtr<ID3D12PipelineState> linePSO;
-
     // Allocators
     UploadArena frameUploadArena;
 
@@ -110,19 +107,12 @@ typedef struct {
     D3D12_VERTEX_BUFFER_VIEW lineVertexBufferView;
     D3D12_INDEX_BUFFER_VIEW lineIndexBufferView;
 
-    u16 lineIndexCount;
-
-    D3D12_VERTEX_BUFFER_VIEW lineInstanceBufferView;
-
     // TODO(get rid of this abomination): create a renderer arena and make this a SLL.
     ComPtr<ID3D12DescriptorHeap> textureSRVHeap;
     u32 textureCount;
     u32 maxTexures;
     ComPtr<ID3D12Resource> textureResources[32];
 
-    // Instance Data Arrays
-    Array lineInstances;
-    Array subTextureInstances;
     Array instanceDrawCMDs;
 
     InstanceRenderData IRD[5];
@@ -140,8 +130,7 @@ DrawInstanceCMD INSTANCE_DRAW_CMDS[64] = {};
 
 TextureInstanceData TEXTURE_INSTANCE_DATA[64] = {};
 DebugGeoInstanceData RECTANGLE_INSTANCE_DATA[32] = {};
-
-LineInstanceData lineInstanceData[32] = {};
-SubTextureInstanceData subTextureInstanceData[32] = {};
+SubTextureInstanceData SUB_TEXTURE_INSTANCE_DATA[32] = {};
+LineInstanceData LINE_INSTANCE_DATA[32] = {};
 
 #endif // RENDERER_DX12_H
