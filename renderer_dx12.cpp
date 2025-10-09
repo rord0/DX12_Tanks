@@ -197,6 +197,44 @@ void InitLineInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature *
     pixelShaderBlob->Release();
 }
 
+void InitCircleInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView)
+{
+    ID3DBlob * vertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/circle_vertex.hlsl", "circle_vertex.hlsl", "main", "vs_5_1");
+    ID3DBlob * pixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/circle_pixel.hlsl", "circle_pixel.hlsl", "main", "ps_5_1");
+
+    D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
+    D3D12_SHADER_BYTECODE  pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
+
+    const D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+            { "Position",         0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "UV",               0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "InstancePosition", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceSize",     0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceColor",    0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceFill",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+    };
+
+    // Create Pipeline State Object
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature, inputElementDescs, _countof(inputElementDescs), vertexShaderBytecode, pixelShaderBytecode);
+    AssertIfFailed(device->CreateGraphicsPipelineState(&pipelineStateDesc, IID_PPV_ARGS(&data->PSO)));
+
+    // Initalize Buffer Views
+    data->vertexBufferView = vertexBufferView;
+    data->indexBufferView = indexBufferView;
+    data->indexCountPerInstance = 6;
+
+    data->instanceBufferView.StrideInBytes = sizeof(DebugGeoInstanceData);
+    data->instanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
+    data->instanceBufferView.SizeInBytes = sizeof(CIRCLE_INSTANCE_DATA);
+
+    // TODO: Use Arena to allocate CPU instance data staging buffer
+    data->instanceData = ArrayInit(sizeof(DebugGeoInstanceData), sizeof(CIRCLE_INSTANCE_DATA) / sizeof(DebugGeoInstanceData), (void*)&CIRCLE_INSTANCE_DATA);
+
+    vertexShaderBlob->Release();
+    pixelShaderBlob->Release();
+}
+
 RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
 {
     RendererResourcesDX12 res = {};
@@ -303,7 +341,6 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
 
     /////////////////////
     // Create Buffer Views
-
     res.textureVertexBufferView.BufferLocation = res.textureVertexBuffer->GetGPUVirtualAddress();
     res.textureVertexBufferView.SizeInBytes = sizeof(quadVertices);
     res.textureVertexBufferView.StrideInBytes = sizeof(VertexPosUV);
@@ -328,6 +365,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
     InitTextureInstanceRenderData(&res.IRD[0], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView);
     InitRectangleInstanceRenderData(&res.IRD[1], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView);
     InitLineInstanceRenderData(&res.IRD[2], res.rootSignature.Get(), state.device, res.lineVertexBufferView, res.lineIndexBufferView, lineIndexCount);
+    InitCircleInstanceRenderData(&res.IRD[3], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView);
 
     return res;
 }
@@ -402,6 +440,11 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
     memcpy(lineAlloc.pCPU, LINE_INSTANCE_DATA, sizeof(LineInstanceData));
     res.IRD[2].instanceBufferView.BufferLocation = lineAlloc.pGPU;
 
+    GPUAllocation circleAlloc = UploadArenaPush(&res.frameUploadArena, sizeof(CIRCLE_INSTANCE_DATA), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+    memcpy(circleAlloc.pCPU, CIRCLE_INSTANCE_DATA, sizeof(CIRCLE_INSTANCE_DATA));
+    res.IRD[3].instanceBufferView.BufferLocation = circleAlloc.pGPU;
+
+
     // NOTE(rordon): shouldn't change much....
     state.cmdList->SetGraphicsRootSignature(res.rootSignature.Get());
     state.cmdList->SetGraphicsRoot32BitConstants(0, 16, &res.projection.m, 0);
@@ -444,6 +487,14 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
                 state.cmdList->IASetVertexBuffers(1, 1, &res.IRD[2].instanceBufferView);
                 state.cmdList->IASetIndexBuffer(&res.IRD[2].indexBufferView);
                 state.cmdList->DrawIndexedInstanced(res.IRD[2].indexCountPerInstance, cmd->count, 0, 0, cmd->offset);
+            } break;
+            case 1:
+            {
+                state.cmdList->SetPipelineState(res.IRD[3].PSO.Get());
+                state.cmdList->IASetVertexBuffers(0, 1, &res.IRD[3].vertexBufferView);
+                state.cmdList->IASetVertexBuffers(1, 1, &res.IRD[3].instanceBufferView);
+                state.cmdList->IASetIndexBuffer(&res.IRD[3].indexBufferView);
+                state.cmdList->DrawIndexedInstanced(res.IRD[3].indexCountPerInstance, cmd->count, 0, 0, cmd->offset);
             } break;
             default:
             {
@@ -529,11 +580,12 @@ void RendererClearInstances(InstanceRenderData * renderData)
     renderData->instanceData.count = 0;
 }
 
-void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData * textureRenderData, InstanceRenderData * rectangleRenderData, InstanceRenderData * lineRenderData, Array * drawCMDs)
+void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData * textureRenderData, InstanceRenderData * rectangleRenderData, InstanceRenderData * lineRenderData, InstanceRenderData * circleRenderData, Array * drawCMDs)
 {
     RendererClearInstances(textureRenderData);
     RendererClearInstances(rectangleRenderData);
     RendererClearInstances(lineRenderData);
+    RendererClearInstances(circleRenderData);
 
     InsertionSortRenderEntries(pb->sortEntries, pb->sortEntryCount);
 
@@ -546,6 +598,7 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
             RendererFlushInstances(rectangleRenderData, drawCMDs, 3);
             RendererFlushInstances(textureRenderData, drawCMDs, 4);
             RendererFlushInstances(lineRenderData, drawCMDs, 2);
+            RendererFlushInstances(circleRenderData, drawCMDs, 1);
         }
         switch (sortEntry.type)
         {
@@ -561,6 +614,14 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
 
             case RENDER_ENTRY_TYPE_DEBUG_CIRCLE:
             {
+                RenderEntryDebugCircle * entry = (RenderEntryDebugCircle*)(pb->memory + sortEntry.pushBufferOffset);
+                DebugGeoInstanceData instanceData = {};
+                instanceData.position = entry->position;
+                instanceData.scale = entry->scale;
+                instanceData.fill = entry->fill;
+                instanceData.rotation = entry->rotation;
+                instanceData.color = entry->color;
+                RendererPushInstance(circleRenderData, drawCMDs, &instanceData, sortEntry.layer, 1);
             } break;
 
             case RENDER_ENTRY_TYPE_TEXTURED_QUAD:
@@ -594,6 +655,7 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
     RendererFlushInstances(textureRenderData, drawCMDs, 4);
     RendererFlushInstances(rectangleRenderData, drawCMDs, 3);
     RendererFlushInstances(lineRenderData, drawCMDs, 2);
+    RendererFlushInstances(circleRenderData, drawCMDs, 1);
 
     pb->entryCount = 0;
     pb->sortEntryCount = 0;
@@ -644,7 +706,7 @@ int RendererCreateTexture(const ImageData * image)
 
 void RendererProcessPushBuffer(RendererPushBuffer * pb)
 {
-    DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.IRD[0], &RENDERER_PIPELINE.IRD[1], &RENDERER_PIPELINE.IRD[2], &RENDERER_PIPELINE.instanceDrawCMDs);
+    DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.IRD[0], &RENDERER_PIPELINE.IRD[1], &RENDERER_PIPELINE.IRD[2], &RENDERER_PIPELINE.IRD[3], &RENDERER_PIPELINE.instanceDrawCMDs);
 }
 
 void BeginFrame(float clearColor[4], mat4 projectionMatrix)

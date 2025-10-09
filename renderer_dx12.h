@@ -132,5 +132,6 @@ TextureInstanceData TEXTURE_INSTANCE_DATA[64] = {};
 DebugGeoInstanceData RECTANGLE_INSTANCE_DATA[32] = {};
 SubTextureInstanceData SUB_TEXTURE_INSTANCE_DATA[32] = {};
 LineInstanceData LINE_INSTANCE_DATA[32] = {};
+SubTextureInstanceData CIRCLE_INSTANCE_DATA[32] = {};
 
 #endif // RENDERER_DX12_H

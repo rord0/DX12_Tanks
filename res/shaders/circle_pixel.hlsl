@@ -26,6 +26,7 @@ float line2(float2 uv, float2 center, float radius)
 
 float circle(float2 uv, float f)
 {
+    f = 1.0 - f;
     const float2 center = float2(0.5f, 0.5f);
     float smooth = 0.01f;
     float radius = 0.5f - smooth;

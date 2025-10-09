@@ -100,8 +100,8 @@ EXPORT GAME_START_FUNCTION(start)
     state->renderPB.sortEntries = (RenderSortEntry*)ArenaPush(&tempMemoryArena, maxSortEntryCount * sizeof(RenderSortEntry));
     state->renderPB.maxSortEntries = maxSortEntryCount;
 
-    state->tankAtlasHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"tank_parts.png");
-    state->extraTextureHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"world_eater.jpg");
+    state->tankAtlasHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"images/platformer/Props_BreakableWall_04.png");
+    state->extraTextureHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"images/platformer/Props_AirDrop.png");
     // TODO(rordon): tank_parts.csv into array of uv atlas data. 
     // TODO(rordon): get image handle for tank texture atlas.
 }
@@ -126,13 +126,17 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
     InstanceData2D gdEasy = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0f}, {1.0f, 1.0f}, 0.0f};
     InstanceData2D gdNormal = {{0.5f, 0.0f}, {1.0f + sinf(time) * 0.5f, 1.0f + sinf(time) * 0.5f}, 1.57079633f};
-    InstanceData2D gdHard = {{-0.0f, -0.5f}, {1.0f, 1.0f}, (float)fmod(time, 360.0)};
+    InstanceData2D gdHard = {{-0.0f, -0.5f}, {0.5f, 0.5f}, (float)fmod(time, 360.0)};
     InstanceData2D gdHarder = {{-sinf(time) * 0.5f, cosf(time) * 0.5f, 0.0f}, {2.0f, 2.0f}, (float)fmod(time/2,360.0)};
 
-    RendererPushImage(&state->renderPB, 1, gdEasy, 2);
-    RendererPushImage(&state->renderPB, 2, gdNormal, 4);
-    RendererPushImage(&state->renderPB, 3, gdHard, 0);
-    RendererPushImage(&state->renderPB, 4, gdHarder, 0);
+    RendererPushCircle(&state->renderPB, gdEasy.position, gdEasy.rotation, {0.1f,0.1f}, {1.0f,0.0f,0.0f}, 1.0f, 30);
+    RendererPushCircle(&state->renderPB, gdHarder.position, gdEasy.rotation, {0.5f,0.5f}, {1.0f,1.0f,0.0f}, 1.0f, 30);
+    RendererPushCircle(&state->renderPB, gdNormal.position, gdEasy.rotation, {0.1f,0.1f}, {0.0f,1.0f,0.0f}, 1.0f, 30);
 
-    RendererPushLine(&state->renderPB, gdEasy.position, gdHard.position, {0.0f, 0.0f, 1.0f}, 0.01f, 0);
+    //RendererPushImage(&state->renderPB, 1, gdEasy, 2);
+    RendererPushImage(&state->renderPB, 2, gdNormal, 4);
+    RendererPushImage(&state->renderPB,    state->extraTextureHandle, gdHard, 0);
+    RendererPushImage(&state->renderPB, state->tankAtlasHandle, gdHarder, 0);
+
+    RendererPushLine(&state->renderPB, gdEasy.position, gdHard.position, {0.0f, 1.0f, 1.0f}, 0.02f, 0);
 }

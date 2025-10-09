@@ -52,9 +52,13 @@ void RendererPushLine(RendererPushBuffer * pb, vec3 startPos, vec3 endPos, vec3 
     PushRenderSortEntry(pb, sortEntry);
 }
 
-void RendererPushCircle(RendererPushBuffer * pb, vec3 position, vec2 size, vec3 color, float fill, u16 layer)
+void RendererPushCircle(RendererPushBuffer * pb, vec3 position, f32 rotation, vec2 scale, vec3 color, float fill, u16 layer)
 {
-    // TODO: Circle rendering
+    RenderEntryDebugCircle entry = {RENDER_ENTRY_TYPE_DEBUG_CIRCLE, position, rotation, scale, color, fill};
+    u32 entryOffset = PushRenderEntry(pb, entry);
+
+    RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_DEBUG_CIRCLE, layer, entryOffset};
+    PushRenderSortEntry(pb, sortEntry);
 }
 
 void RendererPushSubTexture(RendererPushBuffer * pb, u32 textureID, vec2 position, vec2 size, vec4 uvCoords, u16 layer)

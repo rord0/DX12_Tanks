@@ -27,7 +27,11 @@ typedef struct {
 
 typedef struct {
     RenderEntryHeader header;
-    DebugGeoInstanceData instanceData;
+    vec3 position;
+    f32 rotation;
+    vec2 scale;
+    vec3 color;
+    f32 fill;
 } RenderEntryDebugCircle;
 
 typedef struct {
