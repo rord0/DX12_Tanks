@@ -73,6 +73,7 @@ typedef struct
 
 typedef struct 
 {
+    u32 instanceID;
     ComPtr<ID3D12PipelineState> PSO;
 
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView;

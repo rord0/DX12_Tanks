@@ -85,7 +85,7 @@ void GenerateRoundCapLineGeometry(vec3 * vertexBuffer, u16 * indexBuffer, u32 * 
 }
 
 
-void InitTextureInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView)
+void InitTextureInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView, u32 id)
 {
     ID3DBlob * vertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/vertex.hlsl", "vertex.hlsl", "main", "vs_5_1");
     ID3DBlob * pixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/pixel.hlsl", "pixel.hlsl", "main", "ps_5_1");
@@ -107,6 +107,7 @@ void InitTextureInstanceRenderData(InstanceRenderData * data, ID3D12RootSignatur
     AssertIfFailed(device->CreateGraphicsPipelineState(&pipelineStateDesc, IID_PPV_ARGS(&data->PSO)));
 
 
+    data->instanceID = id;
     // Initalize Buffer Views
     data->vertexBufferView = vertexBufferView;
     data->indexBufferView = indexBufferView;
@@ -123,7 +124,7 @@ void InitTextureInstanceRenderData(InstanceRenderData * data, ID3D12RootSignatur
     pixelShaderBlob->Release();
 }
 
-void InitRectangleInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView)
+void InitRectangleInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView, u32 id)
 {
     ID3DBlob * vertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/rectangle_vertex.hlsl", "rectangle_vertex.hlsl", "main", "vs_5_1");
     ID3DBlob * pixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/rectangle_pixel.hlsl", "rectangle_pixel.hlsl", "main", "ps_5_1");
@@ -154,6 +155,7 @@ void InitRectangleInstanceRenderData(InstanceRenderData * data, ID3D12RootSignat
     data->instanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
     data->instanceBufferView.SizeInBytes = sizeof(RECTANGLE_INSTANCE_DATA);
 
+    data->instanceID = id;
     // TODO: Use Arena to allocate CPU instance data staging buffer
     data->instanceData = ArrayInit(sizeof(DebugGeoInstanceData), sizeof(RECTANGLE_INSTANCE_DATA) / sizeof(DebugGeoInstanceData), (void*)&RECTANGLE_INSTANCE_DATA);
 
@@ -161,7 +163,7 @@ void InitRectangleInstanceRenderData(InstanceRenderData * data, ID3D12RootSignat
     pixelShaderBlob->Release();
 }
 
-void InitLineInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView, u32 indexCountPerInstance)
+void InitLineInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView, u32 indexCountPerInstance, u32 id)
 {
     ID3DBlob * vertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/line_vertex.hlsl", "line_vertex.hlsl", "main", "vs_5_1");
     ID3DBlob * pixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/line_pixel.hlsl", "line_pixel.hlsl", "main", "ps_5_1");
@@ -190,6 +192,7 @@ void InitLineInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature *
     data->instanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
     data->instanceBufferView.SizeInBytes = sizeof(LINE_INSTANCE_DATA);
 
+    data->instanceID = id;
     // TODO: Use Arena to allocate CPU instance data staging buffer
     data->instanceData = ArrayInit(sizeof(LineInstanceData), sizeof(LINE_INSTANCE_DATA) / sizeof(LineInstanceData), (void*)&LINE_INSTANCE_DATA);
 
@@ -197,7 +200,7 @@ void InitLineInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature *
     pixelShaderBlob->Release();
 }
 
-void InitCircleInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView)
+void InitCircleInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView, u32 id)
 {
     ID3DBlob * vertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/circle_vertex.hlsl", "circle_vertex.hlsl", "main", "vs_5_1");
     ID3DBlob * pixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/circle_pixel.hlsl", "circle_pixel.hlsl", "main", "ps_5_1");
@@ -228,6 +231,7 @@ void InitCircleInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature
     data->instanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
     data->instanceBufferView.SizeInBytes = sizeof(CIRCLE_INSTANCE_DATA);
 
+    data->instanceID = id;
     // TODO: Use Arena to allocate CPU instance data staging buffer
     data->instanceData = ArrayInit(sizeof(DebugGeoInstanceData), sizeof(CIRCLE_INSTANCE_DATA) / sizeof(DebugGeoInstanceData), (void*)&CIRCLE_INSTANCE_DATA);
 
@@ -362,10 +366,10 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
 
     UploadArenaRelease(&tempUploadArena);
 
-    InitTextureInstanceRenderData(&res.IRD[0], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView);
-    InitRectangleInstanceRenderData(&res.IRD[1], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView);
-    InitLineInstanceRenderData(&res.IRD[2], res.rootSignature.Get(), state.device, res.lineVertexBufferView, res.lineIndexBufferView, lineIndexCount);
-    InitCircleInstanceRenderData(&res.IRD[3], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView);
+    InitTextureInstanceRenderData(&res.IRD[0], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView, 0);
+    InitRectangleInstanceRenderData(&res.IRD[1], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView, 1);
+    InitLineInstanceRenderData(&res.IRD[2], res.rootSignature.Get(), state.device, res.lineVertexBufferView, res.lineIndexBufferView, lineIndexCount, 2);
+    InitCircleInstanceRenderData(&res.IRD[3], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView, 3);
 
     return res;
 }
@@ -463,41 +467,13 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
         DrawInstanceCMD * cmd = (DrawInstanceCMD*)(res.instanceDrawCMDs.elements) + i;
         switch (cmd->instanceID)
         {
-            case 3:
-            {
-                state.cmdList->SetPipelineState(res.IRD[1].PSO.Get());
-                state.cmdList->IASetVertexBuffers(0, 1, &res.IRD[1].vertexBufferView);
-                state.cmdList->IASetVertexBuffers(1, 1, &res.IRD[1].instanceBufferView);
-                state.cmdList->IASetIndexBuffer(&res.IRD[1].indexBufferView);
-                state.cmdList->DrawIndexedInstanced(res.IRD[1].indexCountPerInstance, cmd->count, 0, 0, cmd->offset);
-            } break;
-            case 4:
-            {
-                state.cmdList->SetPipelineState(res.IRD[0].PSO.Get());
-                state.cmdList->IASetVertexBuffers(0, 1, &res.IRD[0].vertexBufferView);
-                state.cmdList->IASetVertexBuffers(1, 1, &res.IRD[0].instanceBufferView);
-                state.cmdList->IASetIndexBuffer(&res.IRD[0].indexBufferView);
-                state.cmdList->DrawIndexedInstanced(res.IRD[0].indexCountPerInstance, cmd->count, 0, 0, cmd->offset);
-            } break;
-            
-            case 2:
-            {
-                state.cmdList->SetPipelineState(res.IRD[2].PSO.Get());
-                state.cmdList->IASetVertexBuffers(0, 1, &res.IRD[2].vertexBufferView);
-                state.cmdList->IASetVertexBuffers(1, 1, &res.IRD[2].instanceBufferView);
-                state.cmdList->IASetIndexBuffer(&res.IRD[2].indexBufferView);
-                state.cmdList->DrawIndexedInstanced(res.IRD[2].indexCountPerInstance, cmd->count, 0, 0, cmd->offset);
-            } break;
-            case 1:
-            {
-                state.cmdList->SetPipelineState(res.IRD[3].PSO.Get());
-                state.cmdList->IASetVertexBuffers(0, 1, &res.IRD[3].vertexBufferView);
-                state.cmdList->IASetVertexBuffers(1, 1, &res.IRD[3].instanceBufferView);
-                state.cmdList->IASetIndexBuffer(&res.IRD[3].indexBufferView);
-                state.cmdList->DrawIndexedInstanced(res.IRD[3].indexCountPerInstance, cmd->count, 0, 0, cmd->offset);
-            } break;
             default:
             {
+                state.cmdList->SetPipelineState(res.IRD[cmd->instanceID].PSO.Get());
+                state.cmdList->IASetVertexBuffers(0, 1, &res.IRD[cmd->instanceID].vertexBufferView);
+                state.cmdList->IASetVertexBuffers(1, 1, &res.IRD[cmd->instanceID].instanceBufferView);
+                state.cmdList->IASetIndexBuffer(&res.IRD[cmd->instanceID].indexBufferView);
+                state.cmdList->DrawIndexedInstanced(res.IRD[cmd->instanceID].indexCountPerInstance, cmd->count, 0, 0, cmd->offset);
             } break;
         }
     }
@@ -542,7 +518,7 @@ void InsertionSortRenderEntries(RenderSortEntry * entries, size_t numEntries)
     }
 }
 
-void RendererPushInstance(InstanceRenderData * renderData, Array * drawCMDs, void * instanceData, u16 layer, u32 type)
+void RendererPushInstance(InstanceRenderData * renderData, Array * drawCMDs, void * instanceData, u16 layer)
 {
     ArrayPush(&renderData->instanceData, instanceData);
 
@@ -550,7 +526,7 @@ void RendererPushInstance(InstanceRenderData * renderData, Array * drawCMDs, voi
     {
         if (renderData->frameInstanceCounter.layerInstanceCount > 0)
         {
-            DrawInstanceCMD cmd = {type, renderData->frameInstanceCounter.layerInstanceCount, renderData->frameInstanceCounter.totalInstances};
+            DrawInstanceCMD cmd = {renderData->instanceID, renderData->frameInstanceCounter.layerInstanceCount, renderData->frameInstanceCounter.totalInstances};
             ArrayPush(drawCMDs, &cmd);
             renderData->frameInstanceCounter.totalInstances += renderData->frameInstanceCounter.layerInstanceCount;
             renderData->frameInstanceCounter.layerInstanceCount = 0;
@@ -561,11 +537,11 @@ void RendererPushInstance(InstanceRenderData * renderData, Array * drawCMDs, voi
     renderData->frameInstanceCounter.layerInstanceCount++;
 }
 
-void RendererFlushInstances(InstanceRenderData * renderData, Array * drawCMDs, u32 type)
+void RendererFlushInstances(InstanceRenderData * renderData, Array * drawCMDs)
 {
     if (renderData->frameInstanceCounter.layerInstanceCount > 0)
     {
-        DrawInstanceCMD cmd = {type, renderData->frameInstanceCounter.layerInstanceCount, renderData->frameInstanceCounter.totalInstances};
+        DrawInstanceCMD cmd = {renderData->instanceID, renderData->frameInstanceCounter.layerInstanceCount, renderData->frameInstanceCounter.totalInstances};
         ArrayPush(drawCMDs, &cmd);
         renderData->frameInstanceCounter.totalInstances += renderData->frameInstanceCounter.layerInstanceCount;
         renderData->frameInstanceCounter.layerInstanceCount = 0;
@@ -595,10 +571,10 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
         RenderSortEntry sortEntry = pb->sortEntries[i];
         if (currentLayer != sortEntry.layer)
         {
-            RendererFlushInstances(rectangleRenderData, drawCMDs, 3);
-            RendererFlushInstances(textureRenderData, drawCMDs, 4);
-            RendererFlushInstances(lineRenderData, drawCMDs, 2);
-            RendererFlushInstances(circleRenderData, drawCMDs, 1);
+            RendererFlushInstances(rectangleRenderData, drawCMDs);
+            RendererFlushInstances(textureRenderData, drawCMDs);
+            RendererFlushInstances(lineRenderData, drawCMDs);
+            RendererFlushInstances(circleRenderData, drawCMDs);
         }
         switch (sortEntry.type)
         {
@@ -609,7 +585,7 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
             case RENDER_ENTRY_TYPE_DEBUG_RECTANGLE:
             {
                 RenderEntryDebugRectangle * entry = (RenderEntryDebugRectangle*)(pb->memory + sortEntry.pushBufferOffset);
-                RendererPushInstance(rectangleRenderData, drawCMDs, &entry->instanceData, sortEntry.layer, 3);
+                RendererPushInstance(rectangleRenderData, drawCMDs, &entry->instanceData, sortEntry.layer);
             } break;
 
             case RENDER_ENTRY_TYPE_DEBUG_CIRCLE:
@@ -621,7 +597,7 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
                 instanceData.fill = entry->fill;
                 instanceData.rotation = entry->rotation;
                 instanceData.color = entry->color;
-                RendererPushInstance(circleRenderData, drawCMDs, &instanceData, sortEntry.layer, 1);
+                RendererPushInstance(circleRenderData, drawCMDs, &instanceData, sortEntry.layer);
             } break;
 
             case RENDER_ENTRY_TYPE_TEXTURED_QUAD:
@@ -632,13 +608,13 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
                 instanceData.rotation = entry->instanceData.rotation;
                 instanceData.scale = entry->instanceData.scale;
                 instanceData.textureIndex = entry->textureID;
-                RendererPushInstance(textureRenderData, drawCMDs, &instanceData, sortEntry.layer, 4);
+                RendererPushInstance(textureRenderData, drawCMDs, &instanceData, sortEntry.layer);
             } break;
 
             case RENDER_ENTRY_TYPE_LINE:
             {
                 RenderEntryLine * entry = (RenderEntryLine*)(pb->memory + sortEntry.pushBufferOffset);
-                RendererPushInstance(lineRenderData, drawCMDs, &entry->instanceData, sortEntry.layer, 2);
+                RendererPushInstance(lineRenderData, drawCMDs, &entry->instanceData, sortEntry.layer);
             } break;
 
             case RENDER_ENTRY_TYPE_SUB_TEXTURE:
@@ -652,10 +628,10 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
         } 
     }
 
-    RendererFlushInstances(textureRenderData, drawCMDs, 4);
-    RendererFlushInstances(rectangleRenderData, drawCMDs, 3);
-    RendererFlushInstances(lineRenderData, drawCMDs, 2);
-    RendererFlushInstances(circleRenderData, drawCMDs, 1);
+    RendererFlushInstances(textureRenderData, drawCMDs);
+    RendererFlushInstances(rectangleRenderData, drawCMDs);
+    RendererFlushInstances(lineRenderData, drawCMDs);
+    RendererFlushInstances(circleRenderData, drawCMDs);
 
     pb->entryCount = 0;
     pb->sortEntryCount = 0;
