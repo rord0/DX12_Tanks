@@ -556,12 +556,13 @@ void RendererClearInstances(InstanceRenderData * renderData)
     renderData->instanceData.count = 0;
 }
 
-void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData * textureRenderData, InstanceRenderData * rectangleRenderData, InstanceRenderData * lineRenderData, InstanceRenderData * circleRenderData, Array * drawCMDs)
+void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData * instanceRenderData, u32 instanceRenderDataCount, Array * drawCMDs)
 {
-    RendererClearInstances(textureRenderData);
-    RendererClearInstances(rectangleRenderData);
-    RendererClearInstances(lineRenderData);
-    RendererClearInstances(circleRenderData);
+    for (int i = 0; i < instanceRenderDataCount; i++)
+    {
+        RendererClearInstances(&instanceRenderData[i]);
+    }
+
 
     InsertionSortRenderEntries(pb->sortEntries, pb->sortEntryCount);
 
@@ -571,10 +572,10 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
         RenderSortEntry sortEntry = pb->sortEntries[i];
         if (currentLayer != sortEntry.layer)
         {
-            RendererFlushInstances(rectangleRenderData, drawCMDs);
-            RendererFlushInstances(textureRenderData, drawCMDs);
-            RendererFlushInstances(lineRenderData, drawCMDs);
-            RendererFlushInstances(circleRenderData, drawCMDs);
+            for (int i = 0; i < instanceRenderDataCount; i++)
+            {
+                RendererFlushInstances(&instanceRenderData[i], drawCMDs);
+            }
         }
         switch (sortEntry.type)
         {
@@ -585,7 +586,7 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
             case RENDER_ENTRY_TYPE_DEBUG_RECTANGLE:
             {
                 RenderEntryDebugRectangle * entry = (RenderEntryDebugRectangle*)(pb->memory + sortEntry.pushBufferOffset);
-                RendererPushInstance(rectangleRenderData, drawCMDs, &entry->instanceData, sortEntry.layer);
+                RendererPushInstance(&instanceRenderData[1], drawCMDs, &entry->instanceData, sortEntry.layer);
             } break;
 
             case RENDER_ENTRY_TYPE_DEBUG_CIRCLE:
@@ -597,7 +598,7 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
                 instanceData.fill = entry->fill;
                 instanceData.rotation = entry->rotation;
                 instanceData.color = entry->color;
-                RendererPushInstance(circleRenderData, drawCMDs, &instanceData, sortEntry.layer);
+                RendererPushInstance(&instanceRenderData[3], drawCMDs, &instanceData, sortEntry.layer);
             } break;
 
             case RENDER_ENTRY_TYPE_TEXTURED_QUAD:
@@ -608,13 +609,13 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
                 instanceData.rotation = entry->instanceData.rotation;
                 instanceData.scale = entry->instanceData.scale;
                 instanceData.textureIndex = entry->textureID;
-                RendererPushInstance(textureRenderData, drawCMDs, &instanceData, sortEntry.layer);
+                RendererPushInstance(&instanceRenderData[0], drawCMDs, &instanceData, sortEntry.layer);
             } break;
 
             case RENDER_ENTRY_TYPE_LINE:
             {
                 RenderEntryLine * entry = (RenderEntryLine*)(pb->memory + sortEntry.pushBufferOffset);
-                RendererPushInstance(lineRenderData, drawCMDs, &entry->instanceData, sortEntry.layer);
+                RendererPushInstance(&instanceRenderData[2], drawCMDs, &entry->instanceData, sortEntry.layer);
             } break;
 
             case RENDER_ENTRY_TYPE_SUB_TEXTURE:
@@ -628,10 +629,10 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
         } 
     }
 
-    RendererFlushInstances(textureRenderData, drawCMDs);
-    RendererFlushInstances(rectangleRenderData, drawCMDs);
-    RendererFlushInstances(lineRenderData, drawCMDs);
-    RendererFlushInstances(circleRenderData, drawCMDs);
+    for (int i = 0; i < instanceRenderDataCount; i++)
+    {
+        RendererFlushInstances(&instanceRenderData[i], drawCMDs);
+    }
 
     pb->entryCount = 0;
     pb->sortEntryCount = 0;
@@ -682,7 +683,7 @@ int RendererCreateTexture(const ImageData * image)
 
 void RendererProcessPushBuffer(RendererPushBuffer * pb)
 {
-    DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.IRD[0], &RENDERER_PIPELINE.IRD[1], &RENDERER_PIPELINE.IRD[2], &RENDERER_PIPELINE.IRD[3], &RENDERER_PIPELINE.instanceDrawCMDs);
+    DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.IRD[0], 4, &RENDERER_PIPELINE.instanceDrawCMDs);
 }
 
 void BeginFrame(float clearColor[4], mat4 projectionMatrix)
