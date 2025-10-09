@@ -129,10 +129,11 @@ const bool USE_WARP = false;
 
 DrawInstanceCMD INSTANCE_DRAW_CMDS[64] = {};
 
+// TODO: use frame arena to allocate these...
 TextureInstanceData TEXTURE_INSTANCE_DATA[64] = {};
 DebugGeoInstanceData RECTANGLE_INSTANCE_DATA[32] = {};
-SubTextureInstanceData SUB_TEXTURE_INSTANCE_DATA[32] = {};
 LineInstanceData LINE_INSTANCE_DATA[32] = {};
-SubTextureInstanceData CIRCLE_INSTANCE_DATA[32] = {};
+DebugGeoInstanceData CIRCLE_INSTANCE_DATA[32] = {};
+SubTextureInstanceData SUB_TEXTURE_INSTANCE_DATA[32] = {};
 
 #endif // RENDERER_DX12_H

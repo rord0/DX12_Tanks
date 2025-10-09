@@ -448,7 +448,6 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
     memcpy(circleAlloc.pCPU, CIRCLE_INSTANCE_DATA, sizeof(CIRCLE_INSTANCE_DATA));
     res.IRD[3].instanceBufferView.BufferLocation = circleAlloc.pGPU;
 
-
     // NOTE(rordon): shouldn't change much....
     state.cmdList->SetGraphicsRootSignature(res.rootSignature.Get());
     state.cmdList->SetGraphicsRoot32BitConstants(0, 16, &res.projection.m, 0);
@@ -563,7 +562,6 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
         RendererClearInstances(&instanceRenderData[i]);
     }
 
-
     InsertionSortRenderEntries(pb->sortEntries, pb->sortEntryCount);
 
     u16 currentLayer = 0;
@@ -583,24 +581,6 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
             {
             } break;
 
-            case RENDER_ENTRY_TYPE_DEBUG_RECTANGLE:
-            {
-                RenderEntryDebugRectangle * entry = (RenderEntryDebugRectangle*)(pb->memory + sortEntry.pushBufferOffset);
-                RendererPushInstance(&instanceRenderData[1], drawCMDs, &entry->instanceData, sortEntry.layer);
-            } break;
-
-            case RENDER_ENTRY_TYPE_DEBUG_CIRCLE:
-            {
-                RenderEntryDebugCircle * entry = (RenderEntryDebugCircle*)(pb->memory + sortEntry.pushBufferOffset);
-                DebugGeoInstanceData instanceData = {};
-                instanceData.position = entry->position;
-                instanceData.scale = entry->scale;
-                instanceData.fill = entry->fill;
-                instanceData.rotation = entry->rotation;
-                instanceData.color = entry->color;
-                RendererPushInstance(&instanceRenderData[3], drawCMDs, &instanceData, sortEntry.layer);
-            } break;
-
             case RENDER_ENTRY_TYPE_TEXTURED_QUAD:
             {
                 RenderEntryTexturedQuad * entry = (RenderEntryTexturedQuad*)(pb->memory + sortEntry.pushBufferOffset);
@@ -612,10 +592,28 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
                 RendererPushInstance(&instanceRenderData[0], drawCMDs, &instanceData, sortEntry.layer);
             } break;
 
+            case RENDER_ENTRY_TYPE_DEBUG_RECTANGLE:
+            {
+                RenderEntryDebugRectangle * entry = (RenderEntryDebugRectangle*)(pb->memory + sortEntry.pushBufferOffset);
+                RendererPushInstance(&instanceRenderData[1], drawCMDs, &entry->instanceData, sortEntry.layer);
+            } break;
+
             case RENDER_ENTRY_TYPE_LINE:
             {
                 RenderEntryLine * entry = (RenderEntryLine*)(pb->memory + sortEntry.pushBufferOffset);
                 RendererPushInstance(&instanceRenderData[2], drawCMDs, &entry->instanceData, sortEntry.layer);
+            } break;
+            
+            case RENDER_ENTRY_TYPE_DEBUG_CIRCLE:
+            {
+                RenderEntryDebugCircle * entry = (RenderEntryDebugCircle*)(pb->memory + sortEntry.pushBufferOffset);
+                DebugGeoInstanceData instanceData = {};
+                instanceData.position = entry->position;
+                instanceData.scale = entry->scale;
+                instanceData.fill = entry->fill;
+                instanceData.rotation = entry->rotation;
+                instanceData.color = entry->color;
+                RendererPushInstance(&instanceRenderData[3], drawCMDs, &instanceData, sortEntry.layer);
             } break;
 
             case RENDER_ENTRY_TYPE_SUB_TEXTURE:
