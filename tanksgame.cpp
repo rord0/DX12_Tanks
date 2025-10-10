@@ -100,7 +100,7 @@ EXPORT GAME_START_FUNCTION(start)
     state->renderPB.sortEntries = (RenderSortEntry*)ArenaPush(&tempMemoryArena, maxSortEntryCount * sizeof(RenderSortEntry));
     state->renderPB.maxSortEntries = maxSortEntryCount;
 
-    state->tankAtlasHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"images/platformer/Props_BreakableWall_04.png");
+    state->tankAtlasHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"tank_parts.png");
     state->extraTextureHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"images/platformer/Props_AirDrop.png");
     // TODO(rordon): tank_parts.csv into array of uv atlas data. 
     // TODO(rordon): get image handle for tank texture atlas.
@@ -124,19 +124,22 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     DebugGeoInstanceData debugRectangle = {{0.5, 0.25, 0.0}, {0.8f, 1.0f}, {0.0f, 1.0f, 0.0f}, 0, 0.1f};
     RendererPushRectangle(&state->renderPB, debugRectangle, 3);
 
-    InstanceData2D gdEasy = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0f}, {1.0f, 1.0f}, 0.0f};
-    InstanceData2D gdNormal = {{0.5f, 0.0f}, {1.0f + sinf(time) * 0.5f, 1.0f + sinf(time) * 0.5f}, 1.57079633f};
-    InstanceData2D gdHard = {{-0.0f, -0.5f}, {0.5f, 0.5f}, (float)fmod(time, 360.0)};
-    InstanceData2D gdHarder = {{-sinf(time) * 0.5f, cosf(time) * 0.5f, 0.0f}, {2.0f, 2.0f}, (float)fmod(time/2,360.0)};
+    float angle = (float)fmod(time, 360.0);
+    InstanceData2D gdEasy = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0f}, {0.8f, 1.0f}, 0.0f};
+    InstanceData2D gdNormal = {{state->tempPlayerPos.x, state->tempPlayerPos.y}, {0.64f, 1.0f}, 1.57079633f};
+    InstanceData2D gdHarder = {{0.0f, 0.2f, 0.0f}, {0.8f, 1.0f}, angle};
+    InstanceData2D gdHard   = {{gdHarder.position.x + sinf(angle)*-0.075, gdHarder.position.y - cosf(angle)*-0.075f}, {0.57f, 1.0f}, angle};
 
     RendererPushCircle(&state->renderPB, gdEasy.position, gdEasy.rotation, {0.1f,0.1f}, {1.0f,0.0f,0.0f}, 1.0f, 30);
-    RendererPushCircle(&state->renderPB, gdHarder.position, gdEasy.rotation, {0.5f,0.5f}, {1.0f,1.0f,0.0f}, 1.0f, 30);
+    //RendererPushCircle(&state->renderPB, gdHarder.position, gdEasy.rotation, {0.5f,0.5f}, {1.0f,1.0f,0.0f}, 1.0f, 30);
     RendererPushCircle(&state->renderPB, gdNormal.position, gdEasy.rotation, {0.1f,0.1f}, {0.0f,1.0f,0.0f}, 1.0f, 30);
 
     //RendererPushImage(&state->renderPB, 1, gdEasy, 2);
-    RendererPushImage(&state->renderPB, 2, gdNormal, 4);
-    RendererPushImage(&state->renderPB, state->extraTextureHandle, gdHard, 0);
-    RendererPushImage(&state->renderPB, state->tankAtlasHandle, gdHarder, 0);
+    RendererPushImage(&state->renderPB, 2, gdEasy, 4);
+    RendererPushImage(&state->renderPB, state->extraTextureHandle, gdEasy, 0);
+    RendererPushSubTexture(&state->renderPB, state->tankAtlasHandle, gdHarder.position, gdHarder.rotation, gdHarder.scale, {0.15625f, 0.1953125f, 0, 0}, 0);
+    RendererPushSubTexture(&state->renderPB, state->tankAtlasHandle, gdHarder.position, gdHarder.rotation, gdNormal.scale, {0.125f, 0.1953125f, 0.15625f, 0.5859375f}, 1);
+    RendererPushSubTexture(&state->renderPB, state->tankAtlasHandle, gdHard.position, gdHarder.rotation, gdHard.scale, {0.111328125f, 0.1953125f, 0.5625f, 0.1953125f}, 2);
 
     RendererPushLine(&state->renderPB, gdEasy.position, gdHard.position, {0.0f, 1.0f, 1.0f}, 0.02f, 0);
 }

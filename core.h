@@ -82,9 +82,9 @@ typedef struct {
 typedef struct {
     vec3 position;
     vec2 scale;
-    vec4 textureCoords;
     float rotation;
-    u32 textureID;
+    u32 textureIndex;
+    vec4 uvTransform;
 } SubTextureInstanceData;
 
 typedef struct {

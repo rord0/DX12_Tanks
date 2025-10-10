@@ -48,7 +48,10 @@ typedef struct {
 typedef struct {
     RenderEntryHeader header;
     u32 textureAtlasID;
-    SubTextureInstanceData instanceData;
+    vec3 position;
+    float rotation;
+    vec2 scale;
+    vec4 uvTransform;
 } RenderEntrySubTexture;
 
 typedef struct {

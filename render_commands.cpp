@@ -61,7 +61,12 @@ void RendererPushCircle(RendererPushBuffer * pb, vec3 position, f32 rotation, ve
     PushRenderSortEntry(pb, sortEntry);
 }
 
-void RendererPushSubTexture(RendererPushBuffer * pb, u32 textureID, vec2 position, vec2 size, vec4 uvCoords, u16 layer)
+void RendererPushSubTexture(RendererPushBuffer * pb, u32 textureID, vec3 position, f32 rotation, vec2 scale, vec4 uvTransform, u16 layer)
 {
     // TODO: SubTexture rendering
+    RenderEntrySubTexture entry = {RENDER_ENTRY_TYPE_SUB_TEXTURE, textureID, position, rotation, scale, uvTransform};
+    u32 entryOffset = PushRenderEntry(pb, entry);
+
+    RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_SUB_TEXTURE, layer, entryOffset};
+    PushRenderSortEntry(pb, sortEntry);
 }

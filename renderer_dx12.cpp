@@ -145,7 +145,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
     res.frameUploadArena = UploadArenaAlloc(state.device, KB(6));
     res.frameUploadArena.resource->SetName(L"Frame Upload Resource");
 
-    const u64 instanceArenaSize = (sizeof(TextureInstanceData) * 64) + (sizeof(DebugGeoInstanceData) * 128) + (sizeof(LineInstanceData) * 32);
+    const u64 instanceArenaSize = (sizeof(TextureInstanceData) * 64) + (sizeof(DebugGeoInstanceData) * 128) + (sizeof(LineInstanceData) * 32) + (sizeof(SubTextureInstanceData) * 32);
     res.instanceDataArena = ArenaAlloc(instanceArenaSize);
 
     ////////////
@@ -308,6 +308,18 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
     InitInstanceRenderData(&res.IRD[3], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(DebugGeoInstanceData), 32, 3, &res.instanceDataArena);
     CreateInstancePipelineState(&res.IRD[3].PSO, state.device, res.rootSignature.Get(), &circleInputElementDescs[0], _countof(circleInputElementDescs), RESOURCES_PATH"shaders/circle_vertex.hlsl", RESOURCES_PATH"shaders/circle_pixel.hlsl");
 
+    // Create Circle Instance Data
+    const D3D12_INPUT_ELEMENT_DESC subTextureInputElementDescs[] = {
+        { "Position",            0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        { "UV",                  0, DXGI_FORMAT_R32G32_FLOAT,       0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        { "InstancePosition",    0, DXGI_FORMAT_R32G32B32_FLOAT,    1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceSize",        0, DXGI_FORMAT_R32G32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceRotZ",        0, DXGI_FORMAT_R32_FLOAT,          1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceTextureID",   0, DXGI_FORMAT_R32_UINT,           1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceUVTransform", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+    };
+    InitInstanceRenderData(&res.IRD[4], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(SubTextureInstanceData), 32, 4, &res.instanceDataArena);
+    CreateInstancePipelineState(&res.IRD[4].PSO, state.device, res.rootSignature.Get(), &subTextureInputElementDescs[0], _countof(subTextureInputElementDescs), RESOURCES_PATH"shaders/subtexture_vertex.hlsl", RESOURCES_PATH"shaders/subtexture_pixel.hlsl");
     return res;
 }
 
@@ -368,7 +380,7 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
 {
     // Upload Instace Buffers to GPU
     UploadArenaClear(&res.frameUploadArena);
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 5; i++)
     {
         if (res.IRD[i].instanceData.count > 0)
         {
@@ -542,16 +554,23 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
                 RenderEntryDebugCircle * entry = (RenderEntryDebugCircle*)(pb->memory + sortEntry.pushBufferOffset);
                 DebugGeoInstanceData instanceData = {};
                 instanceData.position = entry->position;
-                instanceData.scale = entry->scale;
-                instanceData.fill = entry->fill;
+                instanceData.scale    = entry->scale;
+                instanceData.fill     = entry->fill;
                 instanceData.rotation = entry->rotation;
-                instanceData.color = entry->color;
+                instanceData.color    = entry->color;
                 RendererPushInstance(&instanceRenderData[3], drawCMDs, &instanceData, sortEntry.layer);
             } break;
 
             case RENDER_ENTRY_TYPE_SUB_TEXTURE:
             {
                 RenderEntrySubTexture * entry = (RenderEntrySubTexture*)(pb->memory + sortEntry.pushBufferOffset);
+                SubTextureInstanceData instanceData = {};
+                instanceData.position     = entry->position;
+                instanceData.rotation     = entry->rotation;
+                instanceData.scale        = entry->scale;
+                instanceData.uvTransform  = entry->uvTransform;
+                instanceData.textureIndex = entry->textureAtlasID;
+                RendererPushInstance(&instanceRenderData[4], drawCMDs, &instanceData, sortEntry.layer);
             }
             default:
             {
@@ -614,7 +633,7 @@ int RendererCreateTexture(const ImageData * image)
 
 void RendererProcessPushBuffer(RendererPushBuffer * pb)
 {
-    DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.IRD[0], 4, &RENDERER_PIPELINE.instanceDrawCMDs);
+    DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.IRD[0], 5, &RENDERER_PIPELINE.instanceDrawCMDs);
 }
 
 void BeginFrame(float clearColor[4], mat4 projectionMatrix)

@@ -3,6 +3,13 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+size_t TOTAL_ALLOCATED_BYTES  = 0;
+void * PlatformAlloc(size_t size)
+{
+    TOTAL_ALLOCATED_BYTES += size;
+    return VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+}
+
 void DEBUG_PlatformFreeFileMemory(void ** memory)
 {
     if (*memory)
@@ -22,7 +29,7 @@ DEBUG_FileResult DEBUG_PlatformReadEntireFile(const char * filenameASCII)
         LARGE_INTEGER fileSize;
         if (GetFileSizeEx(fileHandle, &fileSize))
         {
-            result.data = VirtualAlloc(0, fileSize.QuadPart, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+            result.data = PlatformAlloc(fileSize.QuadPart);
             result.size = fileSize.QuadPart;
             if (result.data)
             {
@@ -64,10 +71,6 @@ ImageData LoadImageFromFile(const char * filename)
     return data;
 }
 
-void * PlatformAlloc(size_t size)
-{
-    return VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-}
 
 void FreeImage(ImageData * image)
 {
