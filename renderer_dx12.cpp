@@ -1,4 +1,5 @@
 #include "array.h"
+#include "arena.h"
 
 #include "includes.h"
 
@@ -84,159 +85,49 @@ void GenerateRoundCapLineGeometry(vec3 * vertexBuffer, u16 * indexBuffer, u32 * 
     *indexCount = indices.count;
 }
 
-
-void InitTextureInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView, u32 id)
+void CreateInstancePipelineState(ID3D12PipelineState ** ppPSO,
+                                 ComPtr<ID3D12Device2> device,
+                                 ID3D12RootSignature * rootSignature,
+                                 const D3D12_INPUT_ELEMENT_DESC * inputElementDescs,
+                                 u32 numDescs,
+                                 const char * vertexShaderPath,
+                                 const char * pixelShaderPath)
 {
-    ID3DBlob * vertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/vertex.hlsl", "vertex.hlsl", "main", "vs_5_1");
-    ID3DBlob * pixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/pixel.hlsl", "pixel.hlsl", "main", "ps_5_1");
+
+    ID3DBlob * vertexShaderBlob = CompileShaderFromFile(vertexShaderPath, "vertex.hlsl", "main", "vs_5_1");
+    ID3DBlob * pixelShaderBlob  = CompileShaderFromFile(pixelShaderPath, "pixel.hlsl", "main", "ps_5_1");
 
     D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
     D3D12_SHADER_BYTECODE  pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
 
-    const D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-            { "Position",          0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "UV",                0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "InstancePosition",  0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceSize",      0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceRotZ",      0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceTextureID", 0, DXGI_FORMAT_R32_UINT,        1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-    };
-
-    // Create Pipeline State Object
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature, inputElementDescs, _countof(inputElementDescs), vertexShaderBytecode, pixelShaderBytecode);
-    AssertIfFailed(device->CreateGraphicsPipelineState(&pipelineStateDesc, IID_PPV_ARGS(&data->PSO)));
-
-
-    data->instanceID = id;
-    // Initalize Buffer Views
-    data->vertexBufferView = vertexBufferView;
-    data->indexBufferView = indexBufferView;
-    data->indexCountPerInstance = 6;
-
-    data->instanceBufferView.StrideInBytes = sizeof(TextureInstanceData);
-    data->instanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
-    data->instanceBufferView.SizeInBytes = sizeof(TEXTURE_INSTANCE_DATA);
-
-    // TODO: Use Arena to allocate CPU instance data staging buffer
-    data->instanceData = ArrayInit(sizeof(TextureInstanceData), sizeof(TEXTURE_INSTANCE_DATA) / sizeof(TextureInstanceData), (void*)&TEXTURE_INSTANCE_DATA);
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature, inputElementDescs, numDescs, vertexShaderBytecode, pixelShaderBytecode);
+    AssertIfFailed(device->CreateGraphicsPipelineState(&pipelineStateDesc, IID_PPV_ARGS(ppPSO)));
 
     vertexShaderBlob->Release();
     pixelShaderBlob->Release();
 }
 
-void InitRectangleInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView, u32 id)
+void InitInstanceRenderData(InstanceRenderData * data,
+                                   D3D12_VERTEX_BUFFER_VIEW vertexBufferView,
+                                   D3D12_INDEX_BUFFER_VIEW indexBufferView,
+                                   u32 indexCountPerInstance,
+                                   u32 instanceSize,
+                                   u32 maxInstances,
+                                   u32 id,
+                                   Arena * arena)
 {
-    ID3DBlob * vertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/rectangle_vertex.hlsl", "rectangle_vertex.hlsl", "main", "vs_5_1");
-    ID3DBlob * pixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/rectangle_pixel.hlsl", "rectangle_pixel.hlsl", "main", "ps_5_1");
-
-    D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
-    D3D12_SHADER_BYTECODE  pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
-
-    const D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-            { "Position",         0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "UV",               0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "InstancePosition", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceSize",     0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceColor",    0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceFill",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-    };
-
-    // Create Pipeline State Object
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature, inputElementDescs, _countof(inputElementDescs), vertexShaderBytecode, pixelShaderBytecode);
-    AssertIfFailed(device->CreateGraphicsPipelineState(&pipelineStateDesc, IID_PPV_ARGS(&data->PSO)));
-
-    // Initalize Buffer Views
-    data->vertexBufferView = vertexBufferView;
-    data->indexBufferView = indexBufferView;
-    data->indexCountPerInstance = 6;
-
-    data->instanceBufferView.StrideInBytes = sizeof(DebugGeoInstanceData);
-    data->instanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
-    data->instanceBufferView.SizeInBytes = sizeof(RECTANGLE_INSTANCE_DATA);
-
     data->instanceID = id;
-    // TODO: Use Arena to allocate CPU instance data staging buffer
-    data->instanceData = ArrayInit(sizeof(DebugGeoInstanceData), sizeof(RECTANGLE_INSTANCE_DATA) / sizeof(DebugGeoInstanceData), (void*)&RECTANGLE_INSTANCE_DATA);
-
-    vertexShaderBlob->Release();
-    pixelShaderBlob->Release();
-}
-
-void InitLineInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView, u32 indexCountPerInstance, u32 id)
-{
-    ID3DBlob * vertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/line_vertex.hlsl", "line_vertex.hlsl", "main", "vs_5_1");
-    ID3DBlob * pixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/line_pixel.hlsl", "line_pixel.hlsl", "main", "ps_5_1");
-
-    D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
-    D3D12_SHADER_BYTECODE  pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
-
-    const D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-            { "Position",      0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "StartPos",      0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "EndPos",        0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceColor", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceWidth", 0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1}
-    };
-
-    // Create Pipeline State Object
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature, inputElementDescs, _countof(inputElementDescs), vertexShaderBytecode, pixelShaderBytecode);
-    AssertIfFailed(device->CreateGraphicsPipelineState(&pipelineStateDesc, IID_PPV_ARGS(&data->PSO)));
 
     // Initalize Buffer Views
     data->vertexBufferView = vertexBufferView;
     data->indexBufferView = indexBufferView;
     data->indexCountPerInstance = indexCountPerInstance;
 
-    data->instanceBufferView.StrideInBytes = sizeof(LineInstanceData);
+    data->instanceBufferView.StrideInBytes = instanceSize;
     data->instanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
-    data->instanceBufferView.SizeInBytes = sizeof(LINE_INSTANCE_DATA);
+    data->instanceBufferView.SizeInBytes = 0;
 
-    data->instanceID = id;
-    // TODO: Use Arena to allocate CPU instance data staging buffer
-    data->instanceData = ArrayInit(sizeof(LineInstanceData), sizeof(LINE_INSTANCE_DATA) / sizeof(LineInstanceData), (void*)&LINE_INSTANCE_DATA);
-
-    vertexShaderBlob->Release();
-    pixelShaderBlob->Release();
-}
-
-void InitCircleInstanceRenderData(InstanceRenderData * data, ID3D12RootSignature * rootSignature, ComPtr<ID3D12Device2> device, D3D12_VERTEX_BUFFER_VIEW vertexBufferView, D3D12_INDEX_BUFFER_VIEW indexBufferView, u32 id)
-{
-    ID3DBlob * vertexShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/circle_vertex.hlsl", "circle_vertex.hlsl", "main", "vs_5_1");
-    ID3DBlob * pixelShaderBlob = CompileShaderFromFile(RESOURCES_PATH"shaders/circle_pixel.hlsl", "circle_pixel.hlsl", "main", "ps_5_1");
-
-    D3D12_SHADER_BYTECODE vertexShaderBytecode = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
-    D3D12_SHADER_BYTECODE  pixelShaderBytecode = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
-
-    const D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-            { "Position",         0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "UV",               0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "InstancePosition", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceSize",     0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceColor",    0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceFill",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-    };
-
-    // Create Pipeline State Object
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineStateDesc = createQuadPipelineStateDesc(rootSignature, inputElementDescs, _countof(inputElementDescs), vertexShaderBytecode, pixelShaderBytecode);
-    AssertIfFailed(device->CreateGraphicsPipelineState(&pipelineStateDesc, IID_PPV_ARGS(&data->PSO)));
-
-    // Initalize Buffer Views
-    data->vertexBufferView = vertexBufferView;
-    data->indexBufferView = indexBufferView;
-    data->indexCountPerInstance = 6;
-
-    data->instanceBufferView.StrideInBytes = sizeof(DebugGeoInstanceData);
-    data->instanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
-    data->instanceBufferView.SizeInBytes = sizeof(CIRCLE_INSTANCE_DATA);
-
-    data->instanceID = id;
-    // TODO: Use Arena to allocate CPU instance data staging buffer
-    data->instanceData = ArrayInit(sizeof(DebugGeoInstanceData), sizeof(CIRCLE_INSTANCE_DATA) / sizeof(DebugGeoInstanceData), (void*)&CIRCLE_INSTANCE_DATA);
-
-    vertexShaderBlob->Release();
-    pixelShaderBlob->Release();
+    data->instanceData = ArrayInit(instanceSize, maxInstances, ArenaPush(arena, instanceSize * maxInstances));
 }
 
 RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
@@ -253,6 +144,9 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
     // Create Allocators
     res.frameUploadArena = UploadArenaAlloc(state.device, KB(6));
     res.frameUploadArena.resource->SetName(L"Frame Upload Resource");
+
+    const u64 instanceArenaSize = (sizeof(TextureInstanceData) * 64) + (sizeof(DebugGeoInstanceData) * 128) + (sizeof(LineInstanceData) * 32);
+    res.instanceDataArena = ArenaAlloc(instanceArenaSize);
 
     ////////////
     // Geometry
@@ -299,7 +193,6 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
 
     //////////////////////////////////
     // Create and upload texture data
-
     res.textureCount = 0;
     res.maxTexures = 32;
 
@@ -362,14 +255,58 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
     res.lineIndexBufferView.Format = DXGI_FORMAT_R16_UINT; 
 
     // Free temp upload arena.
-    res.instanceDrawCMDs = {sizeof(DrawInstanceCMD), sizeof(INSTANCE_DRAW_CMDS)/sizeof(DrawInstanceCMD), 0, (void*)INSTANCE_DRAW_CMDS};
+    res.instanceDrawCMDs = ArrayInit(sizeof(DrawInstanceCMD), 128, ArenaPush(&res.instanceDataArena, sizeof(DrawInstanceCMD) * 128));
 
     UploadArenaRelease(&tempUploadArena);
 
-    InitTextureInstanceRenderData(&res.IRD[0], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView, 0);
-    InitRectangleInstanceRenderData(&res.IRD[1], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView, 1);
-    InitLineInstanceRenderData(&res.IRD[2], res.rootSignature.Get(), state.device, res.lineVertexBufferView, res.lineIndexBufferView, lineIndexCount, 2);
-    InitCircleInstanceRenderData(&res.IRD[3], res.rootSignature.Get(), state.device, res.textureVertexBufferView, res.textureIndexBufferView, 3);
+    // Create Textured Quad Instance Data
+    const D3D12_INPUT_ELEMENT_DESC texturedQuadInputElementDescs[] = {
+            { "Position",          0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "UV",                0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "InstancePosition",  0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceSize",      0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceRotZ",      0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceTextureID", 0, DXGI_FORMAT_R32_UINT,        1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+    };
+    InitInstanceRenderData(&res.IRD[0], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(TextureInstanceData), 32, 0, &res.instanceDataArena);
+    CreateInstancePipelineState(&res.IRD[0].PSO, state.device, res.rootSignature.Get(), &texturedQuadInputElementDescs[0], _countof(texturedQuadInputElementDescs), RESOURCES_PATH"shaders/vertex.hlsl", RESOURCES_PATH"shaders/pixel.hlsl");
+
+    // Create Rectangle Instance Data
+    const D3D12_INPUT_ELEMENT_DESC rectangleInputElementDescs[] = {
+        { "Position",         0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        { "UV",               0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        { "InstancePosition", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceSize",     0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceColor",    0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceFill",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+    };
+    InitInstanceRenderData(&res.IRD[1], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(DebugGeoInstanceData), 32, 1, &res.instanceDataArena);
+    CreateInstancePipelineState(&res.IRD[1].PSO, state.device, res.rootSignature.Get(), &rectangleInputElementDescs[0], _countof(rectangleInputElementDescs), RESOURCES_PATH"shaders/rectangle_vertex.hlsl", RESOURCES_PATH"shaders/rectangle_pixel.hlsl");
+    
+    // Create Line Instance Data
+    const D3D12_INPUT_ELEMENT_DESC lineInputElementDescs[] = {
+        { "Position",      0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        { "StartPos",      0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "EndPos",        0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceColor", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceWidth", 0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1}
+    };
+    InitInstanceRenderData(&res.IRD[2], res.lineVertexBufferView, res.lineIndexBufferView, lineIndexCount, sizeof(LineInstanceData), 32, 2, &res.instanceDataArena);
+    CreateInstancePipelineState(&res.IRD[2].PSO, state.device, res.rootSignature.Get(), &lineInputElementDescs[0], _countof(lineInputElementDescs), RESOURCES_PATH"shaders/line_vertex.hlsl", RESOURCES_PATH"shaders/line_pixel.hlsl");
+
+    // Create Circle Instance Data
+    const D3D12_INPUT_ELEMENT_DESC circleInputElementDescs[] = {
+        { "Position",         0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        { "UV",               0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        { "InstancePosition", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceSize",     0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceColor",    0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceFill",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+    };
+    InitInstanceRenderData(&res.IRD[3], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(DebugGeoInstanceData), 32, 3, &res.instanceDataArena);
+    CreateInstancePipelineState(&res.IRD[3].PSO, state.device, res.rootSignature.Get(), &circleInputElementDescs[0], _countof(circleInputElementDescs), RESOURCES_PATH"shaders/circle_vertex.hlsl", RESOURCES_PATH"shaders/circle_pixel.hlsl");
 
     return res;
 }
@@ -429,24 +366,19 @@ void DX12_BeginFrame(float clearColor[4], RendererState & state)
 
 void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
 {
-    // Upload Instance Data
+    // Upload Instace Buffers to GPU
     UploadArenaClear(&res.frameUploadArena);
-
-    GPUAllocation dynAlloc = UploadArenaPush(&res.frameUploadArena, sizeof(TEXTURE_INSTANCE_DATA), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-    memcpy(dynAlloc.pCPU, TEXTURE_INSTANCE_DATA, sizeof(TEXTURE_INSTANCE_DATA));
-    res.IRD[0].instanceBufferView.BufferLocation = dynAlloc.pGPU;
-
-    GPUAllocation rectAlloc = UploadArenaPush(&res.frameUploadArena, sizeof(RECTANGLE_INSTANCE_DATA), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-    memcpy(rectAlloc.pCPU, RECTANGLE_INSTANCE_DATA, sizeof(RECTANGLE_INSTANCE_DATA));
-    res.IRD[1].instanceBufferView.BufferLocation = rectAlloc.pGPU;
-
-    GPUAllocation lineAlloc = UploadArenaPush(&res.frameUploadArena, sizeof(LINE_INSTANCE_DATA), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-    memcpy(lineAlloc.pCPU, LINE_INSTANCE_DATA, sizeof(LineInstanceData));
-    res.IRD[2].instanceBufferView.BufferLocation = lineAlloc.pGPU;
-
-    GPUAllocation circleAlloc = UploadArenaPush(&res.frameUploadArena, sizeof(CIRCLE_INSTANCE_DATA), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-    memcpy(circleAlloc.pCPU, CIRCLE_INSTANCE_DATA, sizeof(CIRCLE_INSTANCE_DATA));
-    res.IRD[3].instanceBufferView.BufferLocation = circleAlloc.pGPU;
+    for (int i = 0; i < 4; i++)
+    {
+        if (res.IRD[i].instanceData.count > 0)
+        {
+            size_t uploadSize = res.IRD[i].instanceData.elementSize * res.IRD[i].instanceData.count;
+            GPUAllocation uploadBuffer = UploadArenaPush(&res.frameUploadArena, uploadSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+            memcpy(uploadBuffer.pCPU, res.IRD[i].instanceData.elements, uploadSize);
+            res.IRD[i].instanceBufferView.BufferLocation = uploadBuffer.pGPU;
+            res.IRD[i].instanceBufferView.SizeInBytes = uploadSize;
+        }
+    }
 
     // NOTE(rordon): shouldn't change much....
     state.cmdList->SetGraphicsRootSignature(res.rootSignature.Get());
@@ -468,7 +400,7 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
         {
             default:
             {
-                state.cmdList->SetPipelineState(res.IRD[cmd->instanceID].PSO.Get());
+                state.cmdList->SetPipelineState(res.IRD[cmd->instanceID].PSO);
                 state.cmdList->IASetVertexBuffers(0, 1, &res.IRD[cmd->instanceID].vertexBufferView);
                 state.cmdList->IASetVertexBuffers(1, 1, &res.IRD[cmd->instanceID].instanceBufferView);
                 state.cmdList->IASetIndexBuffer(&res.IRD[cmd->instanceID].indexBufferView);
@@ -574,6 +506,7 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
             {
                 RendererFlushInstances(&instanceRenderData[i], drawCMDs);
             }
+            currentLayer = sortEntry.layer;
         }
         switch (sortEntry.type)
         {
@@ -665,7 +598,7 @@ int DX12_RendererCreateTexture(const ImageData * image, RendererState & state, R
 
 void InitializeRenderer(HWND windowHandle, bool enableVSync, u32 width, u32 height)
 {
-    RENDERER_STATE = DX12_InitializeRenderer(windowHandle, USE_WARP, enableVSync, width, height);
+    RENDERER_STATE    = DX12_InitializeRenderer(windowHandle, USE_WARP, enableVSync, width, height);
     RENDERER_PIPELINE = InitInstancePipelineResources(RENDERER_STATE);
 }
 

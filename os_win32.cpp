@@ -64,6 +64,11 @@ ImageData LoadImageFromFile(const char * filename)
     return data;
 }
 
+void * PlatformAlloc(size_t size)
+{
+    return VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+}
+
 void FreeImage(ImageData * image)
 {
     stbi_image_free(image->memory);

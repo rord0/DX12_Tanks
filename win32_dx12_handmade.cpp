@@ -2,6 +2,7 @@
 
 #include "os_win32.cpp"
 #include "array.cpp"
+#include "arena.cpp"
 
 #include "renderer_dx12.cpp"
 
@@ -274,9 +275,9 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     Win32GameCode gameCode = Win32LoadGameCode(GAME_CODE_DLL);
 
     GameMemory gameMemory = {};
-    gameMemory.permStorage = VirtualAlloc(0, MB(2), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    gameMemory.permStorage = PlatformAlloc(MB(2));
     gameMemory.permStorageSize = MB(2);
-    gameMemory.transientStorage = VirtualAlloc(0, MB(2), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    gameMemory.transientStorage = PlatformAlloc(MB(2));
     gameMemory.transStorageSize = MB(2);
     gameMemory.platformLoadTexture = &PlatformLoadTexture;
 

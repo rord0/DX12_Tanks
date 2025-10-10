@@ -12,7 +12,7 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-//#define _DEBUG
+#define _DEBUG
 
 const static UINT NUM_FRAMES = 2;
 
@@ -74,7 +74,7 @@ typedef struct
 typedef struct 
 {
     u32 instanceID;
-    ComPtr<ID3D12PipelineState> PSO;
+    ID3D12PipelineState * PSO;
 
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
     D3D12_VERTEX_BUFFER_VIEW instanceBufferView;
@@ -114,6 +114,7 @@ typedef struct {
     u32 maxTexures;
     ComPtr<ID3D12Resource> textureResources[32];
 
+    Arena instanceDataArena;
     Array instanceDrawCMDs;
 
     InstanceRenderData IRD[5];
@@ -126,14 +127,5 @@ typedef struct {
 RendererState RENDERER_STATE = {};
 RendererResourcesDX12 RENDERER_PIPELINE = {};
 const bool USE_WARP = false;
-
-DrawInstanceCMD INSTANCE_DRAW_CMDS[64] = {};
-
-// TODO: use frame arena to allocate these...
-TextureInstanceData TEXTURE_INSTANCE_DATA[64] = {};
-DebugGeoInstanceData RECTANGLE_INSTANCE_DATA[32] = {};
-LineInstanceData LINE_INSTANCE_DATA[32] = {};
-DebugGeoInstanceData CIRCLE_INSTANCE_DATA[32] = {};
-SubTextureInstanceData SUB_TEXTURE_INSTANCE_DATA[32] = {};
 
 #endif // RENDERER_DX12_H

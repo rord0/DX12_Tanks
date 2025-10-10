@@ -118,7 +118,7 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
     vec4 color = GetHSVSpectrumColor(time);
     //color = {0.2f, 0.3f, 0.3f, 1.0f};
-    color = {0.0f, 0.714f, 0.486f, 1.0f};
+    color = {0.5f, 0.714f, 0.486f, 1.0f};
     state->clearColor = color;
 
     DebugGeoInstanceData debugRectangle = {{0.5, 0.25, 0.0}, {0.8f, 1.0f}, {0.0f, 1.0f, 0.0f}, 0, 0.1f};
@@ -135,7 +135,7 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
     //RendererPushImage(&state->renderPB, 1, gdEasy, 2);
     RendererPushImage(&state->renderPB, 2, gdNormal, 4);
-    RendererPushImage(&state->renderPB,    state->extraTextureHandle, gdHard, 0);
+    RendererPushImage(&state->renderPB, state->extraTextureHandle, gdHard, 0);
     RendererPushImage(&state->renderPB, state->tankAtlasHandle, gdHarder, 0);
 
     RendererPushLine(&state->renderPB, gdEasy.position, gdHard.position, {0.0f, 1.0f, 1.0f}, 0.02f, 0);
