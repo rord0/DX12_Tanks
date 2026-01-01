@@ -7,7 +7,6 @@
 #include <math.h>
 #include <string.h>
 
-
 typedef uint8_t   u8; // 8-bit unsigned int
 typedef uint16_t u16; // 16-bit unsigned int
 typedef uint32_t u32;
@@ -48,14 +47,34 @@ typedef struct
     float m[4][4];
 } mat4;
 
-typedef union {
-    float elements[2];
-    struct
+struct vec2 {
+    union
     {
-        union { float x, u; };
-        union { float y, v; };
+        float elements[2];
+        struct { float x, y; };
+        struct { float u, v; };
     };
-} vec2;
+};
+
+vec2 operator+(vec2 A, vec2 B) { return {A.x + B.x, A.y + B.y}; }
+
+vec2 operator-(vec2 A, vec2 B) { return {A.x - B.x, A.y - B.y}; }
+vec2 operator-(vec2 A)         { return {-A.x, -A.y}; }
+
+vec2 operator*(f32 c, vec2 V)  { return {c * V.x, c * V.y}; }
+vec2 operator*(vec2 V, f32 c)  { return c * V; }
+
+vec2 & operator*=(vec2 & V, f32 c)
+{
+    V = c * V;
+    return V;
+}
+
+vec2 & operator+=(vec2 & A, vec2 B)
+{
+    A = A + B;
+    return A;
+}
 
 typedef union {
     int elements[2];
@@ -102,12 +121,24 @@ typedef struct {
     float width;
 } LineInstanceData;
 
+typedef struct {
+    void * data;
+    u64 size;
+} DEBUG_FileResult;
+
 #include "render_entry.h"
+#include "array.h"
 
 ////////////////////
 // Function Typedefs
 #define PLATFORM_LOAD_TEXTURE(name) u32 name(const char * textureName)
 typedef PLATFORM_LOAD_TEXTURE(PlatformLoadTextureFunction);
+
+#define PLATFORM_LOAD_FILE(name) DEBUG_FileResult name(const char * filepath)
+typedef PLATFORM_LOAD_FILE(PlatformLoadFileFunction);
+
+#define PLATFORM_FREE_FILE(name) void name(void ** memory)
+typedef PLATFORM_FREE_FILE(PlatformFreeFileFunction);
 
 typedef struct {
     void * permStorage;
@@ -115,6 +146,8 @@ typedef struct {
     void * transientStorage;
     u64 transStorageSize;
     PlatformLoadTextureFunction * platformLoadTexture;
+    PlatformLoadFileFunction * platformLoadFile;
+    PlatformFreeFileFunction * platformFreeFile;
 } GameMemory;
 
 typedef struct {

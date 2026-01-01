@@ -23,16 +23,10 @@ typedef struct
     FILETIME lastWriteTime;
 } Win32GameCode;
 
-
 typedef struct {
     vec3 position;
     vec2 UV;
 } VertexPosUV;
-
-typedef struct {
-    void * data;
-    u64 size;
-} DEBUG_FileResult;
 
 typedef struct {
     int width;

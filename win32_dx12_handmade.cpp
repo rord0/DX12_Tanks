@@ -45,6 +45,7 @@ typedef struct
     KeyInput A;
     KeyInput S;
     KeyInput D;
+    KeyInput ESC;
 } InputState;
 
 void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
@@ -74,6 +75,11 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
                 {
                     inputState.D.isDown = true;
                     inputState.D.wasDown = (msg.lParam & (1 << 30)) != 0;
+                }
+                if (msg.wParam == VK_ESCAPE)
+                {
+                    inputState.ESC.isDown = true;
+                    inputState.ESC.wasDown = (msg.lParam & (1 << 30)) != 0;
                 }
                 break;
             case WM_KEYUP:
@@ -240,6 +246,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     windowClass.hInstance = hInstance;
     windowClass.lpszClassName = L"Cool Window Class";
     windowClass.hbrBackground = nullptr;
+    windowClass.hCursor = LoadCursor(0, IDC_CROSS);
 
     if (!RegisterClass(&windowClass)) { return -1; }
 
@@ -280,6 +287,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     gameMemory.transientStorage = PlatformAlloc(MB(2));
     gameMemory.transStorageSize = MB(2);
     gameMemory.platformLoadTexture = &PlatformLoadTexture;
+    gameMemory.platformLoadFile = &DEBUG_PlatformReadEntireFile;
+    gameMemory.platformFreeFile = &DEBUG_PlatformFreeFileMemory;
 
     InputState inputState = {};
 
@@ -336,6 +345,11 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         gameCode.Update(&gameMemory, deltaTime);
 
         mat4 projectionMatrix = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
+
+	if (inputState.ESC.isDown)
+	{
+		RUNNING = false;
+	}
 
         ///////////////
         // Rendering

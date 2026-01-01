@@ -1,3 +1,5 @@
+#include "renderer_dx12.h"
+
 inline void AssertIfFailed(HRESULT hr)
 {
     if (FAILED(hr))

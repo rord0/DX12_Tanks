@@ -2,6 +2,7 @@
 #define RENDERER_DX12_H
 
 #include "core.h"
+#include "arena.h"
 
 #include <wrl.h>
 using namespace Microsoft::WRL;

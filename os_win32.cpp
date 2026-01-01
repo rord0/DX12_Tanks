@@ -10,7 +10,7 @@ void * PlatformAlloc(size_t size)
     return VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 }
 
-void DEBUG_PlatformFreeFileMemory(void ** memory)
+PLATFORM_FREE_FILE(DEBUG_PlatformFreeFileMemory)
 {
     if (*memory)
     {
@@ -19,10 +19,10 @@ void DEBUG_PlatformFreeFileMemory(void ** memory)
     }
 }
 
-DEBUG_FileResult DEBUG_PlatformReadEntireFile(const char * filenameASCII)
+PLATFORM_LOAD_FILE(DEBUG_PlatformReadEntireFile)
 {
     DEBUG_FileResult result = {NULL, 0};
-    HANDLE fileHandle = CreateFileA(filenameASCII, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, NULL, NULL);
+    HANDLE fileHandle = CreateFileA(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, NULL, NULL);
 
     if (fileHandle != INVALID_HANDLE_VALUE)
     {
