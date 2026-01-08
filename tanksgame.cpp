@@ -1,6 +1,7 @@
 #include "core.h"
 #include "string.h"
 #include <charconv>
+#include <cmath>
 
 #include "render_commands.cpp"
 
@@ -25,6 +26,7 @@ typedef struct
 	u16 playerID;
 	vec2 position;
 	f32 rotation;
+	f32 turretRot;
 	TankStyle style;
 	f32 turretOffset;
 } TankGFX;
@@ -50,7 +52,7 @@ void DrawTank(TankGFX tank, GameState * state)
     u32 bodyIndex   = 12 + (3 * tank.style.bodyType ) + tank.style.colorID;
     u32 turretIndex = 24 + (3 * tank.style.trackType) + tank.style.colorID;
 
-    //TODO(rordon): assert that indexes are less than 36.
+	//TODO(rordon): assert that indexes are less than 36.
 	u32 atlasWidth  = 4096;
 	u32 atlasHeight = 4096;
 
@@ -58,9 +60,24 @@ void DrawTank(TankGFX tank, GameState * state)
 	vec4 bodyUV   = CalculateUVTransform(TANK_PART_ATLAS_ENTRIES[bodyIndex], atlasHeight, atlasWidth);
 	vec4 turretUV = CalculateUVTransform(TANK_PART_ATLAS_ENTRIES[turretIndex], atlasHeight, atlasWidth);
 
-	RendererPushSubTexture(&state->renderPB, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tank.rotation, {0.8f, 1.0f}, trackUV, 0);
-	RendererPushSubTexture(&state->renderPB, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tank.rotation, {0.64f, 1.0f}, bodyUV, 1);
-	RendererPushSubTexture(&state->renderPB, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tank.rotation, {0.57f, 1.0f}, turretUV, 2);
+	vec2 turretDir = vec2{cosf(tank.turretRot), sinf(tank.turretRot)};
+	vec2 tankDir   = vec2{cosf(tank.rotation),  sinf(tank.rotation)};
+	vec2 turretCenter = (-tankDir * -0.03f) + tank.position;
+	vec2 turretPos = (-turretDir * 0.075f); // Offset backwards
+	turretPos += (turretDir *  tank.turretOffset); // Add recoil offset.
+	turretPos += turretCenter;
+
+	f32 tankRot = tank.rotation + (PI/2.0f);
+
+	RendererPushSubTexture(&state->renderPB, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.8f, 1.0f}, trackUV, 0);
+	RendererPushSubTexture(&state->renderPB, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.64f, 1.0f}, bodyUV, 1);
+	RendererPushSubTexture(&state->renderPB, state->tankAtlasHandle, {turretPos.x, turretPos.y, 0.0f}, tank.turretRot + (PI/2.0f), {0.57f, 1.0f}, turretUV, 2);
+    RendererPushCircle(&state->renderPB, vec3{turretPos.x, turretPos.y, 0}, 0, {0.05f,0.05f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
+
+    RendererPushCircle(&state->renderPB, vec3{turretCenter.x, turretCenter.y, 0}, 0, {0.05f,0.05f}, {1.0f, 1.0f, 0.0f}, 1.0f, 30);
+
+    DebugGeoInstanceData debugHitbox = {vec3{tank.position.x, tank.position.y, 0.0f}, {0.8f, 0.8f}, {0.0f, 1.0f, 0.0f}, tankRot, 0.025f};
+    RendererPushRectangle(&state->renderPB, debugHitbox, 30);
 }
 
 vec4 HSVtoRGBA(float h, float s, float v)
@@ -200,10 +217,9 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     color = {0.5f, 0.714f, 0.486f, 1.0f};
     state->clearColor = color;
 
-    DebugGeoInstanceData debugRectangle = {{0.5, 0.25, 0.0}, {0.8f, 1.0f}, {0.0f, 1.0f, 0.0f}, 0, 1.0f};
-    RendererPushRectangle(&state->renderPB, debugRectangle, 3);
 
-    float angle = (float)fmod(time, 360.0);
+    float angle = (float)fmod(time * 100, 360.0) * (PI/180.0f);
+    float angle2 = (float)fmod(time * 50, 360.0) * (PI/180.0f);
     InstanceData2D gdEasy   = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0f}, {0.8f, 1.0f}, 0.0f};
     InstanceData2D gdNormal = {{state->tempPlayerPos.x, state->tempPlayerPos.y}, {0.64f, 1.0f}, 1.57079633f};
     InstanceData2D gdHarder = {{0.0f, sinf(angle), 0.0f}, {0.8f, 1.0f}, angle};
@@ -226,10 +242,11 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
 	TankGFX tankB = {0};
 	tankB.playerID = 0;
-	tankB.position = vec2{gdHard.position.x + 0.5f, gdHard.position.y};
-	tankB.rotation = gdHard.rotation;
+	tankB.position = {cosf(angle2), sinf(angle2)};
+	tankB.rotation = (angle2);
+	tankB.turretRot= angle;
 	tankB.style.colorID = 2;
 
-	DrawTank(tankA, state);
+	// DrawTank(tankA, state);
 	DrawTank(tankB, state);
 }

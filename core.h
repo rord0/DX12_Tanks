@@ -76,6 +76,12 @@ vec2 & operator+=(vec2 & A, vec2 B)
     return A;
 }
 
+vec2 & operator-=(vec2 & A, vec2 B)
+{
+    A = A - B;
+    return A;
+}
+
 typedef union {
     int elements[2];
     struct
