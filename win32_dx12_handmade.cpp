@@ -17,7 +17,6 @@ const u32 CLIENT_HEIGHT = 720;
 
 bool RUNNING = false;
 
-
 mat4 orthographicProjection(float right, float left, float top, float bottom, float n, float f)
 {
     mat4 m = {};
@@ -46,6 +45,7 @@ typedef struct
     KeyInput S;
     KeyInput D;
     KeyInput ESC;
+    KeyInput mouseL;
 } InputState;
 
 void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
@@ -104,6 +104,15 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
                     inputState.D.wasDown = true;
                 }
                 break;
+			case WM_LBUTTONDOWN:
+				{
+					inputState.mouseL.isDown = true;
+					OutputDebugStringA("WM_LBUTTONDOWN\n");
+				}break;
+			case WM_LBUTTONUP:
+				{
+					inputState.mouseL.isDown = false;
+				}break;
             default:
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
@@ -290,7 +299,15 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     gameMemory.platformLoadFile = &DEBUG_PlatformReadEntireFile;
     gameMemory.platformFreeFile = &DEBUG_PlatformFreeFileMemory;
 
+	GameInput gameInput = {0};
+
     InputState inputState = {};
+
+	RendererPushBuffer pushBuffer = {0};
+    pushBuffer.memory = (u8*)PlatformAlloc(MB(1));
+    pushBuffer.size = MB(1);
+    pushBuffer.maxSortEntries = 8096;
+    pushBuffer.sortEntries = (RenderSortEntry*)PlatformAlloc(pushBuffer.maxSortEntries * sizeof(RenderSortEntry));
 
     InitializeRenderer(windowHandle, false, CLIENT_WIDTH, CLIENT_HEIGHT);
 
@@ -338,23 +355,26 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             aspect = RendererResizeFramebuffers(resolution.x, resolution.y);
             prevResolution = resolution;
         }
-        GameState * gameState = (GameState*)gameMemory.permStorage;
-        gameState->tempInput.y = (float)inputState.W.isDown + -(float)(inputState.S.isDown); 
-        gameState->tempInput.x = (float)inputState.D.isDown + -(float)(inputState.A.isDown); 
 
-        gameCode.Update(&gameMemory, deltaTime);
+		float clearColor[4] = {0.5f, 0.714f, 0.486f, 1.0f};
+		gameInput.deltaTime = deltaTime;
+        gameInput.tempInput.x = (float)inputState.D.isDown + -(float)(inputState.A.isDown); 
+        gameInput.tempInput.y = (float)inputState.W.isDown + -(float)(inputState.S.isDown); 
+		gameInput.isMousePressed = inputState.mouseL.isDown;
+
+        gameCode.Update(&gameMemory, &gameInput, &pushBuffer);
 
         mat4 projectionMatrix = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
 
-	if (inputState.ESC.isDown)
-	{
-		RUNNING = false;
-	}
+		if (inputState.ESC.isDown)
+		{
+			RUNNING = false;
+		}
 
         ///////////////
         // Rendering
-        RendererProcessPushBuffer(&gameState->renderPB);
-        BeginFrame((float*)&gameState->clearColor, projectionMatrix);
+        RendererProcessPushBuffer(&pushBuffer);
+        BeginFrame(clearColor, projectionMatrix);
         Render();
         EndFrame();
         

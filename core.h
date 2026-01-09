@@ -157,20 +157,15 @@ typedef struct {
 } GameMemory;
 
 typedef struct {
-    double time;
-    vec4 clearColor;
-    vec3 cameraPos;
-    vec2 tempPlayerPos;
-    vec2 tempInput;
-    RendererPushBuffer renderPB;
-    u32 tankAtlasHandle;
-    u32 extraTextureHandle;
-} GameState;
+	vec2 tempInput;
+	bool isMousePressed;
+	double deltaTime;
+} GameInput;
 
 #define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory)
 typedef GAME_START_FUNCTION(GameStartFunction);
 
-#define GAME_UPDATE_FUNCTION(name) void name(GameMemory * gameMemory, double deltaTime)
+#define GAME_UPDATE_FUNCTION(name) void name(GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands)
 typedef GAME_UPDATE_FUNCTION(GameUpdateFunction);
 
 #endif // CORE_H
