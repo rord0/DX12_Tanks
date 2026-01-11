@@ -1,5 +1,7 @@
 #include "core.h"
+#include "render_entry.h"
 #include "string.h"
+#include <algorithm>
 #include <cassert>
 #include <charconv>
 #include <cmath>
@@ -24,6 +26,14 @@ typedef struct {
 	u32 numFrames;
     u32 textureHandle;
 } SpriteSheet;
+
+typedef struct {
+	b32 active;
+	vec2 position;
+	vec2 direction;
+	vec2 scale;
+	float timeAlive;
+} Particle;
 
 typedef struct {
     u8 trackType;
@@ -59,6 +69,7 @@ typedef struct {
 	AtlasEntry * tankAtlasEntries;
 	SpriteSheet fireEffectSheet;
 	TankGFX testTank;
+	Particle fireEffects[32];
 } GameState;
 
 vec4 CalculateUVTransform(AtlasEntry entry, u32 atlasHeight, u32 atlasWidth)
@@ -127,15 +138,8 @@ void DrawTank(TankGFX tank, RendererPushBuffer * cmdBuffer, GameState * state)
     RendererPushRectangle(cmdBuffer, debugHitbox, 30);
 }
 
-void DrawSpriteFrame(RendererPushBuffer * cmdBuffer, SpriteSheet * sheet, u32 spriteIndex)
+void DrawSpriteFrame(RendererPushBuffer * cmdBuffer, vec2 position, vec2 scale, f32 rotation, SpriteSheet * sheet, u32 spriteIndex)
 {
-	const f32 animFPS = 20;
-	const f32 animTimePerFrame = 1.0 / animFPS;
-	const f32 animDuration = animTimePerFrame * sheet->numFrames;
-
-	// const f32 animElapsed = time - startTime;
-	// const float32 animProgress = animElapsed / animDuration;
-
 	spriteIndex = spriteIndex % sheet->numFrames;
 
 	const u32 animFrameWidth  = sheet->sheetWidth  / sheet->numCols;
@@ -149,7 +153,7 @@ void DrawSpriteFrame(RendererPushBuffer * cmdBuffer, SpriteSheet * sheet, u32 sp
 
 	vec4 uv = {(f32)animFrameWidth / (f32)sheet->sheetWidth, (f32)animFrameHeight / (f32)sheet->sheetHeight, (f32)sheetPosX / (f32)sheet->sheetWidth, (f32)sheetPosY / (f32)sheet->sheetHeight};
 
-	RendererPushSubTexture(cmdBuffer, sheet->textureHandle, {0.0f, 0.0f, 0.0f}, 0.0f, {1.0f, 1.0f}, uv, 3);
+	RendererPushSubTexture(cmdBuffer, sheet->textureHandle, {position.x, position.y, 0.0f}, rotation, scale, uv, 3);
 }
 
 vec4 HSVtoRGBA(float h, float s, float v)
@@ -260,6 +264,69 @@ void ParseTextureAtlasCSV(GameMemory * memory, GameState * state, const char * f
     memory->platformFreeFile(&fileResult.data);
 }
 
+void PlayFireEffect(TankGFX * tank, Particle * particles, size_t maxParticles)
+{
+	for (int i = 0; i < maxParticles; i++)
+	{
+		Particle * particle = &particles[i];
+		if (!particle->active)
+		{
+			// play
+			particle->active = true;
+			particle->timeAlive = 0.0f;
+			particle->direction = vec2{cosf(tank->turretRot), sinf(tank->turretRot)};
+			vec2 tankDir = vec2{cosf(tank->rotation),  sinf(tank->rotation)};
+			vec2 turretCenter = (-tankDir * -0.03f) + tank->position;
+			particle->position = turretCenter - particle->direction * 0.5f;
+			break;
+		}
+	}
+}
+void SimulateParticles(GameState * state, double deltaTime)
+{
+	const f32 animFPS = 20;
+	const f32 animDuration = (1.0 / animFPS) * state->fireEffectSheet.numFrames;
+
+	for (int i = 0; i < 32; i++)
+	{
+		Particle * effect = &state->fireEffects[i];
+		if (effect->active)
+		{
+			effect->timeAlive += (float)deltaTime;
+
+			if (effect->timeAlive > animDuration)
+			{
+				effect->timeAlive = animDuration;
+				effect->active = false;
+			}
+		}
+	}
+}
+
+void DrawTurretFireEffect(RendererPushBuffer * renderCmds, GameState * state, const Particle * effect)
+{
+	const f32 animFPS = 20;
+	const f32 animDuration = (1.0 / animFPS) * state->fireEffectSheet.numFrames;
+	const f32 animProgress = effect->timeAlive / animDuration;
+	u32 currentFrame = (u32)std::max(0.0f, animProgress * state->fireEffectSheet.numFrames);
+	f32 aspect = 480.0f / 240.0f;
+	vec2 scale = {aspect, 1.0f};
+	scale *= 0.6f;
+	f32 angle = atan2f(effect->direction.y, effect->direction.x);
+	if (angle < 0) angle += 2 * PI;
+	DrawSpriteFrame(renderCmds, effect->position, scale, angle - PI, &state->fireEffectSheet, currentFrame);
+    RendererPushCircle(renderCmds, vec3{effect->position.x, effect->position.y, 0}, 0, {0.05f,0.05f}, {1.0f, 0.0f, 0.0f}, 1.0f, 30);
+}
+
+void DrawParticles(RendererPushBuffer * renderCmds, GameState * state)
+{
+	for (int i = 0; i < 32; i++)
+	{
+		const Particle * effect = &state->fireEffects[i];
+		if (effect->active) { DrawTurretFireEffect(renderCmds, state, effect); }
+	}
+}
+
 EXPORT GAME_START_FUNCTION(start)
 {
     GameState * state = (GameState*)gameMemory->permStorage;
@@ -290,7 +357,7 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     vec4 color = GetHSVSpectrumColor(time);
 
     float angle = (float)fmod(time * 100, 360.0) * (PI/180.0f);
-    float angle2 = (float)fmod(time * 20, 360.0) * (PI/180.0f);
+    float angle2 = (float)fmod(time * 10, 360.0) * (PI/180.0f);
     InstanceData2D gdEasy   = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0f}, {0.8f, 1.0f}, 0.0f};
     InstanceData2D gdNormal = {{state->tempPlayerPos.x, state->tempPlayerPos.y}, {0.64f, 1.0f}, 1.57079633f};
     InstanceData2D gdHarder = {{0.0f, sinf(angle), 0.0f}, {0.8f, 1.0f}, angle};
@@ -312,19 +379,24 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 	state->testTank.playerID = 0;
 	state->testTank.position = {cosf(angle2), sinf(angle2)};
 	state->testTank.rotation = (angle2);
-	state->testTank.turretRot= angle;
-	state->testTank.style.colorID = 3;
+	state->testTank.turretRot= 0;
+	state->testTank.style.colorID = 1;
 
-	if (state->testTank.turretOffset >= 1.0f && input->isMousePressed) { 
-		state->testTank.turretOffset = 0.0f; }
+	if (state->testTank.turretOffset >= 1.0f && input->isMousePressed)
+	{ 
+		state->testTank.turretOffset = 0.0f;
+		PlayFireEffect(&state->testTank, state->fireEffects, 32);
+	}
 
 	if (state->testTank.turretOffset < 1.0f)
 	{
-		state->testTank.turretOffset += input->deltaTime * 2.0f;
+		state->testTank.turretOffset += input->deltaTime * 3.0f;
 		if (state->testTank.turretOffset > 1.0f) state->testTank.turretOffset = 1.0f;
 	}
 
+	SimulateParticles(state, input->deltaTime);
+	DrawParticles(renderCommands, state);
+
 	// DrawTank(tankA, state);
 	DrawTank(state->testTank, renderCommands, state);
-	DrawSpriteFrame(renderCommands, &state->fireEffectSheet, 6);
 }
