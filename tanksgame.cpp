@@ -5,11 +5,13 @@
 #include <cassert>
 #include <charconv>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 
 #include "render_commands.cpp"
 
 #define EXPORT extern "C" __declspec(dllexport)
+#define TANK_MAX_HEALTH 100
 
 typedef struct {
     u32 x;
@@ -36,6 +38,12 @@ typedef struct {
 } Particle;
 
 typedef struct {
+	f32 startLifetime;
+	u32 maxParticles;
+	Particle * particles;
+} ParticleEmitter;
+
+typedef struct {
     u8 trackType;
     u8 bodyType;
     u8 turretType;
@@ -45,11 +53,13 @@ typedef struct {
 typedef struct
 {
 	u16 playerID;
+	u16 health;
 	vec2 position;
 	f32 rotation;
 	f32 turretRot;
-	TankStyle style;
 	f32 turretOffset;
+	f32 healthLerp;
+	TankStyle style;
 } TankGFX;
 
 typedef struct
@@ -68,14 +78,25 @@ typedef struct {
     u32 tankAtlasHandle;
 	AtlasEntry * tankAtlasEntries;
 	SpriteSheet fireEffectSheet;
+	SpriteSheet explosionVFXSheet;
 	TankGFX testTank;
-	Particle fireEffects[32];
+	ParticleEmitter turretFireEmitter;
+	ParticleEmitter explosionEmitter;
 } GameState;
 
 vec4 CalculateUVTransform(AtlasEntry entry, u32 atlasHeight, u32 atlasWidth)
 {
 	vec4 uv = {(f32)entry.width / (f32)atlasWidth, (f32)entry.height / (f32)atlasHeight, (f32)entry.x / (f32)atlasWidth, (f32)entry.y / (f32)atlasHeight};
 	return uv;
+}
+
+vec3 ColorHexToRBGNormalized(u32 color)
+{
+	float r = ((color >> 16) & 0xFF) / 255.0f;
+    float g = ((color >> 8)  & 0xFF) / 255.0f;
+    float b = ((color)       & 0xFF) / 255.0f;
+
+    return vec3{r, g, b};
 }
 
 f32 easeOutExpo(f32 x) { return (x == 1.0f) ? 1.0f : 1.0f - powf(2.0f, -10.0f * x); }
@@ -86,22 +107,47 @@ float TurretRecoilOffset(float t)
     if (t < 0.0f) t = 0.0f;
     if (t > 1.0f) t = 1.0f;
 
-	float y;
+    const float peakTime = 0.3f;
+    const float maxOffset = 0.033f;
 
-    if (t < 0.5f)
+    float y;
+
+    if (t < peakTime)
     {
-        // Going up: 0 → 0.5
-        float u = t / 0.5f;              // normalize to 0 → 1
-        y = easeOutExpo(u) * 0.033f;
+        // Going up: 0 → 0.3
+        float u = t / peakTime;          // normalize to 0 → 1
+        y = easeOutExpo(u) * maxOffset;
     }
     else
     {
-        // Going down: 0.5 → 1
-        float d = (t - 0.5f) / 0.5f;     // normalize to 0 → 1
-        y = (1.0f - easeInQuad(d)) * 0.033f;
+        // Going down: 0.3 → 1.0
+        float d = (t - peakTime) / (1.0f - peakTime); // normalize to 0 → 1
+        y = (1.0f - easeInQuad(d)) * maxOffset;
     }
 
     return y;
+}
+
+void DrawHealthbar(RendererPushBuffer * cmdBuffer, vec2 center, f32 remaining, f32 flashAmt)
+{
+	vec3 healthBarBGColor = {0.129411765, 0.141176471, 0.145098039};
+	vec3 hbRemainingColor = ColorHexToRBGNormalized(0x98C24D);
+	vec3 hbLostColor = ColorHexToRBGNormalized(0x8D2E24);
+	f32 healthBarWidth = 0.8f;
+	f32 healthBarHeight = 0.06f;
+	f32 lost = 1.0f - remaining;
+	f32 hbLeftside = center.x - (healthBarWidth/4.0f);
+	f32 hbRightside = center.x + (healthBarWidth/4.0f);
+
+    DebugGeoInstanceData hbBackground= {vec3{center.x, center.y, 0.0f}, {healthBarWidth + 0.026f, healthBarHeight + 0.026f}, healthBarBGColor, 0, 1.0f};
+    DebugGeoInstanceData hbRemaining = {vec3{hbLeftside + ((healthBarWidth*remaining)/4.0f),center.y, 0.0f}, {healthBarWidth*remaining, healthBarHeight}, hbRemainingColor, 0, 1.0f};
+    DebugGeoInstanceData hbFlash = {vec3{hbLeftside + ((healthBarWidth*flashAmt)/4.0f),center.y, 0.0f}, {healthBarWidth*flashAmt, healthBarHeight}, vec3{1.0f,1.0f,1.0f}, 0, 1.0f};
+    DebugGeoInstanceData hbLost = {vec3{hbRightside - ((healthBarWidth*lost)/4.0f), center.y, 0.0f}, {healthBarWidth*lost, healthBarHeight}, hbLostColor, 0, 1.0f};
+
+	RendererPushRectangle(cmdBuffer, hbBackground, 3);
+	RendererPushRectangle(cmdBuffer, hbLost, 4);
+	RendererPushRectangle(cmdBuffer, hbFlash, 4);
+	RendererPushRectangle(cmdBuffer, hbRemaining, 5);
 }
 
 void DrawTank(TankGFX tank, RendererPushBuffer * cmdBuffer, GameState * state)
@@ -130,11 +176,13 @@ void DrawTank(TankGFX tank, RendererPushBuffer * cmdBuffer, GameState * state)
 	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.8f, 1.0f}, trackUV, 0);
 	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.64f, 1.0f}, bodyUV, 1);
 	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {turretPos.x, turretPos.y, 0.0f}, tank.turretRot + (PI/2.0f), {0.57f, 1.0f}, turretUV, 2);
-    RendererPushCircle(cmdBuffer, vec3{turretPos.x, turretPos.y, 0}, 0, {0.05f,0.05f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
 
-    RendererPushCircle(cmdBuffer, vec3{turretCenter.x, turretCenter.y, 0}, 0, {0.05f,0.05f}, {1.0f, 1.0f, 0.0f}, 1.0f, 30);
+	DrawHealthbar(cmdBuffer, vec2{tank.position.x, tank.position.y + 0.3f}, ((float)tank.health / (float)TANK_MAX_HEALTH), tank.healthLerp);
 
+	// DEBUG VISUALS
     DebugGeoInstanceData debugHitbox = {vec3{tank.position.x, tank.position.y, 0.0f}, {0.8f, 0.8f}, {0.0f, 1.0f, 0.0f}, tankRot, 0.025f};
+    RendererPushCircle(cmdBuffer, vec3{turretPos.x, turretPos.y, 0}, 0, {0.05f,0.05f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
+    RendererPushCircle(cmdBuffer, vec3{turretCenter.x, turretCenter.y, 0}, 0, {0.05f,0.05f}, {1.0f, 1.0f, 0.0f}, 1.0f, 30);
     RendererPushRectangle(cmdBuffer, debugHitbox, 30);
 }
 
@@ -264,67 +312,98 @@ void ParseTextureAtlasCSV(GameMemory * memory, GameState * state, const char * f
     memory->platformFreeFile(&fileResult.data);
 }
 
-void PlayFireEffect(TankGFX * tank, Particle * particles, size_t maxParticles)
+void EmitParticles(ParticleEmitter * emitter, vec2 position, vec2 direction)
 {
-	for (int i = 0; i < maxParticles; i++)
+	for (int i = 0; i < emitter->maxParticles; i++)
 	{
-		Particle * particle = &particles[i];
+		Particle * particle = &emitter->particles[i];
 		if (!particle->active)
 		{
-			// play
 			particle->active = true;
 			particle->timeAlive = 0.0f;
-			particle->direction = vec2{cosf(tank->turretRot), sinf(tank->turretRot)};
-			vec2 tankDir = vec2{cosf(tank->rotation),  sinf(tank->rotation)};
-			vec2 turretCenter = (-tankDir * -0.03f) + tank->position;
-			particle->position = turretCenter - particle->direction * 0.5f;
+			particle->position = position;
+			particle->direction = direction;
 			break;
 		}
 	}
 }
-void SimulateParticles(GameState * state, double deltaTime)
-{
-	const f32 animFPS = 20;
-	const f32 animDuration = (1.0 / animFPS) * state->fireEffectSheet.numFrames;
 
-	for (int i = 0; i < 32; i++)
+void SimulateParticles(ParticleEmitter * emitter, double deltaTime)
+{
+	for (int i = 0; i < emitter->maxParticles; i++)
 	{
-		Particle * effect = &state->fireEffects[i];
+		Particle * effect = &emitter->particles[i];
 		if (effect->active)
 		{
 			effect->timeAlive += (float)deltaTime;
 
-			if (effect->timeAlive > animDuration)
+			if (effect->timeAlive > emitter->startLifetime)
 			{
-				effect->timeAlive = animDuration;
+				effect->timeAlive = emitter->startLifetime;
 				effect->active = false;
 			}
 		}
 	}
 }
 
-void DrawTurretFireEffect(RendererPushBuffer * renderCmds, GameState * state, const Particle * effect)
+void UpdateTank(TankGFX * tank, double deltaTime)
 {
-	const f32 animFPS = 20;
-	const f32 animDuration = (1.0 / animFPS) * state->fireEffectSheet.numFrames;
-	const f32 animProgress = effect->timeAlive / animDuration;
-	u32 currentFrame = (u32)std::max(0.0f, animProgress * state->fireEffectSheet.numFrames);
-	f32 aspect = 480.0f / 240.0f;
-	vec2 scale = {aspect, 1.0f};
-	scale *= 0.6f;
-	f32 angle = atan2f(effect->direction.y, effect->direction.x);
-	if (angle < 0) angle += 2 * PI;
-	DrawSpriteFrame(renderCmds, effect->position, scale, angle - PI, &state->fireEffectSheet, currentFrame);
-    RendererPushCircle(renderCmds, vec3{effect->position.x, effect->position.y, 0}, 0, {0.05f,0.05f}, {1.0f, 0.0f, 0.0f}, 1.0f, 30);
+	if (tank->turretOffset < 1.0f)
+	{
+		tank->turretOffset += deltaTime * 2.0f;
+		if (tank->turretOffset > 1.0f) tank->turretOffset = 1.0f;
+	}
+
+	f32 healthNormalized = ((f32)tank->health / (f32)TANK_MAX_HEALTH);
+	if (tank->healthLerp > healthNormalized)
+	{
+		tank->healthLerp -= deltaTime ;
+		if (tank->healthLerp < 0.0f) { tank->healthLerp = 0.0f; }
+	}
+	else if (tank->healthLerp < healthNormalized)
+	{
+		tank->healthLerp = healthNormalized;
+	}
+}
+
+void DrawTurretFireEffects(RendererPushBuffer * renderCmds, GameState * state)
+{
+	for (int i = 0; i < state->turretFireEmitter.maxParticles; i++)
+	{
+		const Particle * effect = &state->turretFireEmitter.particles[i];
+		if (!effect->active) { continue; }
+
+		const f32 animProgress = effect->timeAlive / state->turretFireEmitter.startLifetime;
+		u32 currentFrame = (u32)std::max(0.0f, animProgress * state->fireEffectSheet.numFrames);
+		f32 aspect = 480.0f / 240.0f;
+		vec2 scale = {aspect, 1.0f};
+		scale *= 0.6f;
+		f32 angle = atan2f(effect->direction.y, effect->direction.x);
+		if (angle < 0) angle += 2 * PI;
+		DrawSpriteFrame(renderCmds, effect->position, scale, angle - PI, &state->fireEffectSheet, currentFrame);
+	}
+}
+
+void DrawExplosionEffects(RendererPushBuffer * renderCmds, GameState * state)
+{
+	for (int i = 0; i < state->explosionEmitter.maxParticles; i++)
+	{
+		const Particle * effect = &state->explosionEmitter.particles[i];
+		if (!effect->active) { continue; }
+
+		const f32 animProgress = effect->timeAlive / state->explosionEmitter.startLifetime;
+		u32 currentFrame = (u32)std::max(0.0f, animProgress * state->explosionVFXSheet.numFrames);
+		vec2 scale = {1.0f, 1.0f};
+		f32 angle = atan2f(effect->direction.y, effect->direction.x);
+		if (angle < 0) angle += 2 * PI;
+		DrawSpriteFrame(renderCmds, effect->position, scale, angle, &state->explosionVFXSheet, currentFrame);
+	}
 }
 
 void DrawParticles(RendererPushBuffer * renderCmds, GameState * state)
 {
-	for (int i = 0; i < 32; i++)
-	{
-		const Particle * effect = &state->fireEffects[i];
-		if (effect->active) { DrawTurretFireEffect(renderCmds, state, effect); }
-	}
+	DrawTurretFireEffects(renderCmds, state);
+	DrawExplosionEffects(renderCmds, state);
 }
 
 EXPORT GAME_START_FUNCTION(start)
@@ -335,13 +414,35 @@ EXPORT GAME_START_FUNCTION(start)
     state->tankAtlasHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"tank_parts.png");
     state->extraTextureHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"images/platformer/Props_AirDrop.png");
     ParseTextureAtlasCSV(gameMemory, state, RESOURCES_PATH"tank_parts.csv");
+
+	// SPRITESHEETS INITIALIZATION
 	state->fireEffectSheet.textureHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"tank_fire_spritesheet.png");
 	state->fireEffectSheet.sheetHeight = 480;
-	state->fireEffectSheet.sheetWidth = 1080;
-	state->fireEffectSheet.numCols = 3;
-	state->fireEffectSheet.numRows = 2;
+	state->fireEffectSheet.sheetWidth  = 1080;
 	state->fireEffectSheet.numFrames = 6;
+	state->fireEffectSheet.numCols	 = 3;
+	state->fireEffectSheet.numRows   = 2;
+
+	state->explosionVFXSheet.textureHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"explosion_spritesheet.png");
+	state->explosionVFXSheet.sheetHeight = 1080;
+	state->explosionVFXSheet.sheetWidth  = 2048;
+	state->explosionVFXSheet.numFrames = 8;
+	state->explosionVFXSheet.numCols   = 4;
+	state->explosionVFXSheet.numRows   = 2;
+
 	state->testTank = {0};
+	state->testTank.health = 100;
+
+	const f32 spritesheetAnimFPS = 20;
+	const f32 fireAnimDuration = (1.0 / spritesheetAnimFPS) * state->fireEffectSheet.numFrames;
+	state->turretFireEmitter.startLifetime = fireAnimDuration;
+	state->turretFireEmitter.maxParticles = 16;
+	state->turretFireEmitter.particles = (Particle*)ArenaPush(&state->permArena, sizeof(Particle) * state->turretFireEmitter.maxParticles);
+
+	const f32 explosionAnimDuration = (1.0 / spritesheetAnimFPS) * state->explosionVFXSheet.numFrames;
+	state->explosionEmitter.startLifetime = explosionAnimDuration;
+	state->explosionEmitter.maxParticles = 16;
+	state->explosionEmitter.particles = (Particle*)ArenaPush(&state->permArena, sizeof(Particle) * state->explosionEmitter.maxParticles);
 }
 
 EXPORT GAME_UPDATE_FUNCTION(update)
@@ -358,8 +459,8 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
     float angle = (float)fmod(time * 100, 360.0) * (PI/180.0f);
     float angle2 = (float)fmod(time * 10, 360.0) * (PI/180.0f);
-    InstanceData2D gdEasy   = {{state->tempPlayerPos.x, state->tempPlayerPos.y, 0.0f}, {0.8f, 1.0f}, 0.0f};
-    InstanceData2D gdNormal = {{state->tempPlayerPos.x, state->tempPlayerPos.y}, {0.64f, 1.0f}, 1.57079633f};
+    InstanceData2D gdEasy   = {{state->tempPlayerPos.x + 0.75f, state->tempPlayerPos.y, 0.0f}, {0.8f, 1.0f}, 0.0f};
+    InstanceData2D gdNormal = {{state->tempPlayerPos.x + 0.75f, state->tempPlayerPos.y}, {0.64f, 1.0f}, 1.57079633f};
     InstanceData2D gdHarder = {{0.0f, sinf(angle), 0.0f}, {0.8f, 1.0f}, angle};
     InstanceData2D gdHard   = {{gdHarder.position.x + sinf(angle) * -0.075f, gdHarder.position.y - cosf(angle) * -0.075f}, {0.57f, 1.0f}, angle};
 
@@ -377,26 +478,31 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 	tankA.style.colorID = 1;
 
 	state->testTank.playerID = 0;
-	state->testTank.position = {cosf(angle2), sinf(angle2)};
+	state->testTank.position = vec2{state->tempPlayerPos.x, state->tempPlayerPos.y};
 	state->testTank.rotation = (angle2);
-	state->testTank.turretRot= 0;
+	state->testTank.turretRot= angle;
 	state->testTank.style.colorID = 1;
 
 	if (state->testTank.turretOffset >= 1.0f && input->isMousePressed)
 	{ 
 		state->testTank.turretOffset = 0.0f;
-		PlayFireEffect(&state->testTank, state->fireEffects, 32);
+		vec2 particleDir = vec2{cosf(state->testTank.turretRot), sinf(state->testTank.turretRot)};
+		vec2 tankDir = vec2{cosf(state->testTank.rotation),  sinf(state->testTank.rotation)};
+		vec2 turretCenter = (-tankDir * -0.03f) + state->testTank.position;
+		vec2 newPos = turretCenter - particleDir * 0.5f;
+		EmitParticles(&state->turretFireEmitter, newPos, particleDir);
+		EmitParticles(&state->explosionEmitter, vec2{0,0}, particleDir);
+
+		if (state->testTank.health >= 10)
+			state->testTank.health -= 10;
+		else
+			state->testTank.health = TANK_MAX_HEALTH;
 	}
 
-	if (state->testTank.turretOffset < 1.0f)
-	{
-		state->testTank.turretOffset += input->deltaTime * 3.0f;
-		if (state->testTank.turretOffset > 1.0f) state->testTank.turretOffset = 1.0f;
-	}
-
-	SimulateParticles(state, input->deltaTime);
+	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
+	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
 	DrawParticles(renderCommands, state);
 
-	// DrawTank(tankA, state);
+	UpdateTank(&state->testTank, input->deltaTime);
 	DrawTank(state->testTank, renderCommands, state);
 }
