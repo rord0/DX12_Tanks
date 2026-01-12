@@ -55,6 +55,7 @@ typedef struct
 	u16 playerID;
 	u16 health;
 	vec2 position;
+	b32 active;
 	f32 rotation;
 	f32 turretRot;
 	f32 turretOffset;
@@ -72,16 +73,15 @@ typedef struct
 typedef struct {
     double time;
     vec3 cameraPos;
-    vec2 tempPlayerPos;
-    u32 extraTextureHandle;
 	Arena permArena;
+    u32 extraTextureHandle;
     u32 tankAtlasHandle;
 	AtlasEntry * tankAtlasEntries;
 	SpriteSheet fireEffectSheet;
 	SpriteSheet explosionVFXSheet;
-	TankGFX testTank;
 	ParticleEmitter turretFireEmitter;
 	ParticleEmitter explosionEmitter;
+	TankGFX tanks[8]; 
 } GameState;
 
 vec4 CalculateUVTransform(AtlasEntry entry, u32 atlasHeight, u32 atlasWidth)
@@ -150,8 +150,10 @@ void DrawHealthbar(RendererPushBuffer * cmdBuffer, vec2 center, f32 remaining, f
 	RendererPushRectangle(cmdBuffer, hbRemaining, 5);
 }
 
-void DrawTank(TankGFX tank, RendererPushBuffer * cmdBuffer, GameState * state)
+void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 {
+	if (!tank.active) { return; }
+
     u32 trackIndex  =  0 + (3 * tank.style.trackType) + tank.style.colorID;
     u32 bodyIndex   = 12 + (3 * tank.style.bodyType ) + tank.style.colorID;
     u32 turretIndex = 24 + (3 * tank.style.trackType) + tank.style.colorID;
@@ -348,9 +350,11 @@ void SimulateParticles(ParticleEmitter * emitter, double deltaTime)
 
 void UpdateTank(TankGFX * tank, double deltaTime)
 {
+	if (!(tank->active)) { return; }
+
 	if (tank->turretOffset < 1.0f)
 	{
-		tank->turretOffset += deltaTime * 2.0f;
+		tank->turretOffset += deltaTime;
 		if (tank->turretOffset > 1.0f) tank->turretOffset = 1.0f;
 	}
 
@@ -363,6 +367,25 @@ void UpdateTank(TankGFX * tank, double deltaTime)
 	else if (tank->healthLerp < healthNormalized)
 	{
 		tank->healthLerp = healthNormalized;
+	}
+}
+
+void TankPlayFireEffects(TankGFX * tank, GameState * state)
+{
+	if (tank->turretOffset >= 1.0f)
+	{ 
+		tank->turretOffset = 0.0f;
+		vec2 particleDir = vec2{cosf(tank->turretRot), sinf(tank->turretRot)};
+		vec2 tankDir = vec2{cosf(tank->rotation),  sinf(tank->rotation)};
+		vec2 turretCenter = (-tankDir * -0.03f) + tank->position;
+		vec2 newPos = turretCenter - particleDir * 0.5f;
+		EmitParticles(&state->turretFireEmitter, newPos, particleDir);
+		EmitParticles(&state->explosionEmitter, vec2{0,0}, particleDir);
+
+		if (tank->health >= 10)
+			tank->health -= 10;
+		else
+			tank->health = TANK_MAX_HEALTH;
 	}
 }
 
@@ -430,8 +453,18 @@ EXPORT GAME_START_FUNCTION(start)
 	state->explosionVFXSheet.numCols   = 4;
 	state->explosionVFXSheet.numRows   = 2;
 
-	state->testTank = {0};
-	state->testTank.health = 100;
+	state->tanks[0]= {0};
+	state->tanks[1]= {0};
+	state->tanks[0].playerID = 66;
+	state->tanks[1].playerID = 67;
+
+	state->tanks[0].health = 100;
+	state->tanks[1].health = 100;
+
+	state->tanks[0].active = true;
+	state->tanks[1].active = true;
+	state->tanks[0].style.colorID = 1;
+	state->tanks[1].style.colorID = 2;
 
 	const f32 spritesheetAnimFPS = 20;
 	const f32 fireAnimDuration = (1.0 / spritesheetAnimFPS) * state->fireEffectSheet.numFrames;
@@ -452,15 +485,13 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     state->time += input->deltaTime;
     double time = state->time;
 
-    state->tempPlayerPos.y += input->tempInput.y * input->deltaTime;
-    state->tempPlayerPos.x += input->tempInput.x * input->deltaTime;
 
     vec4 color = GetHSVSpectrumColor(time);
 
     float angle = (float)fmod(time * 100, 360.0) * (PI/180.0f);
     float angle2 = (float)fmod(time * 10, 360.0) * (PI/180.0f);
-    InstanceData2D gdEasy   = {{state->tempPlayerPos.x + 0.75f, state->tempPlayerPos.y, 0.0f}, {0.8f, 1.0f}, 0.0f};
-    InstanceData2D gdNormal = {{state->tempPlayerPos.x + 0.75f, state->tempPlayerPos.y}, {0.64f, 1.0f}, 1.57079633f};
+    InstanceData2D gdEasy   = {{sinf(angle), cosf(angle), 0.0f}, {0.8f, 1.0f}, 0.0f};
+    InstanceData2D gdNormal = {{0.75f, 0.75f}, {0.64f, 1.0f}, 1.57079633f};
     InstanceData2D gdHarder = {{0.0f, sinf(angle), 0.0f}, {0.8f, 1.0f}, angle};
     InstanceData2D gdHard   = {{gdHarder.position.x + sinf(angle) * -0.075f, gdHarder.position.y - cosf(angle) * -0.075f}, {0.57f, 1.0f}, angle};
 
@@ -471,38 +502,22 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
     RendererPushLine(renderCommands, gdEasy.position, gdHarder.position, {0.0f, 1.0f, 1.0f}, 0.02f, 0);
 
-	TankGFX tankA = {0};
-	tankA.playerID = 0;
-	tankA.position = vec2{gdHard.position.x, gdHard.position.y};
-	tankA.rotation = gdHard.rotation;
-	tankA.style.colorID = 1;
-
-	state->testTank.playerID = 0;
-	state->testTank.position = vec2{state->tempPlayerPos.x, state->tempPlayerPos.y};
-	state->testTank.rotation = (angle2);
-	state->testTank.turretRot= angle;
-	state->testTank.style.colorID = 1;
-
-	if (state->testTank.turretOffset >= 1.0f && input->isMousePressed)
-	{ 
-		state->testTank.turretOffset = 0.0f;
-		vec2 particleDir = vec2{cosf(state->testTank.turretRot), sinf(state->testTank.turretRot)};
-		vec2 tankDir = vec2{cosf(state->testTank.rotation),  sinf(state->testTank.rotation)};
-		vec2 turretCenter = (-tankDir * -0.03f) + state->testTank.position;
-		vec2 newPos = turretCenter - particleDir * 0.5f;
-		EmitParticles(&state->turretFireEmitter, newPos, particleDir);
-		EmitParticles(&state->explosionEmitter, vec2{0,0}, particleDir);
-
-		if (state->testTank.health >= 10)
-			state->testTank.health -= 10;
-		else
-			state->testTank.health = TANK_MAX_HEALTH;
-	}
+    state->tanks[0].position.x += input->tempInput.x * input->deltaTime;
+    state->tanks[0].position.y += input->tempInput.y * input->deltaTime;
+	state->tanks[0].rotation = (angle2);
+	state->tanks[0].turretRot= angle;
+    state->tanks[1].position.x += input->tempInput2.x * input->deltaTime;
+    state->tanks[1].position.y += input->tempInput2.y * input->deltaTime;
 
 	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
 	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
 	DrawParticles(renderCommands, state);
 
-	UpdateTank(&state->testTank, input->deltaTime);
-	DrawTank(state->testTank, renderCommands, state);
+	if (input->isMousePressed) { TankPlayFireEffects(&state->tanks[0], state); }
+
+	for (int i = 0; i < 8; i++)
+	{
+		UpdateTank(&state->tanks[i], input->deltaTime);
+		DrawTank(state->tanks[i], renderCommands, state);
+	}
 }

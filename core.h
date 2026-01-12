@@ -158,6 +158,7 @@ typedef struct {
 
 typedef struct {
 	vec2 tempInput;
+	vec2 tempInput2;
 	bool isMousePressed;
 	double deltaTime;
 } GameInput;

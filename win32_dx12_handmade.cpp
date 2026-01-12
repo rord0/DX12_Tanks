@@ -44,6 +44,10 @@ typedef struct
     KeyInput A;
     KeyInput S;
     KeyInput D;
+    KeyInput UP;
+    KeyInput DOWN;
+    KeyInput LEFT;
+    KeyInput RIGHT;
     KeyInput ESC;
     KeyInput mouseL;
 } InputState;
@@ -76,6 +80,26 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
                     inputState.D.isDown = true;
                     inputState.D.wasDown = (msg.lParam & (1 << 30)) != 0;
                 }
+                if (msg.wParam == VK_UP)
+                {
+                    inputState.UP.isDown = true;
+                    inputState.UP.wasDown = (msg.lParam & (1 << 30)) != 0;
+                }
+                if (msg.wParam == VK_DOWN)
+                {
+                    inputState.DOWN.isDown = true;
+                    inputState.DOWN.wasDown = (msg.lParam & (1 << 30)) != 0;
+                }
+                if (msg.wParam == VK_LEFT)
+                {
+                    inputState.LEFT.isDown = true;
+                    inputState.RIGHT.wasDown = (msg.lParam & (1 << 30)) != 0;
+                }
+                if (msg.wParam == VK_RIGHT)
+                {
+                    inputState.RIGHT.isDown = true;
+                    inputState.RIGHT.wasDown = (msg.lParam & (1 << 30)) != 0;
+                }
                 if (msg.wParam == VK_ESCAPE)
                 {
                     inputState.ESC.isDown = true;
@@ -102,6 +126,26 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
                 {
                     inputState.D.isDown = false;
                     inputState.D.wasDown = true;
+                }
+                if (msg.wParam == VK_UP)
+                {
+                    inputState.UP.isDown = false;
+                    inputState.UP.wasDown = true;
+                }
+                if (msg.wParam == VK_DOWN)
+                {
+                    inputState.DOWN.isDown = false;
+                    inputState.DOWN.wasDown = true;
+                }
+                if (msg.wParam == VK_LEFT)
+                {
+                    inputState.LEFT.isDown = false;
+                    inputState.RIGHT.wasDown = true; 
+                }
+                if (msg.wParam == VK_RIGHT)
+                {
+                    inputState.RIGHT.isDown = false;
+                    inputState.RIGHT.wasDown = true;
                 }
                 break;
 			case WM_LBUTTONDOWN:
@@ -360,6 +404,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 		gameInput.deltaTime = deltaTime;
         gameInput.tempInput.x = (float)inputState.D.isDown + -(float)(inputState.A.isDown); 
         gameInput.tempInput.y = (float)inputState.W.isDown + -(float)(inputState.S.isDown); 
+        gameInput.tempInput2.x = (float)inputState.RIGHT.isDown + -(float)(inputState.LEFT.isDown); 
+        gameInput.tempInput2.y = (float)inputState.UP.isDown + -(float)(inputState.DOWN.isDown); 
 		gameInput.isMousePressed = inputState.mouseL.isDown;
 
         gameCode.Update(&gameMemory, &gameInput, &pushBuffer);
