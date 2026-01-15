@@ -4,6 +4,7 @@
 typedef enum 
 {
     RENDER_ENTRY_TYPE_CLEAR,
+	RENDER_ENTRY_TYPE_SET_PROJ,
     RENDER_ENTRY_TYPE_DEBUG_RECTANGLE,
     RENDER_ENTRY_TYPE_DEBUG_CIRCLE,
     RENDER_ENTRY_TYPE_LINE,
@@ -19,6 +20,11 @@ typedef struct {
     RenderEntryHeader header;
     vec4 clearColor;
 } RenderEntryClear;
+
+typedef struct {
+	RenderEntryHeader header;
+	mat4 projection;
+} RenderEntrySetProj;
 
 typedef struct {
     RenderEntryHeader header;

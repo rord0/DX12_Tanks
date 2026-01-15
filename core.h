@@ -162,7 +162,8 @@ typedef struct {
 	vec2 tempInput2;
 	bool isMousePressed;
 	double deltaTime;
-	vec2 mousePosNDC;
+	vec2i viewportSize;
+	vec2 mousePosVP;
 } GameInput;
 
 #define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory)

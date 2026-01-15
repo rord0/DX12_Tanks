@@ -408,18 +408,18 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             prevResolution = resolution;
         }
 
-		float clearColor[4] = {0.5f, 0.714f, 0.486f, 1.0f};
 		gameInput.deltaTime = deltaTime;
         gameInput.tempInput.x = (float)inputState.D.isDown + -(float)(inputState.A.isDown); 
         gameInput.tempInput.y = (float)inputState.W.isDown + -(float)(inputState.S.isDown); 
         gameInput.tempInput2.x = (float)inputState.RIGHT.isDown + -(float)(inputState.LEFT.isDown); 
         gameInput.tempInput2.y = (float)inputState.UP.isDown + -(float)(inputState.DOWN.isDown); 
 		gameInput.isMousePressed = inputState.mouseL.isDown;
-		gameInput.mousePosNDC = vec2{inputState.mousePos.x / (float)screenWidth, inputState.mousePos.y / (float)screenHeight};
+		gameInput.viewportSize = vec2i{screenWidth, screenHeight};
+		gameInput.mousePosVP = vec2{inputState.mousePos.x / (float)screenWidth, inputState.mousePos.y / (float)screenHeight};
 
         gameCode.Update(&gameMemory, &gameInput, &pushBuffer);
 
-        mat4 projectionMatrix = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
+        //mat4 projectionMatrix = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
 
 		if (inputState.ESC.isDown)
 		{
@@ -429,7 +429,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         ///////////////
         // Rendering
         RendererProcessPushBuffer(&pushBuffer);
-        BeginFrame(clearColor, projectionMatrix);
+        BeginFrame();
         Render();
         EndFrame();
         

@@ -7,6 +7,7 @@
 #include "render_entry.h"
 
 #include "render.cpp"
+#include <cstddef>
 
 int DX12_RendererCreateTexture(const ImageData * image, RendererState & state, RendererResourcesDX12  & res);
 
@@ -357,7 +358,7 @@ float DX12_RendererResizeFrameBuffers(u32 width, u32 height, RendererState & sta
 }
 
 
-void DX12_BeginFrame(float clearColor[4], RendererState & state)
+void DX12_BeginFrame(vec4 clearColor, RendererState & state)
 {
     ComPtr<ID3D12CommandAllocator> cmdAllocator = state.cmdAllocators[state.backBufferIndex];
     ComPtr<ID3D12Resource> backBuffer = state.backBuffers[state.backBufferIndex];
@@ -372,7 +373,7 @@ void DX12_BeginFrame(float clearColor[4], RendererState & state)
     D3D12_CPU_DESCRIPTOR_HANDLE rtvDescHandle = state.rtvDescHeap->GetCPUDescriptorHandleForHeapStart();
     rtvDescHandle.ptr += (state.backBufferIndex * state.rtvDescSize);
     state.cmdList->OMSetRenderTargets(1, &rtvDescHandle, FALSE, 0);
-    state.cmdList->ClearRenderTargetView(rtvDescHandle, clearColor, 0, nullptr);
+    state.cmdList->ClearRenderTargetView(rtvDescHandle, (float*)&clearColor, 0, nullptr);
     // Clear Depth Buffer
 }
 
@@ -474,7 +475,6 @@ void RendererPushInstance(InstanceRenderData * renderData, Array * drawCMDs, voi
             renderData->frameInstanceCounter.totalInstances += renderData->frameInstanceCounter.layerInstanceCount;
             renderData->frameInstanceCounter.layerInstanceCount = 0;
         }
-        // Add a draw call for quadCount number of quads.
         renderData->frameInstanceCounter.currentLayer = layer;
     }
     renderData->frameInstanceCounter.layerInstanceCount++;
@@ -499,8 +499,48 @@ void RendererClearInstances(InstanceRenderData * renderData)
     renderData->instanceData.count = 0;
 }
 
+size_t RenderEntrySizeof(RenderEntryType type)
+{
+	switch (type)
+	{
+		case RENDER_ENTRY_TYPE_CLEAR:			return sizeof(RenderEntryClear);
+		case RENDER_ENTRY_TYPE_SET_PROJ:		return sizeof(RenderEntrySetProj);
+		case RENDER_ENTRY_TYPE_DEBUG_RECTANGLE: return sizeof(RenderEntryDebugRectangle);
+		case RENDER_ENTRY_TYPE_DEBUG_CIRCLE:	return sizeof(RenderEntryDebugCircle);
+		case RENDER_ENTRY_TYPE_LINE:			return sizeof(RenderEntryLine);
+		case RENDER_ENTRY_TYPE_TEXTURED_QUAD:	return sizeof(RenderEntryTexturedQuad);
+		case RENDER_ENTRY_TYPE_SUB_TEXTURE:		return sizeof(RenderEntrySubTexture);
+		default: return 0; // TODO: assert here this would be very bad
+	}
+}
+
+void RendererProcessFrameSetupCMDs(RendererPushBuffer * pb)
+{
+	size_t offset = 0;
+    for (int i = 0; i < pb->entryCount; i++)
+    {
+		RenderEntryHeader * entryHeader = (RenderEntryHeader*)(pb->memory + offset);
+        switch (entryHeader->type)
+        {
+            case RENDER_ENTRY_TYPE_CLEAR:
+            {
+				RenderEntryClear * entry = (RenderEntryClear*)entryHeader;
+				RENDERER_PIPELINE.clearColor = entry->clearColor;
+            } break;
+			case RENDER_ENTRY_TYPE_SET_PROJ:
+			{
+				RenderEntrySetProj * entry = (RenderEntrySetProj*)entryHeader;
+				RENDERER_PIPELINE.projection = entry->projection;
+			} break;
+			default: break; // Skip.
+		}
+		offset += RenderEntrySizeof(entryHeader->type);
+	}
+}
+
 void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData * instanceRenderData, u32 instanceRenderDataCount, Array * drawCMDs)
 {
+	RendererProcessFrameSetupCMDs(pb);
     for (int i = 0; i < instanceRenderDataCount; i++)
     {
         RendererClearInstances(&instanceRenderData[i]);
@@ -509,7 +549,7 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
     InsertionSortRenderEntries(pb->sortEntries, pb->sortEntryCount);
 
     u16 currentLayer = 0;
-    for (int i = 0; i < pb->entryCount; i++)
+    for (int i = 0; i < pb->sortEntryCount; i++)
     {
         RenderSortEntry sortEntry = pb->sortEntries[i];
         if (currentLayer != sortEntry.layer)
@@ -522,10 +562,6 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
         }
         switch (sortEntry.type)
         {
-            case RENDER_ENTRY_TYPE_CLEAR:
-            {
-            } break;
-
             case RENDER_ENTRY_TYPE_TEXTURED_QUAD:
             {
                 RenderEntryTexturedQuad * entry = (RenderEntryTexturedQuad*)(pb->memory + sortEntry.pushBufferOffset);
@@ -636,10 +672,9 @@ void RendererProcessPushBuffer(RendererPushBuffer * pb)
     DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.IRD[0], 5, &RENDERER_PIPELINE.instanceDrawCMDs);
 }
 
-void BeginFrame(float clearColor[4], mat4 projectionMatrix)
+void BeginFrame()
 {
-    DX12_BeginFrame(clearColor,  RENDERER_STATE);
-    RENDERER_PIPELINE.projection = projectionMatrix;
+    DX12_BeginFrame(RENDERER_PIPELINE.clearColor,  RENDERER_STATE);
 }
 
 void EndFrame()

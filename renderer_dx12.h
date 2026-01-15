@@ -120,6 +120,7 @@ typedef struct {
 
     InstanceRenderData IRD[5];
 
+	vec4 clearColor;
     // Matrices
     mat4 projection;
 } RendererResourcesDX12;

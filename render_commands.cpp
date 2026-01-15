@@ -1,4 +1,5 @@
 #include "core.h"
+#include "render_entry.h"
 
 u32 PushRenderEntryStruct(RendererPushBuffer * pb, void * entry, size_t entrySize)
 {
@@ -24,6 +25,11 @@ void PushRenderSortEntry(RendererPushBuffer * pb, RenderSortEntry sortEntry)
 
 #define PushRenderEntry(pushBuffer, entry) PushRenderEntryStruct(pushBuffer, &entry, sizeof(entry));
 
+#define PushRenderEntry2(entryType, pushBuffer, entry)							\
+	u32 entryOffset = PushRenderEntryStruct(pushBuffer, &entry, sizeof(entry)); \
+	RenderSortEntry sortEntry = {entryType, layer, entryOffset};				\
+	PushRenderSortEntry(pushBuffer, sortEntry)
+
 void RendererPushImage(RendererPushBuffer * pb, u32 textureID, InstanceData2D instanceData, u16 layer)
 {
     RenderEntryTexturedQuad entry = {RENDER_ENTRY_TYPE_TEXTURED_QUAD, textureID, instanceData};
@@ -31,6 +37,18 @@ void RendererPushImage(RendererPushBuffer * pb, u32 textureID, InstanceData2D in
 
     RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_TEXTURED_QUAD, layer, entryOffset};
     PushRenderSortEntry(pb, sortEntry);
+}
+
+void RendererPushSetProjection(RendererPushBuffer * pb, mat4 projectionMatrix)
+{
+	RenderEntrySetProj entry = {RENDER_ENTRY_TYPE_SET_PROJ, projectionMatrix};
+	PushRenderEntry(pb, entry);
+}
+
+void RendererPushSetClear(RendererPushBuffer * pb, vec4 clearColor)
+{
+	RenderEntryClear entry = {RENDER_ENTRY_TYPE_CLEAR, clearColor};
+	PushRenderEntry(pb, entry);
 }
 
 void RendererPushRectangle(RendererPushBuffer * pb, DebugGeoInstanceData instanceData, u16 layer)

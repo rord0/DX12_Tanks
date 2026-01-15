@@ -84,6 +84,21 @@ typedef struct {
 	TankGFX tanks[8]; 
 } GameState;
 
+mat4 orthographicProjection(float right, float left, float top, float bottom, float n, float f)
+{
+    mat4 m = {};
+    m.m[0][0] = 2.0f / (right - left);
+    m.m[1][1] = 2.0f / (top - bottom);
+    m.m[2][2] = 2.0f / (f - n);
+
+    m.m[0][3] = -((right + left)/(right - left));
+    m.m[1][3] = -((top + bottom)/(top - bottom));
+    m.m[2][3] = -((f + n)/(f - n));
+
+    m.m[3][3] = 1.0f;
+    return m;
+}                      
+
 vec4 CalculateUVTransform(AtlasEntry entry, u32 atlasHeight, u32 atlasWidth)
 {
 	vec4 uv = {(f32)entry.width / (f32)atlasWidth, (f32)entry.height / (f32)atlasHeight, (f32)entry.x / (f32)atlasWidth, (f32)entry.y / (f32)atlasHeight};
@@ -229,10 +244,11 @@ vec4 GetHSVSpectrumColor(float time, float speed = 1.0f)
     return HSVtoRGBA(hue, 1.0f, 1.0f);
 }
 
-vec2 MouseNDCToWorld(vec2 mouseNDC)
+vec2 MousePosToWorld(vec2i mousePos, mat4 proj)
 {
 	// TODO: mouse to NDC
 	// TODO: NDC to PROJ
+	return {0.0f, 0.0f};
 }
 
 Arena ArenaInit(void * memory, size_t size)
@@ -489,8 +505,9 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     // Update code here
     GameState * state = (GameState*)gameMemory->permStorage;
     state->time += input->deltaTime;
+	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
+	mat4 projection = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
     double time = state->time;
-
 
     vec4 color = GetHSVSpectrumColor(time);
 
@@ -501,12 +518,6 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     InstanceData2D gdHarder = {{0.0f, sinf(angle), 0.0f}, {0.8f, 1.0f}, angle};
     InstanceData2D gdHard   = {{gdHarder.position.x + sinf(angle) * -0.075f, gdHarder.position.y - cosf(angle) * -0.075f}, {0.57f, 1.0f}, angle};
 
-    RendererPushCircle(renderCommands, gdNormal.position, gdEasy.rotation, {0.1f,0.1f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
-
-    RendererPushImage(renderCommands, 2, gdEasy, 4);
-    RendererPushImage(renderCommands, state->extraTextureHandle, gdEasy, 0);
-
-    RendererPushLine(renderCommands, gdEasy.position, gdHarder.position, {0.0f, 1.0f, 1.0f}, 0.02f, 0);
 
 	state->tanks[0].style.colorID = 3;
     state->tanks[0].position.x += input->tempInput.x * input->deltaTime;
@@ -515,6 +526,17 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 	state->tanks[0].turretRot= angle;
     state->tanks[1].position.x += input->tempInput2.x * input->deltaTime;
     state->tanks[1].position.y += input->tempInput2.y * input->deltaTime;
+
+	vec4 clearColor = {0.5f, 0.714f, 0.486f, 1.0f};
+	RendererPushSetClear(renderCommands, clearColor);
+	RendererPushSetProjection(renderCommands, projection);
+
+    RendererPushCircle(renderCommands, gdNormal.position, gdEasy.rotation, {0.1f,0.1f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
+
+    RendererPushImage(renderCommands, 2, gdEasy, 4);
+    RendererPushImage(renderCommands, state->extraTextureHandle, gdEasy, 0);
+
+    RendererPushLine(renderCommands, gdEasy.position, gdHarder.position, {0.0f, 1.0f, 1.0f}, 0.02f, 0);
 
 	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
 	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
