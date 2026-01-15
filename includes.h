@@ -6,6 +6,7 @@
 #define UNICODE
 
 #include <windows.h>
+#include <windowsx.h>
 #include <Xinput.h>
 #include <stdint.h>
 #include <mmeapi.h>

@@ -63,6 +63,7 @@ vec2 operator-(vec2 A)         { return {-A.x, -A.y}; }
 
 vec2 operator*(f32 c, vec2 V)  { return {c * V.x, c * V.y}; }
 vec2 operator*(vec2 V, f32 c)  { return c * V; }
+vec2 operator/(vec2 V, f32 c)  { return {V.x / c, V.y / c}; }
 
 vec2 & operator*=(vec2 & V, f32 c)
 {
@@ -161,6 +162,7 @@ typedef struct {
 	vec2 tempInput2;
 	bool isMousePressed;
 	double deltaTime;
+	vec2 mousePosNDC;
 } GameInput;
 
 #define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory)

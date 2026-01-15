@@ -229,6 +229,12 @@ vec4 GetHSVSpectrumColor(float time, float speed = 1.0f)
     return HSVtoRGBA(hue, 1.0f, 1.0f);
 }
 
+vec2 MouseNDCToWorld(vec2 mouseNDC)
+{
+	// TODO: mouse to NDC
+	// TODO: NDC to PROJ
+}
+
 Arena ArenaInit(void * memory, size_t size)
 {
     Arena out = {memory, size, 0};
@@ -502,6 +508,7 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
     RendererPushLine(renderCommands, gdEasy.position, gdHarder.position, {0.0f, 1.0f, 1.0f}, 0.02f, 0);
 
+	state->tanks[0].style.colorID = 3;
     state->tanks[0].position.x += input->tempInput.x * input->deltaTime;
     state->tanks[0].position.y += input->tempInput.y * input->deltaTime;
 	state->tanks[0].rotation = (angle2);

@@ -50,6 +50,7 @@ typedef struct
     KeyInput RIGHT;
     KeyInput ESC;
     KeyInput mouseL;
+	vec2i mousePos;
 } InputState;
 
 void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
@@ -156,6 +157,13 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
 			case WM_LBUTTONUP:
 				{
 					inputState.mouseL.isDown = false;
+				}break;
+			case WM_MOUSEMOVE:
+				{
+					int xPos = GET_X_LPARAM(msg.lParam);
+					int yPos = GET_Y_LPARAM(msg.lParam);
+					inputState.mousePos.x = xPos;
+					inputState.mousePos.y = yPos;
 				}break;
             default:
                 TranslateMessage(&msg);
@@ -407,6 +415,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         gameInput.tempInput2.x = (float)inputState.RIGHT.isDown + -(float)(inputState.LEFT.isDown); 
         gameInput.tempInput2.y = (float)inputState.UP.isDown + -(float)(inputState.DOWN.isDown); 
 		gameInput.isMousePressed = inputState.mouseL.isDown;
+		gameInput.mousePosNDC = vec2{inputState.mousePos.x / (float)screenWidth, inputState.mousePos.y / (float)screenHeight};
 
         gameCode.Update(&gameMemory, &gameInput, &pushBuffer);
 
