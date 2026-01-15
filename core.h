@@ -47,6 +47,16 @@ typedef struct
     float m[4][4];
 } mat4;
 
+vec4 operator*(mat4 m, vec4 V)
+{
+	return vec4{
+			(V.x * m.m[0][0]) + (V.y * m.m[0][1]) + (V.z * m.m[0][2]) + (V.w * m.m[0][3]),
+			(V.x * m.m[1][0]) + (V.y * m.m[1][1]) + (V.z * m.m[1][2]) + (V.w * m.m[1][3]),
+			(V.x * m.m[2][0]) + (V.y * m.m[2][1]) + (V.z * m.m[2][2]) + (V.w * m.m[2][3]),
+			(V.x * m.m[3][0]) + (V.y * m.m[3][1]) + (V.z * m.m[3][2]) + (V.w * m.m[3][3])};
+}
+
+
 struct vec2 {
     union
     {
@@ -83,14 +93,14 @@ vec2 & operator-=(vec2 & A, vec2 B)
     return A;
 }
 
-typedef union {
-    int elements[2];
-    struct
+struct vec2i {
+    union
     {
-        union { int x, u; };
-        union { int y, v; };
+        int elements[2];
+        struct { int x, y; };
+        struct { int u, v; };
     };
-} vec2i;
+};
 
 typedef struct {
     vec3 position;
@@ -163,7 +173,7 @@ typedef struct {
 	bool isMousePressed;
 	double deltaTime;
 	vec2i viewportSize;
-	vec2 mousePosVP;
+	vec2i mousePosVP;
 } GameInput;
 
 #define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory)

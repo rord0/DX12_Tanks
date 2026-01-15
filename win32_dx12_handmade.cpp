@@ -338,7 +338,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     double time = 0.0f;
     double timer = 0.0f;
     vec2i prevResolution = {};
-    float aspect = 1.0f;
 
     Win32GameCode gameCode = Win32LoadGameCode(GAME_CODE_DLL);
 
@@ -404,7 +403,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         if (resolution.x != prevResolution.x || resolution.y != prevResolution.y)
         {
             // Resize Swap Chain Frame Buffers
-            aspect = RendererResizeFramebuffers(resolution.x, resolution.y);
+            RendererResizeFramebuffers(resolution.x, resolution.y);
             prevResolution = resolution;
         }
 
@@ -414,12 +413,10 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         gameInput.tempInput2.x = (float)inputState.RIGHT.isDown + -(float)(inputState.LEFT.isDown); 
         gameInput.tempInput2.y = (float)inputState.UP.isDown + -(float)(inputState.DOWN.isDown); 
 		gameInput.isMousePressed = inputState.mouseL.isDown;
-		gameInput.viewportSize = vec2i{screenWidth, screenHeight};
-		gameInput.mousePosVP = vec2{inputState.mousePos.x / (float)screenWidth, inputState.mousePos.y / (float)screenHeight};
+		gameInput.viewportSize = vec2i{resolution.x, resolution.y};
+		gameInput.mousePosVP = vec2i{inputState.mousePos.x, inputState.mousePos.y};
 
         gameCode.Update(&gameMemory, &gameInput, &pushBuffer);
-
-        //mat4 projectionMatrix = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
 
 		if (inputState.ESC.isDown)
 		{

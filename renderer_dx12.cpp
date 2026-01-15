@@ -324,7 +324,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
     return res;
 }
 
-float DX12_RendererResizeFrameBuffers(u32 width, u32 height, RendererState & state)
+void DX12_RendererResizeFrameBuffers(u32 width, u32 height, RendererState & state)
 {
     width  < 1 ? 1 : width;
     height < 1 ? 1 : height;
@@ -353,8 +353,6 @@ float DX12_RendererResizeFrameBuffers(u32 width, u32 height, RendererState & sta
     state.backBufferIndex = state.swapChain->GetCurrentBackBufferIndex();
 
     UpdateRenderTargetViews(state.device, state.swapChain, state.rtvDescHeap, state.backBuffers, NUM_FRAMES);
-
-    return (float)width / (float)height;
 }
 
 
@@ -657,9 +655,9 @@ void InitializeRenderer(HWND windowHandle, bool enableVSync, u32 width, u32 heig
     RENDERER_PIPELINE = InitInstancePipelineResources(RENDERER_STATE);
 }
 
-float RendererResizeFramebuffers(u32 width, u32 height)
+void RendererResizeFramebuffers(u32 width, u32 height)
 {
-    return DX12_RendererResizeFrameBuffers(width, height, RENDERER_STATE);
+    DX12_RendererResizeFrameBuffers(width, height, RENDERER_STATE);
 }
 
 int RendererCreateTexture(const ImageData * image)

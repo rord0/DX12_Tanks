@@ -99,6 +99,23 @@ mat4 orthographicProjection(float right, float left, float top, float bottom, fl
     return m;
 }                      
 
+mat4 inverseOrthographicProjection(float right, float left, float top, float bottom, float n, float f)
+{
+    mat4 m = {};
+
+    m.m[0][0] = (right - left) * 0.5f;
+    m.m[1][1] = (top - bottom) * 0.5f;
+    m.m[2][2] = (f - n) * 0.5f;
+
+    m.m[0][3] = (right + left) * 0.5f;
+    m.m[1][3] = (top + bottom) * 0.5f;
+    m.m[2][3] = (f + n) * 0.5f;
+
+    m.m[3][3] = 1.0f;
+
+    return m;
+}
+
 vec4 CalculateUVTransform(AtlasEntry entry, u32 atlasHeight, u32 atlasWidth)
 {
 	vec4 uv = {(f32)entry.width / (f32)atlasWidth, (f32)entry.height / (f32)atlasHeight, (f32)entry.x / (f32)atlasWidth, (f32)entry.y / (f32)atlasHeight};
@@ -244,11 +261,17 @@ vec4 GetHSVSpectrumColor(float time, float speed = 1.0f)
     return HSVtoRGBA(hue, 1.0f, 1.0f);
 }
 
-vec2 MousePosToWorld(vec2i mousePos, mat4 proj)
+vec2 MousePosToWorld(vec2i mousePos, vec2i viewportSize, mat4 proj)
 {
-	// TODO: mouse to NDC
-	// TODO: NDC to PROJ
-	return {0.0f, 0.0f};
+	float aspect = (float)viewportSize.x / (float)viewportSize.y;
+	vec2 mouseNDC;
+	mouseNDC.x = (2.0f * (mousePos.x / (float)viewportSize.x)) - 1.0f;
+	mouseNDC.y = 1.0f - ((2.0f * mousePos.y) / (float)viewportSize.y);
+
+	vec4 mouseClip = {mouseNDC.x, mouseNDC.y, 0.0f, 1.0f};
+	vec4 worldPos = inverseOrthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f) * mouseClip;
+
+	return {worldPos.x, worldPos.y};
 }
 
 Arena ArenaInit(void * memory, size_t size)
@@ -509,12 +532,13 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 	mat4 projection = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
     double time = state->time;
 
+	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, input->viewportSize, projection);
     vec4 color = GetHSVSpectrumColor(time);
 
     float angle = (float)fmod(time * 100, 360.0) * (PI/180.0f);
     float angle2 = (float)fmod(time * 10, 360.0) * (PI/180.0f);
     InstanceData2D gdEasy   = {{sinf(angle), cosf(angle), 0.0f}, {0.8f, 1.0f}, 0.0f};
-    InstanceData2D gdNormal = {{0.75f, 0.75f}, {0.64f, 1.0f}, 1.57079633f};
+    InstanceData2D gdNormal = {{mouseWorld.x, mouseWorld.y, 0.0f}, {0.64f, 1.0f}, 1.57079633f};
     InstanceData2D gdHarder = {{0.0f, sinf(angle), 0.0f}, {0.8f, 1.0f}, angle};
     InstanceData2D gdHard   = {{gdHarder.position.x + sinf(angle) * -0.075f, gdHarder.position.y - cosf(angle) * -0.075f}, {0.57f, 1.0f}, angle};
 
