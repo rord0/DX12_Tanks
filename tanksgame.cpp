@@ -70,6 +70,24 @@ typedef struct
     size_t index;
 } Arena; 
 
+typedef enum {
+	COLLIDER_RECTANGLE,
+	COLLIDER_CIRCLE
+} ColliderType;
+
+typedef struct {
+	vec2 position;
+	vec2 size;
+	f32 rotation;
+	ColliderType type;
+} Collider2D;
+
+typedef struct {
+	f32 penetration;
+	vec2 normal;
+	vec2 point;
+} CollisionData;
+
 typedef struct {
     double time;
     vec3 cameraPos;
@@ -83,6 +101,79 @@ typedef struct {
 	ParticleEmitter explosionEmitter;
 	TankGFX tanks[8]; 
 } GameState;
+
+f32 vec2Dot(vec2 a, vec2 b) { return a.x * b.x + a.y * b.y; }
+
+void GetProjectionIntervalOnAxis(const Collider2D & collider, vec2 axis, f32 * min, f32 * max)
+{
+	if (collider.type == COLLIDER_RECTANGLE)
+	{
+		vec2 xAxis = vec2{-sinf(collider.rotation), cosf(collider.rotation)};
+		vec2 yAxis = vec2{ cosf(collider.rotation), sinf(collider.rotation)};
+
+		float center = vec2Dot(collider.position, axis);
+		float radius = (collider.size.x / 4.0f) * fabs(vec2Dot(xAxis, axis))
+					 + (collider.size.y / 4.0f) * fabs(vec2Dot(yAxis, axis));
+
+		*min = center - radius;
+		*max = center + radius;
+	}
+}
+
+b32 IsCollidingOnAxis(vec2 axis, const Collider2D & a, const Collider2D & b, CollisionData & collisionData)
+{
+	float minA, minB, maxA, maxB;
+	GetProjectionIntervalOnAxis(a, axis, &minA, &maxA);
+	GetProjectionIntervalOnAxis(b, axis, &minB, &maxB);
+
+	if (minA <= minB && maxA >= minB)
+	{
+		collisionData.normal = axis;
+		collisionData.penetration = minB - maxA;
+		collisionData.point = (axis * maxA) + (collisionData.normal * collisionData.penetration);
+		return true;
+	}
+
+	if (minB <= minA && maxB >= minA)
+	{
+		collisionData.normal = -axis;
+		collisionData.penetration = minA - maxB;
+		collisionData.point = (axis * minA) + (collisionData.normal * collisionData.penetration);
+		return true;
+	}
+
+	return false;
+}
+
+b32 IsColliding(const Collider2D & a, const Collider2D & b, CollisionData * outData)
+{
+	if (a.type == COLLIDER_RECTANGLE && b.type == COLLIDER_RECTANGLE)
+	{
+		vec2 axes[4];
+		axes[0] = vec2{-sinf(a.rotation), cosf(a.rotation)};
+		axes[1] = vec2{ cosf(a.rotation), sinf(a.rotation)};
+		axes[2] = vec2{-sinf(b.rotation), cosf(b.rotation)};
+		axes[3] = vec2{ cosf(b.rotation), sinf(b.rotation)};
+
+		CollisionData bestCD;
+		CollisionData currentCD;
+
+		bestCD.penetration = -1.0;
+		for (const vec2 & axis : axes)
+		{
+			if (!IsCollidingOnAxis(axis, a, b, currentCD))
+				return false;
+
+			if (currentCD.penetration >= bestCD.penetration)
+				bestCD = currentCD;
+		}
+
+		if (outData != NULL) *outData = bestCD;
+		return true;
+	}
+
+	return true;
+}
 
 mat4 orthographicProjection(float right, float left, float top, float bottom, float n, float f)
 {
@@ -133,6 +224,12 @@ vec3 ColorHexToRBGNormalized(u32 color)
 
 f32 easeOutExpo(f32 x) { return (x == 1.0f) ? 1.0f : 1.0f - powf(2.0f, -10.0f * x); }
 f32 easeInQuad(f32 x) { return (x * x); }
+
+float Vec2AngleToRad(vec2 A, vec2 B)
+{
+	vec2 d = A - B;
+	return atan2f(d.y, d.x);
+}
 
 float TurretRecoilOffset(float t)
 {
@@ -537,7 +634,7 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
     float angle = (float)fmod(time * 100, 360.0) * (PI/180.0f);
     float angle2 = (float)fmod(time * 10, 360.0) * (PI/180.0f);
-    InstanceData2D gdEasy   = {{sinf(angle), cosf(angle), 0.0f}, {0.8f, 1.0f}, 0.0f};
+    InstanceData2D gdEasy   = {{sinf(angle2), cosf(angle2), 0.0f}, {0.8f, 1.0f}, 0.0f};
     InstanceData2D gdNormal = {{mouseWorld.x, mouseWorld.y, 0.0f}, {0.64f, 1.0f}, 1.57079633f};
     InstanceData2D gdHarder = {{0.0f, sinf(angle), 0.0f}, {0.8f, 1.0f}, angle};
     InstanceData2D gdHard   = {{gdHarder.position.x + sinf(angle) * -0.075f, gdHarder.position.y - cosf(angle) * -0.075f}, {0.57f, 1.0f}, angle};
@@ -547,11 +644,31 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     state->tanks[0].position.x += input->tempInput.x * input->deltaTime;
     state->tanks[0].position.y += input->tempInput.y * input->deltaTime;
 	state->tanks[0].rotation = (angle2);
-	state->tanks[0].turretRot= angle;
+	state->tanks[0].turretRot = Vec2AngleToRad(state->tanks[0].position, mouseWorld);
     state->tanks[1].position.x += input->tempInput2.x * input->deltaTime;
     state->tanks[1].position.y += input->tempInput2.y * input->deltaTime;
+    state->tanks[1].rotation = angle;
+	
+	Collider2D a = {.position = state->tanks[0].position,
+					.size = vec2{0.8f, 0.8f},
+					.rotation = state->tanks[0].rotation,
+					.type = COLLIDER_RECTANGLE};
+
+	Collider2D b = {.position = state->tanks[1].position,
+					.size = vec2{0.8f, 0.8f},
+					.rotation = state->tanks[1].rotation,
+					.type = COLLIDER_RECTANGLE};
 
 	vec4 clearColor = {0.5f, 0.714f, 0.486f, 1.0f};
+
+	if (IsColliding(a, b, NULL))
+	{
+		DebugGeoInstanceData debugHitbox = {vec3{state->tanks[0].position.x, state->tanks[0].position.y, 0.0f}, {0.8f, 0.8f}, {1.0f, 0.0f, 0.0f}, state->tanks[0].rotation, 0.05f};
+		DebugGeoInstanceData debugHitbox2 = {vec3{state->tanks[1].position.x, state->tanks[1].position.y, 0.0f}, {0.8f, 0.8f}, {1.0f, 0.0f, 0.0f}, state->tanks[1].rotation, 0.05f};
+		RendererPushRectangle(renderCommands, debugHitbox, 33);
+		RendererPushRectangle(renderCommands, debugHitbox2, 33);
+	}
+
 	RendererPushSetClear(renderCommands, clearColor);
 	RendererPushSetProjection(renderCommands, projection);
 
