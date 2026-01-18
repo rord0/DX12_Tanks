@@ -32,11 +32,6 @@ mat4 orthographicProjection(float right, float left, float top, float bottom, fl
     return m;
 }                      
 
-typedef struct
-{
-    bool isDown;
-    bool wasDown;
-} KeyInput;
 
 typedef struct
 {
@@ -408,10 +403,14 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         }
 
 		gameInput.deltaTime = deltaTime;
-        gameInput.tempInput.x = (float)inputState.D.isDown + -(float)(inputState.A.isDown); 
-        gameInput.tempInput.y = (float)inputState.W.isDown + -(float)(inputState.S.isDown); 
-        gameInput.tempInput2.x = (float)inputState.RIGHT.isDown + -(float)(inputState.LEFT.isDown); 
-        gameInput.tempInput2.y = (float)inputState.UP.isDown + -(float)(inputState.DOWN.isDown); 
+        gameInput.WASD[0]  = inputState.W;
+        gameInput.WASD[1]  = inputState.A;
+        gameInput.WASD[2]  = inputState.S;
+        gameInput.WASD[3]  = inputState.D;
+        gameInput.ARROWS[0]  = inputState.UP;
+        gameInput.ARROWS[1]  = inputState.LEFT;
+        gameInput.ARROWS[2]  = inputState.DOWN;
+        gameInput.ARROWS[3]  = inputState.RIGHT;
 		gameInput.isMousePressed = inputState.mouseL.isDown;
 		gameInput.viewportSize = vec2i{resolution.x, resolution.y};
 		gameInput.mousePosVP = vec2i{inputState.mousePos.x, inputState.mousePos.y};

@@ -12,7 +12,10 @@
 #include "render_commands.cpp"
 
 #define EXPORT extern "C" __declspec(dllexport)
+#define MAX_PLAYERS 8
 #define TANK_MAX_HEALTH 100
+#define TANK_ROTATION_SPEED 1.8
+#define TANK_FIRE_RATE 1.0f
 
 RendererPushBuffer * DEBUG_RENDER_CMDS;
 
@@ -92,6 +95,16 @@ typedef struct {
 } CollisionData;
 
 typedef struct {
+	bool active;
+	u16 playerID;
+	u16 health;
+	vec2 position;
+	f32 turretRot;
+	f32 rotation;
+	Collider2D collider;
+} Tank;
+
+typedef struct {
     double time;
     vec3 cameraPos;
 	Arena permArena;
@@ -103,59 +116,88 @@ typedef struct {
 	ParticleEmitter turretFireEmitter;
 	ParticleEmitter explosionEmitter;
 	TankGFX tanks[8]; 
+	Tank tanks2[8];
 } GameState;
 
 f32 vec2Dot(vec2 a, vec2 b) { return a.x * b.x + a.y * b.y; }
 f32 vec2Dist(vec2 a, vec2 b) { return sqrtf((a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y)); }
 vec2 vec2Norm(vec2 v) { f32 mag = sqrtf(v.x * v.x + v.y * v.y); return {v.x / mag, v.y / mag }; }
+vec2 vec2Rotate(vec2 v, f32 angle)
+{
+	float cosA = cosf(angle);
+    float sinA = sinf(angle);
+	return {v.x * cosA - v.y * sinA, v.x * sinA + v.y * cosA};
+}
 
-void GetProjectionIntervalOnAxis(const Collider2D & collider, vec2 axis, f32 * min, f32 * max)
+void RectGetMinMaxPointsOnAxis(const Collider2D & collider, const vec2 axis, vec2 * min, vec2 * max)
 {
 	if (collider.type == COLLIDER_RECTANGLE)
 	{
-		vec2 yAxis = vec2{-sinf(collider.rotation), cosf(collider.rotation)};
 		vec2 xAxis = vec2{ cosf(collider.rotation), sinf(collider.rotation)};
+		vec2 yAxis = vec2{-sinf(collider.rotation), cosf(collider.rotation)};
 
-		float center = vec2Dot(collider.position, axis);
-		float radius = (collider.size.x / 4.0f) * fabs(vec2Dot(xAxis, axis))
-					 + (collider.size.y / 4.0f) * fabs(vec2Dot(yAxis, axis));
+		f32 halfExtentX = collider.size.x / 4.0f;
+		f32 halfExtentY = collider.size.y / 4.0f;
 
-		*min = center - radius;
-		*max = center + radius;
-	}
+		vec2 vertices[4];
+		vertices[0] = collider.position + (xAxis * halfExtentX) + (yAxis * halfExtentY);
+		vertices[1] = collider.position + (xAxis * halfExtentX) - (yAxis * halfExtentY);
+		vertices[2] = collider.position - (xAxis * halfExtentX) + (yAxis * halfExtentY);
+		vertices[3] = collider.position - (xAxis * halfExtentX) - (yAxis * halfExtentY);
 
-	if (collider.type == COLLIDER_CIRCLE)
-	{
-		float center = vec2Dot(collider.position, axis);
-		float radius = collider.size.x / 4.0f;
-		*min = center - radius;
-		*max = center + radius;
+		f32 minProj = vec2Dot(vertices[0], axis);
+		f32 maxProj = minProj;
+		*min = vertices[0];
+		*max = vertices[0];
+
+		for (vec2 v : vertices)
+		{
+			f32 p = vec2Dot(v, axis);
+			if (p < minProj)
+			{
+				minProj = p;
+				*min = v;
+			}
+			if (p > maxProj)
+			{
+				maxProj = p;
+				*max = v;
+			}
+		}
 	}
 }
 
 b32 IsCollidingOnAxis(vec2 axis, const Collider2D & a, const Collider2D & b, CollisionData & collisionData)
 {
-	float minA, minB, maxA, maxB;
-	GetProjectionIntervalOnAxis(a, axis, &minA, &maxA);
-	GetProjectionIntervalOnAxis(b, axis, &minB, &maxB);
+	vec2 minVertA, minVertB, maxVertA, maxVertB;
+	RectGetMinMaxPointsOnAxis(a, axis, &minVertA, &maxVertA);
+	RectGetMinMaxPointsOnAxis(b, axis, &minVertB, &maxVertB);
 
-	if (minA <= minB && maxA >= minB)
-	{
-		collisionData.normal = axis;
-		collisionData.penetration = minB - maxA;
-		collisionData.point = (axis * maxA) + (collisionData.normal * collisionData.penetration);
-		return true;
-	}
+	float minA = vec2Dot(minVertA, axis);
+	float maxA = vec2Dot(maxVertA, axis);
+	float minB = vec2Dot(minVertB, axis);
+	float maxB = vec2Dot(maxVertB, axis);
 
-	if (minB <= minA && maxB >= minA)
+	if (maxA < minB || maxB < minA) { return false; }
+
+	float overlapA = maxA - minB;
+	float overlapB = maxB - minA;
+
+	if (overlapA < overlapB)
 	{
 		collisionData.normal = -axis;
-		collisionData.penetration = minA - maxB;
-		collisionData.point = (axis * minA) + (collisionData.normal * collisionData.penetration);
-		return true;
+        collisionData.penetration = abs(overlapA);
 	}
+	else
+	{
+		collisionData.normal = axis;
+		collisionData.penetration = abs(overlapB);
+	}
+	collisionData.point = collisionData.normal;
 
-	return false;
+
+	return true;
+
 }
 
 vec2 ClosestPointOnRect(Collider2D rect, vec2 point)
@@ -174,7 +216,7 @@ vec2 ClosestPointOnRect(Collider2D rect, vec2 point)
     py = std::clamp(py, -hy, hy);
 
 	vec2 p = rect.position + xAxis * px + yAxis * py;
-    RendererPushCircle(DEBUG_RENDER_CMDS, vec3{p.x, p.y, 0.0f}, 0.0f, {0.1f,0.1f}, {1.0f, 0.0f, 0.0f}, 1.0f, 30);
+    //RendererPushCircle(DEBUG_RENDER_CMDS, vec3{p.x, p.y, 0.0f}, 0.0f, {0.1f,0.1f}, {1.0f, 0.0f, 0.0f}, 1.0f, 30);
     return p;
 }
 
@@ -191,16 +233,17 @@ b32 IsColliding(const Collider2D & a, const Collider2D & b, CollisionData * outD
 		CollisionData bestCD;
 		CollisionData currentCD;
 
-		bestCD.penetration = -1.0;
+		bestCD.penetration = 10000.0f;
 		for (const vec2 & axis : axes)
 		{
 			if (!IsCollidingOnAxis(axis, a, b, currentCD))
 				return false;
 
-			if (currentCD.penetration >= bestCD.penetration)
+			if (currentCD.penetration <= bestCD.penetration)
 				bestCD = currentCD;
 		}
 
+		RendererPushCircle(DEBUG_RENDER_CMDS, vec3{bestCD.normal.x, bestCD.normal.y, 0.0f}, 0.0f, {0.1f,0.1f}, {1.0f, 0.0f, 0.0f}, 1.0f, 30);
 		if (outData != NULL) *outData = bestCD;
 		return true;
 	}
@@ -358,10 +401,8 @@ void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 	DrawHealthbar(cmdBuffer, vec2{tank.position.x, tank.position.y + 0.3f}, ((float)tank.health / (float)TANK_MAX_HEALTH), tank.healthLerp);
 
 	// DEBUG VISUALS
-    DebugGeoInstanceData debugHitbox = {vec3{tank.position.x, tank.position.y, 0.0f}, {0.8f, 0.8f}, {0.0f, 1.0f, 0.0f}, tankRot, 0.025f};
     RendererPushCircle(cmdBuffer, vec3{turretPos.x, turretPos.y, 0}, 0, {0.05f,0.05f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
     RendererPushCircle(cmdBuffer, vec3{turretCenter.x, turretCenter.y, 0}, 0, {0.05f,0.05f}, {1.0f, 1.0f, 0.0f}, 1.0f, 30);
-    RendererPushRectangle(cmdBuffer, debugHitbox, 30);
 }
 
 void DrawSpriteFrame(RendererPushBuffer * cmdBuffer, vec2 position, vec2 scale, f32 rotation, SpriteSheet * sheet, u32 spriteIndex)
@@ -537,7 +578,38 @@ void SimulateParticles(ParticleEmitter * emitter, double deltaTime)
 	}
 }
 
-void UpdateTank(TankGFX * tank, double deltaTime)
+void UpdateTank(Tank * tank, u8 input, f32 turretRot, double deltaTime)
+{
+	vec2i inputAxis = {0, 0};
+	bool shootPressed = ((input >> 4) & 1);
+	if ((input >> 0) & 1) { inputAxis.y += 1; } // UP
+	if ((input >> 1) & 1) { inputAxis.x -= 1; } // LEFT
+	if ((input >> 2) & 1) { inputAxis.y -= 1; } // DOWN
+	if ((input >> 3) & 1) { inputAxis.x += 1; } // RIGHT
+	
+	tank->rotation -= inputAxis.x * TANK_ROTATION_SPEED * deltaTime;
+	tank->turretRot = tank->rotation;
+	vec2 tankForward = vec2Rotate({-1.0f, 0.0f}, tank->rotation);
+	tank->position += tankForward * inputAxis.y * deltaTime;
+
+	tank->collider.position = tank->position;
+	tank->collider.rotation = tank->rotation;
+
+	// Check if shoot pressed and can fire.
+}
+
+void DEBUG_SyncTanks(Tank * tanks, TankGFX * tankGFX)
+{
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		tankGFX[i].position  = tanks[i].position;
+		tankGFX[i].rotation  = tanks[i].rotation;
+		tankGFX[i].turretRot = tanks[i].turretRot;
+		tankGFX[i].health	 = tanks[i].health;
+	}
+}
+
+void UpdateTankGFX(TankGFX * tank, double deltaTime)
 {
 	if (!(tank->active)) { return; }
 
@@ -666,6 +738,13 @@ EXPORT GAME_START_FUNCTION(start)
 	state->tanks[0].style.colorID = 1;
 	state->tanks[1].style.colorID = 2;
 
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		state->tanks2[i].collider.type = COLLIDER_RECTANGLE;
+		state->tanks2[i].collider.size = {0.75f, 0.65f};
+		state->tanks2[i].health = TANK_MAX_HEALTH;
+	}
+
 	const f32 spritesheetAnimFPS = 20;
 	const f32 fireAnimDuration = (1.0 / spritesheetAnimFPS) * state->fireEffectSheet.numFrames;
 	state->turretFireEmitter.startLifetime = fireAnimDuration;
@@ -698,35 +777,28 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     InstanceData2D gdHarder = {{0.0f, sinf(angle), 0.0f}, {0.8f, 1.0f}, angle};
     InstanceData2D gdHard   = {{gdHarder.position.x + sinf(angle) * -0.075f, gdHarder.position.y - cosf(angle) * -0.075f}, {0.57f, 1.0f}, angle};
 
+	u8 inputA = 0;
+	if (input->WASD[0].isDown) {inputA |= 1 << 0; };
+	if (input->WASD[1].isDown) {inputA |= 1 << 1; };
+	if (input->WASD[2].isDown) {inputA |= 1 << 2; };
+	if (input->WASD[3].isDown) {inputA |= 1 << 3; };
+	if (input->isMousePressed) {inputA |= 1 << 4; };
+	u8 inputB = 0;
+	if (input->ARROWS[0].isDown) {inputB |= 1 << 0; };
+	if (input->ARROWS[1].isDown) {inputB |= 1 << 1; };
+	if (input->ARROWS[2].isDown) {inputB |= 1 << 2; };
+	if (input->ARROWS[3].isDown) {inputB |= 1 << 3; };
+	if (input->isMousePressed)   {inputB |= 1 << 4; };
 
-	state->tanks[0].style.colorID = 3;
-    state->tanks[0].position.x += input->tempInput.x * input->deltaTime;
-    state->tanks[0].position.y += input->tempInput.y * input->deltaTime;
-	state->tanks[0].rotation = (angle2);
-	state->tanks[0].turretRot = Vec2AngleToRad(state->tanks[0].position, mouseWorld);
-    state->tanks[1].position.x += input->tempInput2.x * input->deltaTime;
-    state->tanks[1].position.y += input->tempInput2.y * input->deltaTime;
     state->tanks[1].rotation = angle;
 	
-	Collider2D a = {.position = state->tanks[0].position,
-					.size = vec2{1.5f, 0.8f},
-					.rotation = state->tanks[0].rotation,
-					.type = COLLIDER_RECTANGLE};
-
-	Collider2D b = {.position = state->tanks[1].position,
-					.size = vec2{0.8f, 0.8f},
-					.rotation = state->tanks[1].rotation,
-					.type = COLLIDER_RECTANGLE};
-
 	Collider2D c = {.position = mouseWorld,
 					.size = vec2{0.5f, 0.5f},
 					.rotation = 0,
 					.type = COLLIDER_CIRCLE};
 
 	vec4 clearColor = {0.5f, 0.714f, 0.486f, 1.0f};
-
-	DEBUG_DrawCollider(renderCommands, &a, IsColliding(a, c, NULL));
-	DEBUG_DrawCollider(renderCommands, &b, IsColliding(a, b, NULL));
+	CollisionData cd;
 
 	RendererPushSetClear(renderCommands, clearColor);
 	RendererPushSetProjection(renderCommands, projection);
@@ -745,9 +817,24 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
 	if (input->isMousePressed) { TankPlayFireEffects(&state->tanks[0], state); }
 
-	for (int i = 0; i < 8; i++)
+	UpdateTank(&state->tanks2[0], inputA, Vec2AngleToRad(state->tanks2[0].position, mouseWorld), input->deltaTime);
+	UpdateTank(&state->tanks2[1], inputB, Vec2AngleToRad(state->tanks2[1].position, mouseWorld), input->deltaTime);
+
+	bool tanksColliding = IsColliding(state->tanks2[0].collider, state->tanks2[1].collider, &cd);
+	//DEBUG_DrawCollider(renderCommands, &state->tanks2->collider, IsColliding(state->tanks2[0].collider, c, NULL));
+	DEBUG_DrawCollider(renderCommands, &state->tanks2[1].collider, tanksColliding);
+	if (tanksColliding)
 	{
-		UpdateTank(&state->tanks[i], input->deltaTime);
+		vec2 correction = cd.normal * (cd.penetration * 0.5f);
+		state->tanks2[0].position += correction;
+		state->tanks2[1].position -= correction;
+	}
+
+	DEBUG_SyncTanks(state->tanks2, state->tanks);
+
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		UpdateTankGFX(&state->tanks[i], input->deltaTime);
 		DrawTank(state->tanks[i], renderCommands, state);
 	}
 }

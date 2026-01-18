@@ -167,9 +167,15 @@ typedef struct {
     PlatformFreeFileFunction * platformFreeFile;
 } GameMemory;
 
+typedef struct
+{
+    bool isDown;
+    bool wasDown;
+} KeyInput;
+
 typedef struct {
-	vec2 tempInput;
-	vec2 tempInput2;
+	KeyInput WASD[4];
+	KeyInput ARROWS[4];
 	bool isMousePressed;
 	double deltaTime;
 	vec2i viewportSize;
