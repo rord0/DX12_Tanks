@@ -7,11 +7,14 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <algorithm>
 
 #include "render_commands.cpp"
 
 #define EXPORT extern "C" __declspec(dllexport)
 #define TANK_MAX_HEALTH 100
+
+RendererPushBuffer * DEBUG_RENDER_CMDS;
 
 typedef struct {
     u32 x;
@@ -103,18 +106,28 @@ typedef struct {
 } GameState;
 
 f32 vec2Dot(vec2 a, vec2 b) { return a.x * b.x + a.y * b.y; }
+f32 vec2Dist(vec2 a, vec2 b) { return sqrtf((a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y)); }
+vec2 vec2Norm(vec2 v) { f32 mag = sqrtf(v.x * v.x + v.y * v.y); return {v.x / mag, v.y / mag }; }
 
 void GetProjectionIntervalOnAxis(const Collider2D & collider, vec2 axis, f32 * min, f32 * max)
 {
 	if (collider.type == COLLIDER_RECTANGLE)
 	{
-		vec2 xAxis = vec2{-sinf(collider.rotation), cosf(collider.rotation)};
-		vec2 yAxis = vec2{ cosf(collider.rotation), sinf(collider.rotation)};
+		vec2 yAxis = vec2{-sinf(collider.rotation), cosf(collider.rotation)};
+		vec2 xAxis = vec2{ cosf(collider.rotation), sinf(collider.rotation)};
 
 		float center = vec2Dot(collider.position, axis);
 		float radius = (collider.size.x / 4.0f) * fabs(vec2Dot(xAxis, axis))
 					 + (collider.size.y / 4.0f) * fabs(vec2Dot(yAxis, axis));
 
+		*min = center - radius;
+		*max = center + radius;
+	}
+
+	if (collider.type == COLLIDER_CIRCLE)
+	{
+		float center = vec2Dot(collider.position, axis);
+		float radius = collider.size.x / 4.0f;
 		*min = center - radius;
 		*max = center + radius;
 	}
@@ -145,6 +158,26 @@ b32 IsCollidingOnAxis(vec2 axis, const Collider2D & a, const Collider2D & b, Col
 	return false;
 }
 
+vec2 ClosestPointOnRect(Collider2D rect, vec2 point)
+{
+	vec2 yAxis = vec2{-sinf(rect.rotation), cosf(rect.rotation)};
+	vec2 xAxis = vec2{ cosf(rect.rotation), sinf(rect.rotation)};
+
+    float hx = rect.size.x * 0.25f;
+    float hy = rect.size.y * 0.25f;
+
+	vec2 dir = point - rect.position;
+    float px = vec2Dot(dir, xAxis);
+    float py = vec2Dot(dir, yAxis);
+
+	px = std::clamp(px, -hx, hx);
+    py = std::clamp(py, -hy, hy);
+
+	vec2 p = rect.position + xAxis * px + yAxis * py;
+    RendererPushCircle(DEBUG_RENDER_CMDS, vec3{p.x, p.y, 0.0f}, 0.0f, {0.1f,0.1f}, {1.0f, 0.0f, 0.0f}, 1.0f, 30);
+    return p;
+}
+
 b32 IsColliding(const Collider2D & a, const Collider2D & b, CollisionData * outData)
 {
 	if (a.type == COLLIDER_RECTANGLE && b.type == COLLIDER_RECTANGLE)
@@ -170,6 +203,20 @@ b32 IsColliding(const Collider2D & a, const Collider2D & b, CollisionData * outD
 
 		if (outData != NULL) *outData = bestCD;
 		return true;
+	}
+	if (a.type == COLLIDER_RECTANGLE && b.type == COLLIDER_CIRCLE)
+	{
+		vec2 closestPoint = ClosestPointOnRect(a, b.position);
+		f32 dist = vec2Dist(closestPoint, b.position);
+
+		if (dist <= 0.5f / 4.0f)
+		{
+			CollisionData cd;
+			if (outData != NULL) *outData = cd;
+			return true;
+		}
+
+		return false;
 	}
 
 	return true;
@@ -571,6 +618,17 @@ void DrawParticles(RendererPushBuffer * renderCmds, GameState * state)
 	DrawExplosionEffects(renderCmds, state);
 }
 
+void DEBUG_DrawCollider(RendererPushBuffer * renderCmds, Collider2D * collider, b32 colliding)
+{
+	vec3 color = colliding ? vec3{1.0f, 0.0f, 0.0f} : vec3{0.0f, 1.0f, 0.0f};
+	if (collider->type == COLLIDER_RECTANGLE)
+	{
+		DebugGeoInstanceData rect = {vec3{collider->position.x, collider->position.y, 0.0f},
+			{collider->size.x, collider->size.y}, color, collider->rotation, 0.05f};
+		RendererPushRectangle(renderCmds, rect, 33);
+	}
+}
+
 EXPORT GAME_START_FUNCTION(start)
 {
     GameState * state = (GameState*)gameMemory->permStorage;
@@ -628,14 +686,15 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
 	mat4 projection = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
     double time = state->time;
+	DEBUG_RENDER_CMDS = renderCommands;
 
 	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, input->viewportSize, projection);
     vec4 color = GetHSVSpectrumColor(time);
 
     float angle = (float)fmod(time * 100, 360.0) * (PI/180.0f);
     float angle2 = (float)fmod(time * 10, 360.0) * (PI/180.0f);
-    InstanceData2D gdEasy   = {{sinf(angle2), cosf(angle2), 0.0f}, {0.8f, 1.0f}, 0.0f};
-    InstanceData2D gdNormal = {{mouseWorld.x, mouseWorld.y, 0.0f}, {0.64f, 1.0f}, 1.57079633f};
+    InstanceData2D gdEasy   = {{mouseWorld.x, mouseWorld.y, 0.0f}, {0.5f, 0.5f}, 0.0f};
+    InstanceData2D gdNormal = {{0, 0, 0.0f}, {0.64f, 1.0f}, 1.57079633f};
     InstanceData2D gdHarder = {{0.0f, sinf(angle), 0.0f}, {0.8f, 1.0f}, angle};
     InstanceData2D gdHard   = {{gdHarder.position.x + sinf(angle) * -0.075f, gdHarder.position.y - cosf(angle) * -0.075f}, {0.57f, 1.0f}, angle};
 
@@ -650,7 +709,7 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     state->tanks[1].rotation = angle;
 	
 	Collider2D a = {.position = state->tanks[0].position,
-					.size = vec2{0.8f, 0.8f},
+					.size = vec2{1.5f, 0.8f},
 					.rotation = state->tanks[0].rotation,
 					.type = COLLIDER_RECTANGLE};
 
@@ -659,20 +718,21 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 					.rotation = state->tanks[1].rotation,
 					.type = COLLIDER_RECTANGLE};
 
+	Collider2D c = {.position = mouseWorld,
+					.size = vec2{0.5f, 0.5f},
+					.rotation = 0,
+					.type = COLLIDER_CIRCLE};
+
 	vec4 clearColor = {0.5f, 0.714f, 0.486f, 1.0f};
 
-	if (IsColliding(a, b, NULL))
-	{
-		DebugGeoInstanceData debugHitbox = {vec3{state->tanks[0].position.x, state->tanks[0].position.y, 0.0f}, {0.8f, 0.8f}, {1.0f, 0.0f, 0.0f}, state->tanks[0].rotation, 0.05f};
-		DebugGeoInstanceData debugHitbox2 = {vec3{state->tanks[1].position.x, state->tanks[1].position.y, 0.0f}, {0.8f, 0.8f}, {1.0f, 0.0f, 0.0f}, state->tanks[1].rotation, 0.05f};
-		RendererPushRectangle(renderCommands, debugHitbox, 33);
-		RendererPushRectangle(renderCommands, debugHitbox2, 33);
-	}
+	DEBUG_DrawCollider(renderCommands, &a, IsColliding(a, c, NULL));
+	DEBUG_DrawCollider(renderCommands, &b, IsColliding(a, b, NULL));
 
 	RendererPushSetClear(renderCommands, clearColor);
 	RendererPushSetProjection(renderCommands, projection);
 
     RendererPushCircle(renderCommands, gdNormal.position, gdEasy.rotation, {0.1f,0.1f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
+    RendererPushCircle(renderCommands, gdEasy.position, gdEasy.rotation, {0.5f,0.5f}, {0.0f, 1.0f, 0.0f}, 0.1f, 30);
 
     RendererPushImage(renderCommands, 2, gdEasy, 4);
     RendererPushImage(renderCommands, state->extraTextureHandle, gdEasy, 0);
