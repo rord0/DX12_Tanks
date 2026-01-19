@@ -60,9 +60,9 @@ void RendererPushRectangle(RendererPushBuffer * pb, DebugGeoInstanceData instanc
     PushRenderSortEntry(pb, sortEntry);
 }
 
-void RendererPushLine(RendererPushBuffer * pb, vec3 startPos, vec3 endPos, vec3 color, float width, u16 layer)
+void RendererPushLine(RendererPushBuffer * pb, vec2 startPos, vec2 endPos, vec3 color, float width, u16 layer)
 {
-    LineInstanceData instanceData = {startPos, endPos, color, width};
+    LineInstanceData instanceData = {{startPos.x, startPos.y, 0.0f}, {endPos.x, endPos.y, 0.0f}, color, width};
     RenderEntryLine entry = {RENDER_ENTRY_TYPE_LINE, instanceData};
     u32 entryOffset = PushRenderEntry(pb, entry);
 

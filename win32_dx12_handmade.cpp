@@ -1,3 +1,4 @@
+#include "core.h"
 #include "includes.h"
 
 #include "os_win32.cpp"
@@ -44,6 +45,8 @@ typedef struct
     KeyInput LEFT;
     KeyInput RIGHT;
     KeyInput ESC;
+	KeyInput SPACE;
+	KeyInput ENTER;
     KeyInput mouseL;
 	vec2i mousePos;
 } InputState;
@@ -101,6 +104,16 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
                     inputState.ESC.isDown = true;
                     inputState.ESC.wasDown = (msg.lParam & (1 << 30)) != 0;
                 }
+                if (msg.wParam == VK_SPACE)
+                {
+                    inputState.SPACE.isDown = true;
+                    inputState.SPACE.wasDown = (msg.lParam & (1 << 30)) != 0;
+                }
+                if (msg.wParam == VK_RETURN)
+                {
+                    inputState.ENTER.isDown = true;
+                    inputState.ENTER.wasDown = (msg.lParam & (1 << 30)) != 0;
+                }
                 break;
             case WM_KEYUP:
                 if (msg.wParam == 'W')
@@ -142,6 +155,16 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
                 {
                     inputState.RIGHT.isDown = false;
                     inputState.RIGHT.wasDown = true;
+                }
+                if (msg.wParam == VK_SPACE)
+                {
+                    inputState.SPACE.isDown = false;
+                    inputState.SPACE.wasDown = true;
+                }
+                if (msg.wParam == VK_RETURN)
+                {
+                    inputState.ENTER.isDown = false;
+                    inputState.ENTER.wasDown = true;
                 }
                 break;
 			case WM_LBUTTONDOWN:
@@ -411,6 +434,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         gameInput.ARROWS[1]  = inputState.LEFT;
         gameInput.ARROWS[2]  = inputState.DOWN;
         gameInput.ARROWS[3]  = inputState.RIGHT;
+		gameInput.isSpacePressed = inputState.SPACE.isDown;
+		gameInput.isEnterPressed = inputState.ENTER.isDown;
 		gameInput.isMousePressed = inputState.mouseL.isDown;
 		gameInput.viewportSize = vec2i{resolution.x, resolution.y};
 		gameInput.mousePosVP = vec2i{inputState.mousePos.x, inputState.mousePos.y};

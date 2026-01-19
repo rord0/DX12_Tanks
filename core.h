@@ -177,6 +177,8 @@ typedef struct {
 	KeyInput WASD[4];
 	KeyInput ARROWS[4];
 	bool isMousePressed;
+	bool isEnterPressed;
+	bool isSpacePressed;
 	double deltaTime;
 	vec2i viewportSize;
 	vec2i mousePosVP;

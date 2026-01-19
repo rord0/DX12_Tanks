@@ -8,14 +8,16 @@
 #include <cstddef>
 #include <cstdio>
 #include <algorithm>
+#include <limits>
 
 #include "render_commands.cpp"
 
 #define EXPORT extern "C" __declspec(dllexport)
 #define MAX_PLAYERS 8
 #define TANK_MAX_HEALTH 100
-#define TANK_ROTATION_SPEED 1.8
-#define TANK_FIRE_RATE 1.0f
+#define TANK_ROTATION_SPEED 1.8f
+#define TANK_MOVEMENT_SPEED 0.5f
+#define TANK_FIRE_RATE 0.8f
 
 RendererPushBuffer * DEBUG_RENDER_CMDS;
 
@@ -101,7 +103,9 @@ typedef struct {
 	vec2 position;
 	f32 turretRot;
 	f32 rotation;
+	f32 lastFireTime;
 	Collider2D collider;
+	u8 input;
 } Tank;
 
 typedef struct {
@@ -254,8 +258,6 @@ b32 IsColliding(const Collider2D & a, const Collider2D & b, CollisionData * outD
 
 		if (dist <= 0.5f / 4.0f)
 		{
-			CollisionData cd;
-			if (outData != NULL) *outData = cd;
 			return true;
 		}
 
@@ -263,6 +265,59 @@ b32 IsColliding(const Collider2D & a, const Collider2D & b, CollisionData * outD
 	}
 
 	return true;
+}
+
+bool IsLinesColliding(vec2 startA, vec2 endA, vec2 startB, vec2 endB, vec2 * outIntersection)
+{
+	float uA = ((endB.x-startB.x)*(startA.y-startB.y) - (endB.y-startB.y)*(startA.x-startB.x)) / ((endB.y-startB.y)*(endA.x-startA.x) - (endB.x-startB.x)*(endA.y-startA.y));
+	float uB = ((endA.x-startA.x)*(startA.y-startB.y) - (endA.y-startA.y)*(startA.x-startB.x)) / ((endB.y-startB.y)*(endA.x-startA.x) - (endB.x-startB.x)*(endA.y-startA.y));
+
+	if (uA >= 0 && uA <= 1 && uB >= 0 && uB <= 1)
+	{
+		float intersectionX = startA.x + (uA * (endA.x-startA.x));
+		float intersectionY = startA.y + (uA * (endA.y-startA.y));
+		if (outIntersection != NULL) *outIntersection = vec2{intersectionX, intersectionY};
+		return true;
+	}
+	return false;
+}
+
+bool IsLineColliding(const Collider2D & collider, vec2 start, vec2 end, vec2 * outPoint)
+{
+	vec2 xAxis = vec2{ cosf(collider.rotation), sinf(collider.rotation)};
+	vec2 yAxis = vec2{-sinf(collider.rotation), cosf(collider.rotation)};
+
+	f32 halfExtentX = collider.size.x / 4.0f;
+	f32 halfExtentY = collider.size.y / 4.0f;
+
+	vec2 vertices[4];
+	vertices[0] = collider.position + (xAxis * halfExtentX) + (yAxis * halfExtentY);
+	vertices[1] = collider.position - (xAxis * halfExtentX) + (yAxis * halfExtentY);
+	vertices[2] = collider.position - (xAxis * halfExtentX) - (yAxis * halfExtentY);
+	vertices[3] = collider.position + (xAxis * halfExtentX) - (yAxis * halfExtentY);
+
+	bool colliding = false;
+	f32 closestDist = std::numeric_limits<float>::max();;
+	vec2 closestPoint= {0,0};
+	for (int i = 0; i < 4; i++)
+	{
+		vec2 intersection;
+		if (IsLinesColliding(start, end, vertices[i], vertices[(i + 1) % 4], &intersection))
+		{
+			colliding = true;
+			f32 dist= vec2Dist(start, intersection);
+			if (dist <= closestDist)
+			{
+				closestPoint = intersection;
+				closestDist = dist;
+			}
+			RendererPushCircle(DEBUG_RENDER_CMDS, {intersection.x, intersection.y, 0.0f}, 0.0f, {0.1f,0.1f}, {1.0f, 0.0f, 0.0f}, 1.0f, 30);
+		}
+	}
+
+	if (colliding && outPoint != NULL) { *outPoint = closestPoint; }
+
+	return colliding;
 }
 
 mat4 orthographicProjection(float right, float left, float top, float bottom, float n, float f)
@@ -578,24 +633,105 @@ void SimulateParticles(ParticleEmitter * emitter, double deltaTime)
 	}
 }
 
-void UpdateTank(Tank * tank, u8 input, f32 turretRot, double deltaTime)
+int GetTankIndex(u16 playerID, GameState * state)
 {
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		if (state->tanks[i].playerID == playerID) { return i; }
+	}
+	return -1;
+}
+
+void TankDamage(Tank * tank, u16 amount)
+{
+	if (tank->health > amount)
+	{
+		tank->health -= amount;
+	}
+	else
+	{
+		tank->health = TANK_MAX_HEALTH;
+	}
+}
+
+void TankPlayFireEffects(u16 playerID, vec2 hitPosition, GameState * state)
+{
+	int tankIndex = GetTankIndex(playerID, state);
+	if (tankIndex == -1) { return; }
+
+	TankGFX * tank = &state->tanks[tankIndex];
+	tank->turretOffset = 0.0f;
+	vec2 particleDir = vec2{cosf(tank->turretRot), sinf(tank->turretRot)};
+	vec2 tankDir = vec2{cosf(tank->rotation),  sinf(tank->rotation)};
+	vec2 turretCenter = (-tankDir * -0.03f) + tank->position;
+	vec2 newPos = turretCenter - particleDir * 0.5f;
+	EmitParticles(&state->turretFireEmitter, newPos, particleDir);
+	EmitParticles(&state->explosionEmitter, hitPosition, particleDir);
+}
+
+void TankShoot(Tank * tank, GameState * state)
+{
+	vec2 turretDir = vec2{cosf(tank->turretRot), sinf(tank->turretRot)};
+	vec2 tankDir   = vec2{cosf(tank->rotation),  sinf(tank->rotation)};
+	vec2 turretCenter = tank->position + (tankDir * -0.03f);
+	vec2 turretPos = turretCenter - (turretDir * 0.075f); // Offset backwards
+											//
+	vec2 lineStart = turretCenter;
+	vec2 lineEnd =  turretCenter + (-turretDir*1.5f);
+
+	Tank * hitTank = NULL;
+	vec2 hitPos = lineEnd;
+	f32 closestDist = std::numeric_limits<float>::max();
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		Tank * otherTank = &state->tanks2[i];
+		if (otherTank->active && otherTank->playerID != tank->playerID)
+		{
+			vec2 collisionPoint;
+			if (IsLineColliding(otherTank->collider, lineStart, lineEnd, &collisionPoint))
+			{
+				f32 dist = vec2Dist(collisionPoint, lineStart);
+				if (dist < closestDist)
+				{
+					closestDist = dist;
+					hitPos = collisionPoint;
+					hitTank = otherTank;
+				}
+			}
+		}
+	}
+	if (hitTank != NULL)
+	{
+		TankDamage(hitTank, 10);
+	}
+
+	TankPlayFireEffects(tank->playerID, hitPos, state);
+	tank->lastFireTime = state->time;
+}
+
+void UpdateTank(Tank * tank, double deltaTime, GameState * state)
+{
+	if (!tank->active) return;
+
 	vec2i inputAxis = {0, 0};
-	bool shootPressed = ((input >> 4) & 1);
-	if ((input >> 0) & 1) { inputAxis.y += 1; } // UP
-	if ((input >> 1) & 1) { inputAxis.x -= 1; } // LEFT
-	if ((input >> 2) & 1) { inputAxis.y -= 1; } // DOWN
-	if ((input >> 3) & 1) { inputAxis.x += 1; } // RIGHT
+	bool shootPressed = ((tank->input >> 4) & 1);
+	if ((tank->input >> 0) & 1) { inputAxis.y += 1; } // UP
+	if ((tank->input >> 1) & 1) { inputAxis.x -= 1; } // LEFT
+	if ((tank->input >> 2) & 1) { inputAxis.y -= 1; } // DOWN
+	if ((tank->input >> 3) & 1) { inputAxis.x += 1; } // RIGHT
 	
 	tank->rotation -= inputAxis.x * TANK_ROTATION_SPEED * deltaTime;
 	tank->turretRot = tank->rotation;
 	vec2 tankForward = vec2Rotate({-1.0f, 0.0f}, tank->rotation);
-	tank->position += tankForward * inputAxis.y * deltaTime;
+	tank->position += tankForward * TANK_MOVEMENT_SPEED * inputAxis.y * deltaTime;
 
 	tank->collider.position = tank->position;
 	tank->collider.rotation = tank->rotation;
 
-	// Check if shoot pressed and can fire.
+	if (shootPressed && state->time > tank->lastFireTime + TANK_FIRE_RATE)
+	{
+		TankShoot(tank, state);
+	}
 }
 
 void DEBUG_SyncTanks(Tank * tanks, TankGFX * tankGFX)
@@ -606,6 +742,7 @@ void DEBUG_SyncTanks(Tank * tanks, TankGFX * tankGFX)
 		tankGFX[i].rotation  = tanks[i].rotation;
 		tankGFX[i].turretRot = tanks[i].turretRot;
 		tankGFX[i].health	 = tanks[i].health;
+		tankGFX[i].active	 = tanks[i].active;
 	}
 }
 
@@ -622,7 +759,7 @@ void UpdateTankGFX(TankGFX * tank, double deltaTime)
 	f32 healthNormalized = ((f32)tank->health / (f32)TANK_MAX_HEALTH);
 	if (tank->healthLerp > healthNormalized)
 	{
-		tank->healthLerp -= deltaTime ;
+		tank->healthLerp -= deltaTime * 0.5f;
 		if (tank->healthLerp < 0.0f) { tank->healthLerp = 0.0f; }
 	}
 	else if (tank->healthLerp < healthNormalized)
@@ -631,24 +768,6 @@ void UpdateTankGFX(TankGFX * tank, double deltaTime)
 	}
 }
 
-void TankPlayFireEffects(TankGFX * tank, GameState * state)
-{
-	if (tank->turretOffset >= 1.0f)
-	{ 
-		tank->turretOffset = 0.0f;
-		vec2 particleDir = vec2{cosf(tank->turretRot), sinf(tank->turretRot)};
-		vec2 tankDir = vec2{cosf(tank->rotation),  sinf(tank->rotation)};
-		vec2 turretCenter = (-tankDir * -0.03f) + tank->position;
-		vec2 newPos = turretCenter - particleDir * 0.5f;
-		EmitParticles(&state->turretFireEmitter, newPos, particleDir);
-		EmitParticles(&state->explosionEmitter, vec2{0,0}, particleDir);
-
-		if (tank->health >= 10)
-			tank->health -= 10;
-		else
-			tank->health = TANK_MAX_HEALTH;
-	}
-}
 
 void DrawTurretFireEffects(RendererPushBuffer * renderCmds, GameState * state)
 {
@@ -730,11 +849,10 @@ EXPORT GAME_START_FUNCTION(start)
 	state->tanks[0].playerID = 66;
 	state->tanks[1].playerID = 67;
 
-	state->tanks[0].health = 100;
-	state->tanks[1].health = 100;
-
-	state->tanks[0].active = true;
-	state->tanks[1].active = true;
+	state->tanks2[0].active= true;
+	state->tanks2[1].active = true;
+	state->tanks2[0].playerID = 66;
+	state->tanks2[1].playerID = 67;
 	state->tanks[0].style.colorID = 1;
 	state->tanks[1].style.colorID = 2;
 
@@ -762,6 +880,7 @@ EXPORT GAME_UPDATE_FUNCTION(update)
     // Update code here
     GameState * state = (GameState*)gameMemory->permStorage;
     state->time += input->deltaTime;
+
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
 	mat4 projection = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
     double time = state->time;
@@ -782,15 +901,17 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 	if (input->WASD[1].isDown) {inputA |= 1 << 1; };
 	if (input->WASD[2].isDown) {inputA |= 1 << 2; };
 	if (input->WASD[3].isDown) {inputA |= 1 << 3; };
-	if (input->isMousePressed) {inputA |= 1 << 4; };
+	if (input->isSpacePressed) {inputA |= 1 << 4; };
 	u8 inputB = 0;
 	if (input->ARROWS[0].isDown) {inputB |= 1 << 0; };
 	if (input->ARROWS[1].isDown) {inputB |= 1 << 1; };
 	if (input->ARROWS[2].isDown) {inputB |= 1 << 2; };
 	if (input->ARROWS[3].isDown) {inputB |= 1 << 3; };
-	if (input->isMousePressed)   {inputB |= 1 << 4; };
+	if (input->isEnterPressed) {inputB |= 1 << 4; };
 
-    state->tanks[1].rotation = angle;
+	state->tanks2[0].input = inputA;
+	state->tanks2[1].input = inputB;
+	//state->tanks2[0].turretRot = Vec2AngleToRad(state->tanks2[0].position, mouseWorld); 
 	
 	Collider2D c = {.position = mouseWorld,
 					.size = vec2{0.5f, 0.5f},
@@ -798,28 +919,30 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 					.type = COLLIDER_CIRCLE};
 
 	vec4 clearColor = {0.5f, 0.714f, 0.486f, 1.0f};
-	CollisionData cd;
 
+	vec2 intersection;
+
+	vec2 lineAStart = {0,0};
+	vec2 lineAEnd = mouseWorld;
+	
+	bool lineColliding  = IsLineColliding(state->tanks2[0].collider, lineAStart, lineAEnd, &intersection);
+	vec3 lineColor = lineColliding ? vec3{1.0,0,0} : vec3{0,1,0};
 	RendererPushSetClear(renderCommands, clearColor);
 	RendererPushSetProjection(renderCommands, projection);
 
     RendererPushCircle(renderCommands, gdNormal.position, gdEasy.rotation, {0.1f,0.1f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
-    RendererPushCircle(renderCommands, gdEasy.position, gdEasy.rotation, {0.5f,0.5f}, {0.0f, 1.0f, 0.0f}, 0.1f, 30);
+    RendererPushCircle(renderCommands, vec3{intersection.x, intersection.y, 0}, gdEasy.rotation, {0.1f,0.1f}, {0.0f, 1.0f, 0.0f}, 0.25f, 30);
 
     RendererPushImage(renderCommands, 2, gdEasy, 4);
     RendererPushImage(renderCommands, state->extraTextureHandle, gdEasy, 0);
 
-    RendererPushLine(renderCommands, gdEasy.position, gdHarder.position, {0.0f, 1.0f, 1.0f}, 0.02f, 0);
+    RendererPushLine(renderCommands, lineAStart, lineAEnd, lineColor, 0.02f, 0);
 
 	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
 	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
 	DrawParticles(renderCommands, state);
 
-	if (input->isMousePressed) { TankPlayFireEffects(&state->tanks[0], state); }
-
-	UpdateTank(&state->tanks2[0], inputA, Vec2AngleToRad(state->tanks2[0].position, mouseWorld), input->deltaTime);
-	UpdateTank(&state->tanks2[1], inputB, Vec2AngleToRad(state->tanks2[1].position, mouseWorld), input->deltaTime);
-
+	CollisionData cd = {0};
 	bool tanksColliding = IsColliding(state->tanks2[0].collider, state->tanks2[1].collider, &cd);
 	//DEBUG_DrawCollider(renderCommands, &state->tanks2->collider, IsColliding(state->tanks2[0].collider, c, NULL));
 	DEBUG_DrawCollider(renderCommands, &state->tanks2[1].collider, tanksColliding);
@@ -834,6 +957,7 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
 	for (int i = 0; i < MAX_PLAYERS; i++)
 	{
+		UpdateTank(&state->tanks2[i], input->deltaTime, state);
 		UpdateTankGFX(&state->tanks[i], input->deltaTime);
 		DrawTank(state->tanks[i], renderCommands, state);
 	}
