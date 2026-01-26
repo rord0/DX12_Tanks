@@ -8,6 +8,7 @@
 #include "renderer_dx12.cpp"
 
 #include "render_entry.h"
+#include "portal.h"
 
 #include <climits>
 
