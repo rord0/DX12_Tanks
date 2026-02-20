@@ -10,5 +10,6 @@ typedef struct
 
 Arena ArenaAlloc(size_t size);
 void * ArenaPush(Arena * arena, size_t size);
+void ArenaClear(Arena * arena);
 
 #endif // ARENA_H

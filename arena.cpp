@@ -19,3 +19,8 @@ void * ArenaPush(Arena * arena, size_t size)
     }
     return memory;
 };
+
+void ArenaClear(Arena * arena)
+{
+	arena->pos = 0;
+}

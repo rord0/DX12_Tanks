@@ -3,6 +3,8 @@
 
 // Shared definitions between 'engine' and game code.
 
+#include <cstddef>
+#include <cstdint>
 #include <stdint.h>
 #include <math.h>
 #include <string.h>
@@ -143,6 +145,24 @@ typedef struct {
     u64 size;
 } DEBUG_FileResult;
 
+typedef enum {
+	NET_EVENT_CLIENT_CONNECTED,
+	NET_EVENT_CLIENT_DISCONNECTED,
+	NET_EVENT_PACKET,
+} NetworkEventType;
+
+typedef struct {
+	size_t size;
+	u32 id;
+	void * data;
+} NetworkPacket;
+
+typedef struct {
+	NetworkEventType type;
+	u32 connID;
+	NetworkPacket * packet; 
+} NetworkEvent;
+
 #include "render_entry.h"
 #include "array.h"
 
@@ -157,6 +177,15 @@ typedef PLATFORM_LOAD_FILE(PlatformLoadFileFunction);
 #define PLATFORM_FREE_FILE(name) void name(void ** memory)
 typedef PLATFORM_FREE_FILE(PlatformFreeFileFunction);
 
+#define PLATFORM_START_SERVER(name) bool name(uint16_t port, uint16_t maxConnections)
+typedef PLATFORM_START_SERVER(PlatformStartServerFunction);
+
+#define PLATFORM_START_CLIENT(name) bool name(const char * addressStr, uint16_t serverPort)
+typedef PLATFORM_START_CLIENT(PlatformStartClientFn);
+
+#define PLATFORM_CLIENT_SEND(name) void name(void * data, size_t size, uint16_t sendMode)
+typedef PLATFORM_CLIENT_SEND(PlatformClientSendFn);
+
 typedef struct {
     void * permStorage;
     u64 permStorageSize;
@@ -165,6 +194,9 @@ typedef struct {
     PlatformLoadTextureFunction * platformLoadTexture;
     PlatformLoadFileFunction * platformLoadFile;
     PlatformFreeFileFunction * platformFreeFile;
+    PlatformStartServerFunction * platformStartServer;
+    PlatformStartClientFn * platformStartClient;
+	PlatformClientSendFn * platformClientSend;
 } GameMemory;
 
 typedef struct
@@ -182,6 +214,11 @@ typedef struct {
 	double deltaTime;
 	vec2i viewportSize;
 	vec2i mousePosVP;
+	// ---- Networking ----
+	NetworkEvent * clientEvents;
+	u32 clientEventCount;
+	NetworkEvent * serverEvents;
+	u32 serverEventCount;
 } GameInput;
 
 #define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory)

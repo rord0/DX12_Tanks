@@ -6,11 +6,9 @@
 #include "arena.cpp"
 
 #include "renderer_dx12.cpp"
+#include "networking.cpp"
 
 #include "render_entry.h"
-#include "portal.h"
-
-#include <climits>
 
 #define GAME_CODE_DLL "tanksgame.dll"
 
@@ -305,6 +303,7 @@ PLATFORM_LOAD_TEXTURE(PlatformLoadTexture)
     return textureHandle;
 }
 
+
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -366,8 +365,11 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     gameMemory.transientStorage = PlatformAlloc(MB(2));
     gameMemory.transStorageSize = MB(2);
     gameMemory.platformLoadTexture = &PlatformLoadTexture;
-    gameMemory.platformLoadFile = &DEBUG_PlatformReadEntireFile;
-    gameMemory.platformFreeFile = &DEBUG_PlatformFreeFileMemory;
+    gameMemory.platformLoadFile    = &DEBUG_PlatformReadEntireFile;
+    gameMemory.platformFreeFile	   = &DEBUG_PlatformFreeFileMemory;
+	gameMemory.platformStartServer = &PlatformStartServer;
+	gameMemory.platformStartClient = &PlatformStartClient;
+	gameMemory.platformClientSend  = &PlatformClientSend;
 
 	GameInput gameInput = {0};
 
@@ -380,6 +382,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     pushBuffer.sortEntries = (RenderSortEntry*)PlatformAlloc(pushBuffer.maxSortEntries * sizeof(RenderSortEntry));
 
     InitializeRenderer(windowHandle, false, CLIENT_WIDTH, CLIENT_HEIGHT);
+	InitializeNetworking();
 
     gameCode.Start(&gameMemory);
 
@@ -403,8 +406,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         u32 FPS = perfFrequency / counterElapsed;
         lastFrameStartCounter = endCounter;
         QueryPerformanceCounter(&lastFrameStartCounter);
-        // Check for dll import
 
+        // Check for dll import
         FILETIME newDLLWriteTime = Win32GetLastFileWriteTime(GAME_CODE_DLL);
         if (CompareFileTime(&newDLLWriteTime, &gameCode.lastWriteTime))
         {
@@ -414,6 +417,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
         // Update
         win32ProcessPendingMessages(windowHandle, inputState);
+		NetworkingUpdate(&gameInput, time);
 
         // Check for resize.
         RECT currentClientRect;

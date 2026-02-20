@@ -1,5 +1,5 @@
-#include "core.h"
-#include "render_entry.h"
+#include "../core.h"
+#include "../render_entry.h"
 
 u32 PushRenderEntryStruct(RendererPushBuffer * pb, void * entry, size_t entrySize)
 {
