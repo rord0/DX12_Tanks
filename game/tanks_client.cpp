@@ -1,4 +1,8 @@
 #include "tanks_client.hpp"
+#include "tanks.hpp"
+#include "util.hpp"
+#include <cmath>
+#include <cstddef>
 
 mat4 orthographicProjection(float right, float left, float top, float bottom, float n, float f)
 {
@@ -204,28 +208,6 @@ vec2 MousePosToWorld(vec2i mousePos, vec2i viewportSize, mat4 proj)
 	return {worldPos.x, worldPos.y};
 }
 
-Arena ArenaInit(void * memory, size_t size)
-{
-    Arena out = {memory, size, 0};
-    return out;
-}
-
-void * ArenaPush(Arena * arena, size_t size)
-{
-    void * memory = nullptr;
-    if (arena->index + size <= arena->size)
-    {
-        memory = (u8*)arena->memory + arena->index;
-        arena->index += size;
-    }
-    return memory;
-}
-
-size_t ArenaGetRemainingSize(Arena * Arena)
-{
-    return Arena->size - Arena->index;
-}
-
 bool CSVParseU32Field(const char *& ptr, const char *& end, u32 & out)
 {
     const char * start = ptr;
@@ -245,7 +227,7 @@ bool CSVParseU32Field(const char *& ptr, const char *& end, u32 & out)
 void ParseTextureAtlasCSV(GameMemory * memory, GameState * state, const char * filepath)
 {
     // read csv file into buffer.
-    DEBUG_FileResult fileResult = memory->platformLoadFile(filepath);
+    DEBUG_FileResult fileResult = memory->platform.platformLoadFile(filepath);
     if (fileResult.size == 0) { return; }
 
     // Count the number of lines 
@@ -286,7 +268,7 @@ void ParseTextureAtlasCSV(GameMemory * memory, GameState * state, const char * f
 		state->tankAtlasEntries[entryCount++] = entry;
     }
 
-    memory->platformFreeFile(&fileResult.data);
+    memory->platform.platformFreeFile(&fileResult.data);
 }
 
 void EmitParticles(ParticleEmitter * emitter, vec2 position, vec2 direction)
@@ -351,13 +333,13 @@ void DEBUG_SyncTanks(Tank * tanks, TankGFX * tankGFX)
 {
 	for (int i = 0; i < MAX_PLAYERS; i++)
 	{
-		tankGFX[i].playerID  = tanks[i].playerID;
+		//tankGFX[i].playerID  = tanks[i].playerID;
 		tankGFX[i].position  = tanks[i].position;
 		tankGFX[i].rotation  = tanks[i].rotation;
 		tankGFX[i].turretRot = tanks[i].turretRot;
 		tankGFX[i].health	 = tanks[i].health;
-		tankGFX[i].active	 = tanks[i].active;
-		tankGFX[i].style	 = tanks[i].style;
+		//tankGFX[i].active	 = tanks[i].active;
+		//tankGFX[i].style	 = tanks[i].style;
 	}
 }
 
@@ -426,24 +408,25 @@ void DrawParticles(RendererPushBuffer * renderCmds, GameState * state)
 
 void ClientStart(GameState * state, GameMemory * gameMemory)
 {
-	state->permArena = ArenaInit((u8*)gameMemory->permStorage + sizeof(GameState) + sizeof(ServerState), gameMemory->permStorageSize - sizeof(GameState) - sizeof(ServerState));
+	state->permArena = ArenaInit((u8*)gameMemory->permStorage + sizeof(GameState) + sizeof(ServerState),
+								 gameMemory->permStorageSize - sizeof(GameState) - sizeof(ServerState));
 
-    state->tankAtlasHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"tank_parts.png");
-    state->extraTextureHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"images/platformer/Props_AirDrop.png");
+    state->tankAtlasHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"tank_parts.png");
+    state->extraTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"images/platformer/Props_AirDrop.png");
     ParseTextureAtlasCSV(gameMemory, state, RESOURCES_PATH"tank_parts.csv");
 
 	state->connected = false;
 	state->helloSent = false;
 
 	// SPRITESHEETS INITIALIZATION
-	state->fireEffectSheet.textureHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"tank_fire_spritesheet.png");
+	state->fireEffectSheet.textureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"tank_fire_spritesheet.png");
 	state->fireEffectSheet.sheetHeight = 480;
 	state->fireEffectSheet.sheetWidth  = 1080;
 	state->fireEffectSheet.numFrames = 6;
 	state->fireEffectSheet.numCols	 = 3;
 	state->fireEffectSheet.numRows   = 2;
 
-	state->explosionVFXSheet.textureHandle = gameMemory->platformLoadTexture(RESOURCES_PATH"explosion_spritesheet.png");
+	state->explosionVFXSheet.textureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"explosion_spritesheet.png");
 	state->explosionVFXSheet.sheetHeight = 1080;
 	state->explosionVFXSheet.sheetWidth  = 2048;
 	state->explosionVFXSheet.numFrames = 8;
@@ -471,6 +454,55 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 	state->explosionEmitter.particles = (Particle*)ArenaPush(&state->permArena, sizeof(Particle) * state->explosionEmitter.maxParticles);
 }
 
+void ClientProcessWelcomePacket(GameState * state, WelcomePacket * packet, u32 connID)
+{
+	state->playerID = packet->playerID;
+	for (int i = 0; i < packet->playerCount; i++)
+	{
+		PlayerConnectData * connectData = &packet->playerData[i];
+		TankGFX * tank = &state->tanks[connectData->playerID];
+		tank->active = true;
+		tank->playerID = connectData->playerID;
+		tank->style = connectData->style;
+		copy_c_str(tank->displayName, connectData->displayName, sizeof(tank->displayName));
+	}
+}
+
+void ClientProcessConnectPacket(GameState * state, ConnectPacket * packet)
+{
+	TankGFX * tank = &state->tanks[packet->playerData.playerID];
+	tank->active = true;
+	tank->playerID = packet->playerData.playerID;
+	tank->style = packet->playerData.style;
+	copy_c_str(tank->displayName, packet->playerData.displayName, sizeof(tank->displayName));
+}
+
+void ClientHandlePacket(GameState * state, NetworkPacket * packet)
+{
+	PacketType type = (PacketType)(((u8*)packet->data)[0]);
+	ReadStream stream((u8*)packet->data, packet->size);
+
+	switch (type)
+	{
+		case PACKET_TYPE_WELCOME:
+		{
+			WelcomePacket welcomePkt;
+			if (welcomePkt.serialize(stream))
+			{
+				ClientProcessWelcomePacket(state, &welcomePkt, packet->id);
+			}
+		} break;
+		case PACKET_TYPE_CONNECT:
+		{
+			ConnectPacket connectPkt;
+			if (connectPkt.serialize(stream))
+			{
+				ClientProcessConnectPacket(state, &connectPkt);
+			}
+		} break;
+		default: break;
+	}
+}
 void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands)
 {
     state->time += input->deltaTime;
@@ -499,6 +531,9 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 			case NET_EVENT_CLIENT_DISCONNECTED:
 				state->connected = false;
 				break;
+			case NET_EVENT_PACKET:
+				ClientHandlePacket(state, event->packet);
+				break;
 			default:
 				break;
 		}
@@ -508,11 +543,12 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	{
 		u8 buf[64] = {0};
 		WriteStream stream(buf, sizeof(buf));
-		HelloPacket packet = {{0,0,0,2}, "Rordo!"};
+		HelloPacket packet = {{0,0,0,2}};
+		copy_c_str(packet.displayName, state->displayName, sizeof(packet.displayName));
 
 		if (packet.serialize(stream))
 		{
-			gameMemory->platformClientSend(stream.buffer, stream.pos, 1);
+			gameMemory->platform.platformClientSend(stream.buffer, stream.pos, 1);
 		}
 		
 		state->helloSent = true;

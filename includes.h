@@ -7,6 +7,7 @@
 
 #include <windows.h>
 #include <windowsx.h>
+#include <shellapi.h> 
 #include <Xinput.h>
 #include <stdint.h>
 #include <mmeapi.h>

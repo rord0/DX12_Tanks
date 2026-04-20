@@ -1,5 +1,9 @@
+#include "serialize.hpp"
 #include "tanks.hpp"
+#include <cassert>
+#include <cstring>
 #include "tanks_server.hpp"
+#include "util.hpp"
 
 void DEBUG_DrawCollider(RendererPushBuffer * renderCmds, Collider2D * collider, b32 colliding)
 {
@@ -12,24 +16,107 @@ void DEBUG_DrawCollider(RendererPushBuffer * renderCmds, Collider2D * collider, 
 	}
 }
 
-void ServerStart(ServerState * state)
+PlayerConnectData GetPlayerConnectData(ServerState * state, u32 playerID)
 {
-	state->tanks[3].active = true;
-	state->tanks[3].playerID = 67;
+	PlayerConnectData data = {0};
+
+	data.playerID = state->tanks[playerID].playerID;
+	data.style = state->tanks[playerID].style;
+	copy_c_str(data.displayName, state->tanks[playerID].displayName, sizeof(data.displayName));
+
+	return data;
+}
+
+void ServerSendWelcomeMessage(ServerState * state, u32 playerIndex)
+{
+	ScratchArena temp(&state->tempArena);
+
+	Tank * player = &state->tanks[playerIndex];
+	assert(player->active);
+
+	WelcomePacket packet = {0};
+	packet.playerID = player->playerID;
+	packet.playerCount = 0;
 	for (int i = 0; i < MAX_PLAYERS; i++)
 	{
-		state->tanks[i].collider.type = COLLIDER_RECTANGLE;
-		state->tanks[i].collider.size = {0.75f, 0.65f};
-		state->tanks[i].health = TANK_MAX_HEALTH;
+		if (state->tanks[i].active)
+		{
+			packet.playerData[packet.playerCount] = GetPlayerConnectData(state, i);
+			packet.playerCount++;
+		}
 	}
+
+	// TODO: log error msg
+	WriteStream stream = {(u8*)ArenaPush(temp.arena, 1024), 1024};
+	if (!packet.serialize(stream)) { return; }
+
+	state->platform.platformServerSend(stream.buffer, stream.pos, 1, player->connectionID);
+}
+
+void ServerBroadcastConnectMessage(ServerState * state, u32 playerIndex)
+{
+	ScratchArena temp(&state->tempArena);
+
+	ConnectPacket packet = {0};
+	Tank * player = &state->tanks[playerIndex];
+	packet.playerData = GetPlayerConnectData(state, playerIndex);
+
+	WriteStream stream = {(u8*)ArenaPush(temp.arena, KB(1)), KB(1)};
+	if (!packet.serialize(stream)) { return; }
+
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		if (state->tanks[i].active && i != playerIndex) 
+		{
+			state->platform.platformServerSend(stream.buffer, stream.pos, 1, state->tanks[i].connectionID);
+		}
+	}
+}
+
+void ServerStart(ServerState * state, u16 port, u16 maxPlayers)
+{
+	state->platform.platformStartServer(7777, maxPlayers);
+	state->serverActive = true;
 }
 
 void ServerProcessHelloPacket(ServerState * state, HelloPacket * packet, u32 connID)
 {
-	state->tanks[connID].active = true;
-	state->tanks[connID].style = packet->style;
+	// Find empty player index
+	int playerIndex = -1; 
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		if (state->tanks[i].active == false)
+		{
+			playerIndex = i;
+			break;
+		}
+	}
+	// Max number of players reached
+	// TODO: warn message: this shouldn't happen...
+	if (playerIndex == -1) { return; }
 
-	// Send connected message to other clients.
+	Tank * player = &state->tanks[playerIndex];
+	
+	memset(&state->tanks[playerIndex], 0, sizeof(Tank));
+	player->active = true;
+	player->playerID = playerIndex;
+	player->connectionID = connID;
+	player->style = packet->style;
+	player->health = TANK_MAX_HEALTH;
+	player->collider.type = COLLIDER_RECTANGLE;
+	player->collider.size = {0.75f, 0.65f};
+	memcpy(player->displayName, packet->displayName, 32);
+	player->displayName[31] = '\0';
+	player->position = RR_SPAWN_POSITIONS[state->playerCount % 4];
+
+	state->playerCount++;
+	ServerSendWelcomeMessage(state, playerIndex);
+	ServerBroadcastConnectMessage(state, playerIndex);
+}
+
+void ServerHandleDisconnect(ServerState * state, u32 connID)
+{
+	return;
 }
 
 void ServerHandlePacket(ServerState * state, NetworkPacket * packet)
@@ -128,6 +215,13 @@ void UpdateTank(Tank * tank, double deltaTime, ServerState * state)
 
 void ServerUpdate(ServerState * state, GameInput * input)
 {
+	if (!state->serverActive) { return; }
+
+	if (DEBUG_RENDER_CMDS != NULL)
+	{
+		DebugGeoInstanceData rect = {vec3{0.0f, 0.0f, 0.0f}, {7.15f, 4.0f}, {1.0f,0.0f,0.0f}, 0.0f, 0.02f};
+		RendererPushRectangle(DEBUG_RENDER_CMDS, rect, 33);
+	}
 	state->time += input->deltaTime;
 
 	u8 inputA = 0;
@@ -143,23 +237,21 @@ void ServerUpdate(ServerState * state, GameInput * input)
 	if (input->ARROWS[3].isDown) {inputB |= 1 << 3; };
 	if (input->isEnterPressed)	 {inputB |= 1 << 4; };
 
-	state->tanks[0].input = inputA;
-	state->tanks[3].input = inputB;
+	//state->tanks[0].input = inputA;
+	//state->tanks[3].input = inputB;
 
 	for (int i = 0; i < input->serverEventCount; i++)
 	{
 		NetworkEvent * event = &input->serverEvents[i];
 		switch (event->type) {
 			case NET_EVENT_CLIENT_CONNECTED:
-				state->tanks[event->connID].active = true;
-				state->tanks[event->connID].playerID = event->connID;
 				break;
 			case NET_EVENT_CLIENT_DISCONNECTED:
-				state->tanks[event->connID].active = false;
+				ServerHandleDisconnect(state, event->connID);
 				break;
 			case NET_EVENT_PACKET:
 				ServerHandlePacket(state, event->packet);
-			break;
+				break;
 		}
 	}
 

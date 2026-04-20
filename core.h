@@ -186,17 +186,25 @@ typedef PLATFORM_START_CLIENT(PlatformStartClientFn);
 #define PLATFORM_CLIENT_SEND(name) void name(void * data, size_t size, uint16_t sendMode)
 typedef PLATFORM_CLIENT_SEND(PlatformClientSendFn);
 
+#define PLATFORM_SERVER_SEND(name) void name(void * data, size_t size, uint16_t sendMode, u32 clientIndex)
+typedef PLATFORM_SERVER_SEND(PlatformServerSendFn);
+
 typedef struct {
-    void * permStorage;
-    u64 permStorageSize;
-    void * transientStorage;
-    u64 transStorageSize;
     PlatformLoadTextureFunction * platformLoadTexture;
     PlatformLoadFileFunction * platformLoadFile;
     PlatformFreeFileFunction * platformFreeFile;
     PlatformStartServerFunction * platformStartServer;
     PlatformStartClientFn * platformStartClient;
 	PlatformClientSendFn * platformClientSend;
+	PlatformServerSendFn * platformServerSend;
+} PlatformAPI;
+
+typedef struct {
+    void * permStorage;
+    u64 permStorageSize;
+    void * transientStorage;
+    u64 transStorageSize;
+	PlatformAPI platform;
 } GameMemory;
 
 typedef struct
@@ -221,7 +229,7 @@ typedef struct {
 	u32 serverEventCount;
 } GameInput;
 
-#define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory)
+#define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory, int argc, char ** argv)
 typedef GAME_START_FUNCTION(GameStartFunction);
 
 #define GAME_UPDATE_FUNCTION(name) void name(GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands)

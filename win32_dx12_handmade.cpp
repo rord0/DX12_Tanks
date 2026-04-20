@@ -32,7 +32,6 @@ mat4 orthographicProjection(float right, float left, float top, float bottom, fl
     return m;
 }                      
 
-
 typedef struct
 {
     KeyInput W;
@@ -303,9 +302,32 @@ PLATFORM_LOAD_TEXTURE(PlatformLoadTexture)
     return textureHandle;
 }
 
+void GetCLIArguments(int * argc, char *** argv)
+{
+	int arg_count;
+    LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &arg_count);
+
+    *argc = arg_count;
+    *argv = new char*[arg_count];
+
+    for (int i = 0; i < arg_count; i++)
+    {
+        int len = wcstombs(nullptr, wargv[i], 0) + 1;
+        (*argv)[i] = new char[len];
+        wcstombs((*argv)[i], wargv[i], len);
+    }
+
+    LocalFree(wargv);
+}
+
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
+    // Convert to char**
+	int argc = 0;
+    char** argv = NULL;
+	GetCLIArguments(&argc, &argv);
+
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     WNDCLASS windowClass = {};
 
@@ -364,12 +386,14 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     gameMemory.permStorageSize = MB(2);
     gameMemory.transientStorage = PlatformAlloc(MB(2));
     gameMemory.transStorageSize = MB(2);
-    gameMemory.platformLoadTexture = &PlatformLoadTexture;
-    gameMemory.platformLoadFile    = &DEBUG_PlatformReadEntireFile;
-    gameMemory.platformFreeFile	   = &DEBUG_PlatformFreeFileMemory;
-	gameMemory.platformStartServer = &PlatformStartServer;
-	gameMemory.platformStartClient = &PlatformStartClient;
-	gameMemory.platformClientSend  = &PlatformClientSend;
+
+    gameMemory.platform.platformLoadTexture = &PlatformLoadTexture;
+    gameMemory.platform.platformLoadFile    = &DEBUG_PlatformReadEntireFile;
+    gameMemory.platform.platformFreeFile    = &DEBUG_PlatformFreeFileMemory;
+	gameMemory.platform.platformStartServer = &PlatformStartServer;
+	gameMemory.platform.platformStartClient = &PlatformStartClient;
+	gameMemory.platform.platformClientSend  = &PlatformClientSend;
+	gameMemory.platform.platformServerSend  = &PlatformServerSend;
 
 	GameInput gameInput = {0};
 
@@ -384,7 +408,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     InitializeRenderer(windowHandle, false, CLIENT_WIDTH, CLIENT_HEIGHT);
 	InitializeNetworking();
 
-    gameCode.Start(&gameMemory);
+    gameCode.Start(&gameMemory, argc, argv);
 
     ShowWindow(windowHandle, SW_SHOW);
     //----------------------

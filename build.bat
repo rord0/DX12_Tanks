@@ -4,6 +4,6 @@ if not exist build (
 )
 mkdir build
 pushd build
-cl /std:c++20 -Zi ../win32_dx12_handmade.cpp /I ..\include\directx /I ..\include\stb /I ..\include\portal user32.lib dxgi.lib d3d12.lib xinput.lib d3dcompiler.lib ws2_32.lib portal.lib /Fe: tanks.exe /link /LIBPATH:..\lib
+cl /std:c++20 -Zi ../win32_dx12_handmade.cpp /I ..\include\directx /I ..\include\stb /I ..\include\portal user32.lib dxgi.lib d3d12.lib xinput.lib d3dcompiler.lib ws2_32.lib portal.lib shell32.lib /Fe: tanks.exe /link /LIBPATH:..\lib
 cl /LDd /std:c++20 -Zi ../game/tanks.cpp /Fe: tanksgame.dll
 popd

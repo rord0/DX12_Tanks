@@ -3,12 +3,17 @@
 
 #include "../core.h"
 #include "serialize.hpp"
+#include "arena.hpp"
+#include <immintrin.h>
 
 #define MAX_PLAYERS 8
 #define TANK_MAX_HEALTH 100
 #define TANK_ROTATION_SPEED 1.8f
 #define TANK_MOVEMENT_SPEED 0.5f
 #define TANK_FIRE_RATE 0.8f
+
+#define SerializeTankStyle(stream, value)   if(!serializeTankStyle(stream, value))   { return false; }
+#define SerializePlayerData(stream, value)  if(!serializePlayerData(stream, value))  { return false; }
 
 typedef struct {
     u8 trackType;
@@ -17,13 +22,39 @@ typedef struct {
     u8 colorID;
 } TankStyle;
 
+typedef struct PlayerConnectData_t {
+	u16 playerID;
+	TankStyle style;
+	char displayName[32];
+} PlayerConnectData;
+
 typedef enum {
-	PACKET_TYPE_HELLO,
+	PACKET_TYPE_HELLO = 10,
 	PACKET_TYPE_WELCOME,
+	PACKET_TYPE_CONNECT,
 	PACKET_TYPE_INPUT,
 	PACKET_TYPE_UPDATE,
 	PACKET_TYPE_FIRED
 } PacketType;
+
+template<typename Stream>
+bool serializeTankStyle(Stream & stream, TankStyle & style)
+{
+	SerializeU8(stream, style.bodyType);
+	SerializeU8(stream, style.trackType);
+	SerializeU8(stream, style.turretType);
+	SerializeU8(stream, style.colorID);
+	return true;
+}
+
+template<typename Stream>
+bool serializePlayerData(Stream & stream, PlayerConnectData & data)
+{
+	SerializeU16(stream, data.playerID);
+	SerializeTankStyle(stream, data.style);
+	SerializeCStr(stream, data.displayName, 32);
+	return true;
+}
 
 typedef struct ClientHelloPacket {
 	TankStyle style;
@@ -32,13 +63,43 @@ typedef struct ClientHelloPacket {
 	template<typename Stream>
 	bool serialize(Stream & stream)
 	{
-		SerializeU8(stream, style.bodyType);
-		SerializeU8(stream, style.trackType);
-		SerializeU8(stream, style.turretType);
-		SerializeU8(stream, style.colorID);
+		u8 type = PACKET_TYPE_HELLO;
+		SerializeU8(stream, type);
+		SerializeTankStyle(stream, style);
 		SerializeCStr(stream, displayName, 32);
 		return true;
 	}
 } HelloPacket;
+
+typedef struct ServerWelcomePacket {
+	u16 playerID;
+	u8 playerCount;
+	PlayerConnectData playerData[MAX_PLAYERS];
+	template<typename Stream>
+	bool serialize(Stream & stream)
+	{
+		u8 type = PACKET_TYPE_WELCOME;
+		SerializeU8(stream, type);
+		SerializeU16(stream, playerID);
+		SerializeU8(stream, playerCount);
+		for (int i = 0; i < playerCount; i++)
+		{
+			SerializePlayerData(stream, playerData[i]);
+		}
+		return true;
+	}
+} WelcomePacket;
+
+typedef struct ServerConnectPacket {
+	PlayerConnectData playerData;
+	template<typename Stream>
+	bool serialize(Stream & stream)
+	{
+		u8 type = PACKET_TYPE_CONNECT;
+		SerializeU8(stream, type);
+		SerializePlayerData(stream, playerData)
+		return true;
+	}
+} ConnectPacket;
 
 #endif // TANKS_H

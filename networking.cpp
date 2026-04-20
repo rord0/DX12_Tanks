@@ -32,6 +32,11 @@ PLATFORM_CLIENT_SEND(PlatformClientSend)
 	PortalClientSend(&NETWORK_STATE.client, data, size, (PortalPacketSendMode)sendMode);
 }
 
+PLATFORM_SERVER_SEND(PlatformServerSend)
+{
+	PortalServerSend(&NETWORK_STATE.server, data, size, (PortalPacketSendMode)sendMode, clientIndex);
+}
+
 void InitializeNetworking()
 {
 	PortalInit(NULL);

@@ -4,27 +4,44 @@
 #include "tanks.hpp"
 #include "tanks_client.hpp"
 #include "tanks_server.hpp"
+#include "util.hpp"
 
 RendererPushBuffer * DEBUG_RENDER_CMDS;
 
 // Unity Build
 #include "render_commands.cpp"
 #include "tanks_math.cpp"
+#include "util.cpp"
 #include "tanks_client.cpp"
 #include "tanks_server.cpp"
+#define ARENA_IMPLEMENTATION
+#include "arena.hpp"
 
 #define EXPORT extern "C" __declspec(dllexport)
 
 EXPORT GAME_START_FUNCTION(start)
 {
 	ServerState * serverState = (ServerState*)((u8*)gameMemory->permStorage + sizeof(GameState));
-	ServerStart(serverState);
-
     GameState * state = (GameState*)gameMemory->permStorage;
+	copy_c_str(state->displayName, "Player", 32);
+
+	for (int i = 1; i < argc; i++)
+	{
+		if (strcmp(argv[i], "--host") == 0 && serverState->serverActive == false)
+		{
+			serverState->tempArena = ArenaInit((u8*)gameMemory->transientStorage, MB(1));
+			serverState->platform = gameMemory->platform;
+			ServerStart(serverState, 7777, 8);
+		}
+		else if (strncmp(argv[i], "--name=", 7) == 0)
+		{
+			copy_c_str(state->displayName, &argv[i][7], 32);
+		}
+	}
+
 	ClientStart(state, gameMemory);
 
-	gameMemory->platformStartServer(7777, 8);
-	gameMemory->platformStartClient("::1", 7777);
+	gameMemory->platform.platformStartClient("::1", 7777);
 }
 
 EXPORT GAME_UPDATE_FUNCTION(update)

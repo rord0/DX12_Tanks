@@ -5,6 +5,7 @@
 
 #define serializeint(stream, value)  if(!stream.serializeU32(value))  { return false; }
 #define SerializeU8(stream, value)   if(!stream.serializeU8(value))   { return false; }
+#define SerializeU16(stream, value)  if(!stream.serializeU16(value))  { return false; }
 #define SerializeCStr(stream, value, bufferSize) if(!stream.serializeCStr(value, bufferSize)) { return false; }
 
 struct WriteStream

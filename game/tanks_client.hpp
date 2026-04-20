@@ -53,14 +53,8 @@ typedef struct
 	f32 turretOffset;
 	f32 healthLerp;
 	TankStyle style;
+	char displayName[32];
 } TankGFX;
-
-typedef struct
-{
-    void * memory;
-    size_t size;
-    size_t index;
-} Arena; 
 
 typedef struct {
     double time;
@@ -74,6 +68,8 @@ typedef struct {
 	ParticleEmitter turretFireEmitter;
 	ParticleEmitter explosionEmitter;
 	TankGFX tanks[8]; 
+	u16 playerID;
+	char displayName[32];
 	bool connected;
 	bool helloSent;
 } GameState;
