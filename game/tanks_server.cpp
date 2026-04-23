@@ -53,6 +53,41 @@ void ServerSendWelcomeMessage(ServerState * state, u32 playerIndex)
 	state->platform.platformServerSend(stream.buffer, stream.pos, 1, player->connectionID);
 }
 
+void ServerSendUpdateMessage(ServerState * state)
+{
+	ScratchArena temp(&state->tempArena);
+
+	UpdatePacket packet;
+	packet.count = state->playerCount;
+	packet.playerData = (PlayerUpdateData*)ArenaPush(temp.arena, sizeof(PlayerUpdateData) * state->playerCount);
+
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		Tank * player = &state->tanks[i];
+		if (player->active)
+		{
+			PlayerUpdateData * playerData = packet.playerData + i;
+			playerData->playerID  = player->playerID;
+			playerData->health    = player->health;
+			playerData->pos       = player->position;
+			playerData->rotation  = player->rotation;
+			playerData->turretRot = player->turretRot;
+			playerData->wasTeleport = 0;
+		}
+	}
+
+	WriteStream stream = {(u8*)ArenaPush(temp.arena, KB(1)), KB(1)};
+	if (!packet.serialize(stream)) { return; }
+
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		if (state->tanks[i].active)
+		{
+			state->platform.platformServerSend(stream.buffer, stream.pos, 0, state->tanks[i].connectionID);
+		}
+	}
+}
+
 void ServerBroadcastConnectMessage(ServerState * state, u32 playerIndex)
 {
 	ScratchArena temp(&state->tempArena);
@@ -190,7 +225,7 @@ void TankShoot(Tank * tank, ServerState * state)
 	tank->lastFireTime = state->time;
 }
 
-void UpdateTank(Tank * tank, double deltaTime, ServerState * state)
+void UpdateTank(Tank * tank, ServerState * state)
 {
 	vec2i inputAxis = {0, 0};
 	bool shootPressed = ((tank->input >> 4) & 1);
@@ -199,10 +234,10 @@ void UpdateTank(Tank * tank, double deltaTime, ServerState * state)
 	if ((tank->input >> 2) & 1) { inputAxis.y -= 1; } // DOWN
 	if ((tank->input >> 3) & 1) { inputAxis.x += 1; } // RIGHT
 	
-	tank->rotation -= inputAxis.x * TANK_ROTATION_SPEED * deltaTime;
+	tank->rotation -= inputAxis.x * TANK_ROTATION_SPEED * TICK_DURATION;
 	tank->turretRot = tank->rotation;
 	vec2 tankForward = vec2Rotate({-1.0f, 0.0f}, tank->rotation);
-	tank->position += tankForward * TANK_MOVEMENT_SPEED * inputAxis.y * deltaTime;
+	tank->position += tankForward * TANK_MOVEMENT_SPEED * inputAxis.y * TICK_DURATION;
 
 	tank->collider.position = tank->position;
 	tank->collider.rotation = tank->rotation;
@@ -213,17 +248,8 @@ void UpdateTank(Tank * tank, double deltaTime, ServerState * state)
 	}
 }
 
-void ServerUpdate(ServerState * state, GameInput * input)
+void ServerTick(ServerState * state, GameInput * input)
 {
-	if (!state->serverActive) { return; }
-
-	if (DEBUG_RENDER_CMDS != NULL)
-	{
-		DebugGeoInstanceData rect = {vec3{0.0f, 0.0f, 0.0f}, {7.15f, 4.0f}, {1.0f,0.0f,0.0f}, 0.0f, 0.02f};
-		RendererPushRectangle(DEBUG_RENDER_CMDS, rect, 33);
-	}
-	state->time += input->deltaTime;
-
 	u8 inputA = 0;
 	if (input->WASD[0].isDown) {inputA |= 1 << 0; };
 	if (input->WASD[1].isDown) {inputA |= 1 << 1; };
@@ -240,17 +266,17 @@ void ServerUpdate(ServerState * state, GameInput * input)
 	//state->tanks[0].input = inputA;
 	//state->tanks[3].input = inputB;
 
-	for (int i = 0; i < input->serverEventCount; i++)
+	NetworkEvent * netEvent;
+	while (state->platform.serverGetEvent(&netEvent))
 	{
-		NetworkEvent * event = &input->serverEvents[i];
-		switch (event->type) {
+		switch (netEvent->type) {
 			case NET_EVENT_CLIENT_CONNECTED:
 				break;
 			case NET_EVENT_CLIENT_DISCONNECTED:
-				ServerHandleDisconnect(state, event->connID);
+				ServerHandleDisconnect(state, netEvent->connID);
 				break;
 			case NET_EVENT_PACKET:
-				ServerHandlePacket(state, event->packet);
+				ServerHandlePacket(state, netEvent->packet);
 				break;
 		}
 	}
@@ -259,7 +285,7 @@ void ServerUpdate(ServerState * state, GameInput * input)
 	{
 		Tank * tank = &state->tanks[i];
 		if (!tank->active) continue;
-		UpdateTank(tank, input->deltaTime, state);
+		UpdateTank(tank, state);
 
 		// Handle Tank -> Tank Collision
 		for (int j = 0; j < MAX_PLAYERS; j++)
@@ -275,8 +301,31 @@ void ServerUpdate(ServerState * state, GameInput * input)
 				tank->position += correction;
 				otherTank->position -= correction;
 			}
-			DEBUG_DrawCollider(DEBUG_RENDER_CMDS, &tank->collider, colliding);
-			DEBUG_DrawCollider(DEBUG_RENDER_CMDS, &otherTank->collider, colliding);
+			//DEBUG_DrawCollider(DEBUG_RENDER_CMDS, &tank->collider, colliding);
+			//DEBUG_DrawCollider(DEBUG_RENDER_CMDS, &otherTank->collider, colliding);
 		}
+	}
+
+	ServerSendUpdateMessage(state);
+}
+
+void ServerUpdate(ServerState * state, GameInput * input)
+{
+	if (!state->serverActive) { return; }
+
+	state->time += input->deltaTime;
+
+	if (DEBUG_RENDER_CMDS != NULL)
+	{
+		DebugGeoInstanceData rect = {vec3{0.0f, 0.0f, 0.0f}, {7.15f, 4.0f}, {1.0f,0.0f,0.0f}, 0.0f, 0.02f};
+		RendererPushRectangle(DEBUG_RENDER_CMDS, rect, 33);
+	}
+
+	double elapsed = state->time - state->last_tick;
+	while (elapsed >= TICK_DURATION)
+	{
+		ServerTick(state, input);
+		state->last_tick += TICK_DURATION;
+		elapsed -= TICK_DURATION;
 	}
 }

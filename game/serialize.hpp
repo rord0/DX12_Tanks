@@ -6,7 +6,42 @@
 #define serializeint(stream, value)  if(!stream.serializeU32(value))  { return false; }
 #define SerializeU8(stream, value)   if(!stream.serializeU8(value))   { return false; }
 #define SerializeU16(stream, value)  if(!stream.serializeU16(value))  { return false; }
+#define SerializeU32(stream, value)  if(!stream.serializeU32(value))  { return false; }
+#define SerializeF32(stream, value)  if(!serializeF32(stream, value)) { return false; }
+#define SerializeV2(stream, value)   if(!serializeV2(stream, value))  { return false; }
 #define SerializeCStr(stream, value, bufferSize) if(!stream.serializeCStr(value, bufferSize)) { return false; }
+
+
+template<typename Stream>
+bool serializeF32(Stream & stream, f32 & value)
+{
+	if (stream.pos + sizeof(f32) > stream.size) { return false; }
+	union FloatInt
+	{
+		f32 float_value;
+		u32 int_value;
+	};
+	FloatInt temp;
+
+	if (Stream::IsWriting)
+	{
+		temp.float_value = value;
+	}
+	bool result = stream.serializeU32(temp.int_value);
+	if (Stream::IsReading)
+	{
+		value = temp.float_value;
+	}
+	return result;
+}
+
+template<typename Stream>
+bool serializeV2(Stream & stream, vec2 & value)
+{
+	SerializeF32(stream, value.x);
+	SerializeF32(stream, value.y);
+	return true;
+}
 
 struct WriteStream
 {
@@ -72,6 +107,14 @@ struct ReadStream
     static constexpr bool IsWriting = false;
 
 	ReadStream(u8 * buf, size_t bufSize) : buffer(buf), size(bufSize), pos(0) {}
+
+	bool serializeU32(u32 & value)
+	{
+		if (pos + sizeof(u32) > size) { return false; }
+		value = *((u32*)(buffer + pos));
+		pos += sizeof(u32);
+		return true;
+	}
 
 	bool serializeU8(u8 & value)
 	{

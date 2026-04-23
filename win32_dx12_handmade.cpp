@@ -4,6 +4,7 @@
 #include "os_win32.cpp"
 #include "array.cpp"
 #include "arena.cpp"
+#include "ring_buffer.cpp"
 
 #include "renderer_dx12.cpp"
 #include "networking.cpp"
@@ -394,6 +395,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 	gameMemory.platform.platformStartClient = &PlatformStartClient;
 	gameMemory.platform.platformClientSend  = &PlatformClientSend;
 	gameMemory.platform.platformServerSend  = &PlatformServerSend;
+	gameMemory.platform.serverGetEvent      = &PlatformServerGetEvent;
 
 	GameInput gameInput = {0};
 

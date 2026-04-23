@@ -189,6 +189,9 @@ typedef PLATFORM_CLIENT_SEND(PlatformClientSendFn);
 #define PLATFORM_SERVER_SEND(name) void name(void * data, size_t size, uint16_t sendMode, u32 clientIndex)
 typedef PLATFORM_SERVER_SEND(PlatformServerSendFn);
 
+#define PLATFORM_SERVER_GET_EVENT(name) bool name(NetworkEvent ** outEvent)
+typedef PLATFORM_SERVER_GET_EVENT(PlatformServerGetEventFn);
+
 typedef struct {
     PlatformLoadTextureFunction * platformLoadTexture;
     PlatformLoadFileFunction * platformLoadFile;
@@ -197,6 +200,7 @@ typedef struct {
     PlatformStartClientFn * platformStartClient;
 	PlatformClientSendFn * platformClientSend;
 	PlatformServerSendFn * platformServerSend;
+	PlatformServerGetEventFn * serverGetEvent;
 } PlatformAPI;
 
 typedef struct {
@@ -225,8 +229,6 @@ typedef struct {
 	// ---- Networking ----
 	NetworkEvent * clientEvents;
 	u32 clientEventCount;
-	NetworkEvent * serverEvents;
-	u32 serverEventCount;
 } GameInput;
 
 #define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory, int argc, char ** argv)

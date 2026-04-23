@@ -39,6 +39,7 @@ EXPORT GAME_START_FUNCTION(start)
 		}
 	}
 
+	state->frameArena = ArenaInit((u8*)gameMemory->transientStorage + MB(1), MB(1));
 	ClientStart(state, gameMemory);
 
 	gameMemory->platform.platformStartClient("::1", 7777);
@@ -51,8 +52,6 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 	ServerState * serverState = (ServerState*)((u8*)gameMemory->permStorage + sizeof(GameState));
 
 	ServerUpdate(serverState, input);
-
-	DEBUG_SyncTanks(serverState->tanks, state->tanks);
-
+	// DEBUG_SyncTanks(serverState->tanks, state->tanks);
 	ClientUpdate(state, gameMemory, input, renderCommands);
 }

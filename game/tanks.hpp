@@ -4,6 +4,7 @@
 #include "../core.h"
 #include "serialize.hpp"
 #include "arena.hpp"
+#include <cstddef>
 #include <immintrin.h>
 
 #define MAX_PLAYERS 8
@@ -14,6 +15,7 @@
 
 #define SerializeTankStyle(stream, value)   if(!serializeTankStyle(stream, value))   { return false; }
 #define SerializePlayerData(stream, value)  if(!serializePlayerData(stream, value))  { return false; }
+#define SerializePlayerUpdateData(stream, value) if(!serializePlayerUpdateData(stream, value))  { return false; }
 
 typedef struct {
     u8 trackType;
@@ -27,6 +29,15 @@ typedef struct PlayerConnectData_t {
 	TankStyle style;
 	char displayName[32];
 } PlayerConnectData;
+
+typedef struct PlayerUpdateData_t {
+	u16 playerID;
+	u8 health;
+	u8 wasTeleport;
+	vec2 pos;
+	f32 rotation;
+	f32 turretRot;
+} PlayerUpdateData;
 
 typedef enum {
 	PACKET_TYPE_HELLO = 10,
@@ -53,6 +64,18 @@ bool serializePlayerData(Stream & stream, PlayerConnectData & data)
 	SerializeU16(stream, data.playerID);
 	SerializeTankStyle(stream, data.style);
 	SerializeCStr(stream, data.displayName, 32);
+	return true;
+}
+
+template<typename Stream>
+bool serializePlayerUpdateData(Stream & stream, PlayerUpdateData & data)
+{
+	SerializeU16(stream, data.playerID);
+	SerializeU8(stream, data.health);
+	SerializeU8(stream, data.wasTeleport);
+	SerializeV2(stream, data.pos);
+	SerializeF32(stream, data.rotation);
+	SerializeF32(stream, data.turretRot);
 	return true;
 }
 
@@ -101,5 +124,32 @@ typedef struct ServerConnectPacket {
 		return true;
 	}
 } ConnectPacket;
+
+typedef struct ServerUpdatePacket {
+	u16 count;
+	PlayerUpdateData * playerData;
+	template<typename Stream>
+	bool serialize(Stream & stream, Arena * arena = nullptr)
+	{
+		u8 type = PACKET_TYPE_UPDATE;
+		SerializeU8(stream, type);
+		SerializeU16(stream, count);
+
+		if (Stream::IsReading)
+		{
+			if (arena == nullptr)    { return false; }
+			if (count > MAX_PLAYERS) { return false; }
+			playerData = (PlayerUpdateData*)ArenaPush(arena, count * sizeof(PlayerUpdateData));
+			if (!playerData) { return false; }
+		}
+
+		for (int i = 0; i < count; i++)
+		{
+			SerializePlayerUpdateData(stream, playerData[i]);
+		}
+
+		return true;
+	}
+} UpdatePacket;
 
 #endif // TANKS_H

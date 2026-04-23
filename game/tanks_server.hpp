@@ -6,6 +6,9 @@
 #include "tanks_math.hpp"
 #include <limits.h>
 
+#define TICK_RATE 60
+#define TICK_DURATION (1.0 / TICK_RATE)
+
 typedef struct {
 	bool active;
 	u32 connectionID;
@@ -28,6 +31,7 @@ typedef struct {
 	u32 playerCount;
 	Arena tempArena;
 	PlatformAPI platform;
+	double last_tick;
 } ServerState;
 
 const vec2 RR_SPAWN_POSITIONS[4] = {{-0.5f, 0.5f}, {0.5f, 0.5f}, {-0.5f, -0.5f}, {0.5f, -0.5f}};

@@ -1,12 +1,15 @@
 #include "portal.h"
 #include "arena.h"
+#include "ring_buffer.hpp"
 #include "core.h"
+#include <cassert>
+#include <cstddef>
 
 typedef struct {
 	PortalServer server;
 	PortalClient client;
-	NetworkEvent * serverEvents;
 	NetworkEvent * clientEvents;
+	RingBuffer * serverEvents;
 	clientState lastClientState;
 	Arena framePackets;
 } NetworkState;
@@ -37,14 +40,42 @@ PLATFORM_SERVER_SEND(PlatformServerSend)
 	PortalServerSend(&NETWORK_STATE.server, data, size, (PortalPacketSendMode)sendMode, clientIndex);
 }
 
+PLATFORM_SERVER_GET_EVENT(PlatformServerGetEvent)
+{
+	if (NETWORK_STATE.serverEvents->count == 0) { return false; }
+
+	RingEntry entry = RingBufferPop(NETWORK_STATE.serverEvents);
+	assert(entry.size >= sizeof(NetworkEvent));
+	*outEvent = (NetworkEvent*)entry.data;
+	return true;
+}
+
 void InitializeNetworking()
 {
 	PortalInit(NULL);
 
-	NETWORK_STATE.serverEvents = (NetworkEvent*)PlatformAlloc(sizeof(NetworkEvent) * 1024);
 	NETWORK_STATE.clientEvents = (NetworkEvent*)PlatformAlloc(sizeof(NetworkEvent) * 1024);
+	NETWORK_STATE.serverEvents = RingBufferCreate(KB(16));
 	NETWORK_STATE.framePackets = ArenaAlloc(KB(16));
 	NETWORK_STATE.lastClientState = CLIENT_DISCONNECTED;
+}
+
+void NetworkingHandleServerPacket(PortalPacket * packet)
+{
+	void * eventData = RingBufferPush(NETWORK_STATE.serverEvents, sizeof(NetworkEvent) + sizeof(NetworkPacket) + packet->size);
+
+	NetworkEvent  * event = (NetworkEvent*)eventData;
+	NetworkPacket * netPacket = (NetworkPacket*)((u8*)eventData + sizeof(NetworkEvent));
+	void * payload = (u8*)netPacket + sizeof(NetworkPacket);
+
+	netPacket->size = packet->size;
+	netPacket->data = payload;
+	netPacket->id   = packet->peerID;
+	memcpy(payload, packet->data, packet->size);
+
+	event->type   = NET_EVENT_PACKET;
+	event->connID = packet->peerID;
+	event->packet = netPacket;
 }
 
 void NetworkingUpdate(GameInput * input, double time)
@@ -88,14 +119,18 @@ void NetworkingUpdate(GameInput * input, double time)
 			switch (serverEvent.type) {
 				case PORTAL_EVENT_CLIENT_CONNECT:
 				{
-					NetworkEvent event = {NET_EVENT_CLIENT_CONNECTED, serverEvent.id, NULL};
-					NETWORK_STATE.serverEvents[serverEventCount++] = event;
+					NetworkEvent * event = (NetworkEvent*)RingBufferPush(NETWORK_STATE.serverEvents, sizeof(NetworkEvent));
+					event->type = NET_EVENT_CLIENT_CONNECTED;
+					event->connID = serverEvent.id;
+					event->packet = NULL;
 				} break;
 
 				case PORTAL_EVENT_CLIENT_DISCONNECT:
 				{
-					NetworkEvent event = {NET_EVENT_CLIENT_DISCONNECTED, serverEvent.id, NULL};
-					NETWORK_STATE.serverEvents[serverEventCount++] = event;
+					NetworkEvent * event = (NetworkEvent*)RingBufferPush(NETWORK_STATE.serverEvents, sizeof(NetworkEvent));
+					event->type = NET_EVENT_CLIENT_CONNECTED;
+					event->connID = serverEvent.id;
+					event->packet = NULL;
 				} break;
 			}
 		}
@@ -103,19 +138,10 @@ void NetworkingUpdate(GameInput * input, double time)
 		PortalPacket packet = {0};
 		while (NETWORK_STATE.server.started && PortalServerReceive(&NETWORK_STATE.server, &packet))
 		{
-			NetworkPacket * netPacket = (NetworkPacket*)ArenaPush(&NETWORK_STATE.framePackets, sizeof(NetworkPacket));
-			void * data = ArenaPush(&NETWORK_STATE.framePackets, packet.size);
-			netPacket->size = packet.size;
-			netPacket->data = data;
-			netPacket->id = packet.peerID;
-			memcpy(data, packet.data, packet.size);
-			NetworkEvent event = {NET_EVENT_PACKET, packet.peerID, netPacket};
-			NETWORK_STATE.serverEvents[serverEventCount++] = event;
+			NetworkingHandleServerPacket(&packet);
 		}
 	}
 
 	input->clientEventCount = clientEventCount;
 	input->clientEvents = NETWORK_STATE.clientEvents;
-	input->serverEventCount = serverEventCount;
-	input->serverEvents = NETWORK_STATE.serverEvents;
 }

@@ -333,13 +333,13 @@ void DEBUG_SyncTanks(Tank * tanks, TankGFX * tankGFX)
 {
 	for (int i = 0; i < MAX_PLAYERS; i++)
 	{
-		//tankGFX[i].playerID  = tanks[i].playerID;
+		tankGFX[i].playerID  = tanks[i].playerID;
 		tankGFX[i].position  = tanks[i].position;
 		tankGFX[i].rotation  = tanks[i].rotation;
 		tankGFX[i].turretRot = tanks[i].turretRot;
 		tankGFX[i].health	 = tanks[i].health;
-		//tankGFX[i].active	 = tanks[i].active;
-		//tankGFX[i].style	 = tanks[i].style;
+		tankGFX[i].active	 = tanks[i].active;
+		tankGFX[i].style	 = tanks[i].style;
 	}
 }
 
@@ -409,7 +409,7 @@ void DrawParticles(RendererPushBuffer * renderCmds, GameState * state)
 void ClientStart(GameState * state, GameMemory * gameMemory)
 {
 	state->permArena = ArenaInit((u8*)gameMemory->permStorage + sizeof(GameState) + sizeof(ServerState),
-								 gameMemory->permStorageSize - sizeof(GameState) - sizeof(ServerState));
+								  gameMemory->permStorageSize - sizeof(GameState) - sizeof(ServerState));
 
     state->tankAtlasHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"tank_parts.png");
     state->extraTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"images/platformer/Props_AirDrop.png");
@@ -477,6 +477,20 @@ void ClientProcessConnectPacket(GameState * state, ConnectPacket * packet)
 	copy_c_str(tank->displayName, packet->playerData.displayName, sizeof(tank->displayName));
 }
 
+void ClientProcessUpdatePacket(GameState * state, UpdatePacket * packet)
+{
+	for (int i = 0; i < packet->count; i++)
+	{
+		PlayerUpdateData * updateData = packet->playerData + i;
+
+		TankGFX * player = &state->tanks[updateData->playerID];
+		player->health = updateData->health;
+		player->position = updateData->pos;
+		player->turretRot = updateData->turretRot;
+		player->rotation = updateData->rotation;
+	}
+}
+
 void ClientHandlePacket(GameState * state, NetworkPacket * packet)
 {
 	PacketType type = (PacketType)(((u8*)packet->data)[0]);
@@ -500,12 +514,21 @@ void ClientHandlePacket(GameState * state, NetworkPacket * packet)
 				ClientProcessConnectPacket(state, &connectPkt);
 			}
 		} break;
+		case PACKET_TYPE_UPDATE:
+		{
+			UpdatePacket updatePkt;
+			if (updatePkt.serialize(stream, &state->frameArena))
+			{
+				ClientProcessUpdatePacket(state, &updatePkt);
+			}
+		} break;
 		default: break;
 	}
 }
 void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands)
 {
     state->time += input->deltaTime;
+	ArenaClear(&state->frameArena);
 
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
 	mat4 projection = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);

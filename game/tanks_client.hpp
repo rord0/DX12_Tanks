@@ -60,6 +60,7 @@ typedef struct {
     double time;
     vec3 cameraPos;
 	Arena permArena;
+	Arena frameArena;
     u32 extraTextureHandle;
     u32 tankAtlasHandle;
 	AtlasEntry * tankAtlasEntries;

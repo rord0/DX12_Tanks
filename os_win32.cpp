@@ -10,6 +10,14 @@ void * PlatformAlloc(size_t size)
     return VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 }
 
+void PlatformFree(void * memory)
+{
+    if (memory)
+    {
+        VirtualFree(memory, 0, MEM_RELEASE);
+    }
+}
+
 PLATFORM_FREE_FILE(DEBUG_PlatformFreeFileMemory)
 {
     if (*memory)
