@@ -39,6 +39,7 @@ void * RingBufferPush(RingBuffer * rb, size_t size)
     f->size = size;
     rb->head += total_size;
 	rb->count++;
+	assert(rb->head - rb->tail <= rb->cap);
     return f + 1;
 }
 
@@ -62,6 +63,7 @@ RingEntry RingBufferPop(RingBuffer * rb)
 	entry.data = (void*)(f+1);
     rb->tail += sizeof(RingFrame) + RING_FRAME_ALIGN(f->size);
 	rb->count--;
+	assert(rb->tail <= rb->head);
 	return entry;
 }
 

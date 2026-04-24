@@ -141,6 +141,25 @@ void ServerBroadcastConnectMessage(ServerState * state, u32 playerIndex)
 	}
 }
 
+void ServerBroadcastDisconnectMessage(ServerState * state, u32 playerID)
+{
+	ScratchArena temp(&state->tempArena);
+
+	DisconnectPacket packet = {0};
+	packet.playerID = playerID;
+
+	WriteStream stream = {(u8*)ArenaPush(temp.arena, KB(1)), KB(1)};
+	if (!packet.serialize(stream)) { return; }
+
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		if (state->tanks[i].active)
+		{
+			state->platform.platformServerSend(stream.buffer, stream.pos, 1, state->tanks[i].connectionID);
+		}
+	}
+}
+
 void ServerStart(ServerState * state, u16 port, u16 maxPlayers)
 {
 	state->platform.platformStartServer(7777, maxPlayers);
@@ -193,7 +212,11 @@ void ServerProcessInputPacket(ServerState * state, InputPacket * packet, u32 con
 
 void ServerHandleDisconnect(ServerState * state, u32 connID)
 {
-	return;
+	Tank * player = ServerGetPlayer(state, connID);
+	if (!player) { return; }
+
+	player->active = false;
+	ServerBroadcastDisconnectMessage(state, player->playerID);
 }
 
 void ServerHandlePacket(ServerState * state, NetworkPacket * packet)

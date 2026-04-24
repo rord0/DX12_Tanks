@@ -58,6 +58,7 @@ typedef struct
 
 typedef struct {
     double time;
+    double timeSinceLastUpdate;
     vec3 cameraPos;
 	Arena permArena;
 	Arena frameArena;

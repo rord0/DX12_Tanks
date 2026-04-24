@@ -474,6 +474,12 @@ void ClientProcessConnectPacket(GameState * state, ConnectPacket * packet)
 	copy_c_str(tank->displayName, packet->playerData.displayName, sizeof(tank->displayName));
 }
 
+void ClientProcessDisconnectPacket(GameState * state, DisconnectPacket * packet)
+{
+	TankGFX * tank = &state->tanks[packet->playerID];
+	tank->active = false;
+}
+
 void ClientProcessUpdatePacket(GameState * state, UpdatePacket * packet)
 {
 	for (int i = 0; i < packet->count; i++)
@@ -532,12 +538,23 @@ void ClientHandlePacket(GameState * state, NetworkPacket * packet)
 				ClientProcessPlayerFiredPacket(state, &firedPkt);
 			}
 		} break;
+		case PACKET_TYPE_DISCONNECT:
+		{
+			DisconnectPacket disconnectPkt;
+			if (disconnectPkt.serialize(stream))
+			{
+				ClientProcessDisconnectPacket(state, &disconnectPkt);
+			}
+		}
 		default: break;
 	}
 }
 
 void ClientSendInput(GameState * state, GameInput * input, GameMemory * memory, vec2 mouseWorld)
 {
+	if (state->time - state->timeSinceLastUpdate < 0.016) { return; }
+	state->timeSinceLastUpdate = state->time;
+
 	TankGFX * localPlayer = &state->tanks[state->playerID];
 	localPlayer->turretRot = Vec2AngleToRad(localPlayer->position, mouseWorld);
 

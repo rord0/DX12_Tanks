@@ -128,7 +128,7 @@ void NetworkingUpdate(GameInput * input, double time)
 				case PORTAL_EVENT_CLIENT_DISCONNECT:
 				{
 					NetworkEvent * event = (NetworkEvent*)RingBufferPush(NETWORK_STATE.serverEvents, sizeof(NetworkEvent));
-					event->type = NET_EVENT_CLIENT_CONNECTED;
+					event->type = NET_EVENT_CLIENT_DISCONNECTED;
 					event->connID = serverEvent.id;
 					event->packet = NULL;
 				} break;

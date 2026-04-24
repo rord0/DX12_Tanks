@@ -43,6 +43,7 @@ typedef enum {
 	PACKET_TYPE_HELLO = 10,
 	PACKET_TYPE_WELCOME,
 	PACKET_TYPE_CONNECT,
+	PACKET_TYPE_DISCONNECT,
 	PACKET_TYPE_INPUT,
 	PACKET_TYPE_UPDATE,
 	PACKET_TYPE_FIRED
@@ -138,6 +139,18 @@ typedef struct ServerConnectPacket {
 		return true;
 	}
 } ConnectPacket;
+
+typedef struct ServerDisconnectPacket {
+	u16 playerID;
+	template<typename Stream>
+	bool serialize(Stream & stream)
+	{
+		u8 type = PACKET_TYPE_DISCONNECT;
+		SerializeU8(stream, type);
+		SerializeU16(stream, playerID);
+		return true;
+	}
+} DisconnectPacket;
 
 typedef struct PlayerFiredPacket {
 	u16 playerID;
