@@ -3,6 +3,7 @@ struct PixelShaderInput
 {
     float2 UV: UV;
     uint instanceTextureID: InstanceTextureID;
+	float alpha : InstanceAlpha;
 };
 
 Texture2D<float4> texture1[32] : register(t0);
@@ -18,5 +19,6 @@ float4 main(PixelShaderInput IN) : SV_TARGET
     float4 texel = texture1[IN.instanceTextureID].Sample(textureSampler, float2(uv));
 
     float4 pixelColor = texel;
+	pixelColor.a *= IN.alpha;
     return pixelColor;
 }

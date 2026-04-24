@@ -2,6 +2,7 @@
 #include "serialize.hpp"
 #include "tanks.hpp"
 #include "util.hpp"
+#include "render_commands.hpp"
 #include <cmath>
 #include <cstddef>
 
@@ -62,8 +63,9 @@ vec3 ColorHexToRBGNormalized(u32 color)
     return vec3{r, g, b};
 }
 
-f32 easeOutExpo(f32 x) { return (x == 1.0f) ? 1.0f : 1.0f - powf(2.0f, -10.0f * x); }
-f32 easeInQuad(f32 x) { return (x * x); }
+f32 easeOutExpo(f32 x)  { return (x == 1.0f) ? 1.0f : 1.0f - powf(2.0f, -10.0f * x); }
+f32 easeInQuad(f32 x)   { return (x * x); }
+f32 easeInExpo(float x) { return x == 0.0f ? 0.0f : powf(2.0f, 10.0f * x - 10.0f); }
 
 float Vec2AngleToRad(vec2 A, vec2 B)
 {
@@ -326,8 +328,11 @@ void TankPlayFireEffects(u16 playerID, vec2 hitPosition, GameState * state)
 	vec2 tankDir = vec2{cosf(tank->rotation),  sinf(tank->rotation)};
 	vec2 turretCenter = (-tankDir * -0.03f) + tank->position;
 	vec2 newPos = turretCenter - particleDir * 0.5f;
+	vec2 turretTipPos = turretCenter - particleDir * 0.25f;
 	EmitParticles(&state->turretFireEmitter, newPos, particleDir);
-	EmitParticles(&state->explosionEmitter, hitPosition, particleDir);
+	EmitParticles(&state->explosionEmitter, hitPosition, RandomDirection(&state->random));
+	EmitParticles(&state->shellTrailEmitter, turretTipPos, hitPosition);
+	EmitParticles(&state->impactEmitter, hitPosition, RandomDirection(&state->random));
 }
 
 void DEBUG_SyncTanks(Tank * tanks, TankGFX * tankGFX)
@@ -401,10 +406,52 @@ void DrawExplosionEffects(RendererPushBuffer * renderCmds, GameState * state)
 	}
 }
 
+void DrawShellTrailEffects(RendererPushBuffer * renderCmds, GameState * state)
+{
+	for (int i = 0; i < state->shellTrailEmitter.maxParticles; i++)
+	{
+		const Particle * effect = &state->shellTrailEmitter.particles[i];
+		if (!effect->active) { continue; }
+
+		const f32 progress = effect->timeAlive / state->shellTrailEmitter.startLifetime;
+		f32 alpha = 1.0f - easeInExpo(progress);
+		vec4 lineColor = {0.2078f, 0.2078f, 0.2078f, alpha / 10.0f};
+
+		RendererPushLine(renderCmds, effect->position, effect->direction, lineColor, 0.025f, 2);
+	}
+}
+
+void DrawShellImpactEffects(RendererPushBuffer * renderCmds, GameState * state)
+{
+	for (int i = 0; i < state->shellTrailEmitter.maxParticles; i++)
+	{
+		const Particle * effect = &state->impactEmitter.particles[i];
+		if (!effect->active) { continue; }
+
+		const f32 progress = effect->timeAlive / state->impactEmitter.startLifetime;
+		f32 alpha = 1.0f - easeInExpo(progress);
+		f32 angle = atan2f(effect->direction.y, effect->direction.x);
+
+		InstanceData2D instanceData = {{effect->position.x, effect->position.y, 0.0f}, {0.6f, 0.6f}, angle, alpha};
+		RendererPushImage(renderCmds, state->shellImpactTextureHandle, instanceData, 0);
+	}
+}
+
 void DrawParticles(RendererPushBuffer * renderCmds, GameState * state)
 {
 	DrawTurretFireEffects(renderCmds, state);
 	DrawExplosionEffects(renderCmds, state);
+	DrawShellTrailEffects(renderCmds, state);
+	DrawShellImpactEffects(renderCmds, state);
+}
+
+ParticleEmitter InitEmitter(f32 startLifetime, u32 maxParticles, Arena * arena)
+{
+	ParticleEmitter out;
+	out.startLifetime = startLifetime;
+	out.maxParticles = 16;
+	out.particles = (Particle*)ArenaPush(arena, sizeof(Particle) * maxParticles);
+	return out;
 }
 
 void ClientStart(GameState * state, GameMemory * gameMemory)
@@ -414,6 +461,7 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 
     state->tankAtlasHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"tank_parts.png");
     state->extraTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"images/platformer/Props_AirDrop.png");
+    state->shellImpactTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"shell_impact.png");
     ParseTextureAtlasCSV(gameMemory, state, RESOURCES_PATH"tank_parts.csv");
 
 	state->connected = false;
@@ -441,14 +489,14 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 
 	const f32 spritesheetAnimFPS = 20;
 	const f32 fireAnimDuration = (1.0 / spritesheetAnimFPS) * state->fireEffectSheet.numFrames;
-	state->turretFireEmitter.startLifetime = fireAnimDuration;
-	state->turretFireEmitter.maxParticles = 16;
-	state->turretFireEmitter.particles = (Particle*)ArenaPush(&state->permArena, sizeof(Particle) * state->turretFireEmitter.maxParticles);
-
 	const f32 explosionAnimDuration = (1.0 / spritesheetAnimFPS) * state->explosionVFXSheet.numFrames;
-	state->explosionEmitter.startLifetime = explosionAnimDuration;
-	state->explosionEmitter.maxParticles = 16;
-	state->explosionEmitter.particles = (Particle*)ArenaPush(&state->permArena, sizeof(Particle) * state->explosionEmitter.maxParticles);
+
+	state->turretFireEmitter = InitEmitter(fireAnimDuration, 16, &state->permArena);
+	state->explosionEmitter  = InitEmitter(explosionAnimDuration, 16, &state->permArena);
+	state->shellTrailEmitter = InitEmitter(explosionAnimDuration * 1.5f, 16, &state->permArena);
+	state->impactEmitter     = InitEmitter(10.0f, 32, &state->permArena);
+
+	state->random = {0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL};
 }
 
 void ClientProcessWelcomePacket(GameState * state, WelcomePacket * packet, u32 connID)
@@ -645,15 +693,17 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	RendererPushSetClear(renderCommands, clearColor);
 	RendererPushSetProjection(renderCommands, projection);
 
-    RendererPushCircle(renderCommands, gdNormal.position, gdEasy.rotation, {0.1f,0.1f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
+    // RendererPushCircle(renderCommands, gdNormal.position, gdEasy.rotation, {0.1f,0.1f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
 
     //RendererPushImage(renderCommands, 2, gdEasy, 4);
     //RendererPushImage(renderCommands, state->extraTextureHandle, gdEasy, 0);
 
-    RendererPushLine(renderCommands, lineAStart, lineAEnd, lineColor, 0.02f, 0);
+   // RendererPushLine(renderCommands, lineAStart, lineAEnd, lineColor, 0.02f, 0);
 
 	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
 	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
+	SimulateParticles(&state->shellTrailEmitter, input->deltaTime);
+	SimulateParticles(&state->impactEmitter,     input->deltaTime);
 	DrawParticles(renderCommands, state);
 
 

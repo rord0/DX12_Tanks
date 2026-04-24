@@ -267,6 +267,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
             { "InstancePosition",  0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
             { "InstanceSize",      0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
             { "InstanceRotZ",      0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceAlpha",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
             { "InstanceTextureID", 0, DXGI_FORMAT_R32_UINT,        1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
     InitInstanceRenderData(&res.IRD[0], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(TextureInstanceData), 32, 0, &res.instanceDataArena);
@@ -290,7 +291,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
         { "Position",      0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         { "StartPos",      0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "EndPos",        0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-        { "InstanceColor", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InstanceColor", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "InstanceWidth", 0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1}
     };
     InitInstanceRenderData(&res.IRD[2], res.lineVertexBufferView, res.lineIndexBufferView, lineIndexCount, sizeof(LineInstanceData), 32, 2, &res.instanceDataArena);
@@ -568,6 +569,7 @@ void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData 
                 instanceData.rotation = entry->instanceData.rotation;
                 instanceData.scale = entry->instanceData.scale;
                 instanceData.textureIndex = entry->textureID;
+                instanceData.alpha = entry->instanceData.alpha;
                 RendererPushInstance(&instanceRenderData[0], drawCMDs, &instanceData, sortEntry.layer);
             } break;
 

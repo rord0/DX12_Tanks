@@ -1,5 +1,4 @@
-#include "../core.h"
-#include "../render_entry.h"
+#include "render_commands.hpp"
 
 u32 PushRenderEntryStruct(RendererPushBuffer * pb, void * entry, size_t entrySize)
 {
@@ -20,7 +19,10 @@ void PushRenderSortEntry(RendererPushBuffer * pb, RenderSortEntry sortEntry)
     {
         pb->sortEntries[pb->sortEntryCount++] = sortEntry;
     }
-    // TODO: warn if sort entry buffer full.
+	else
+	{
+		// TODO: warn if sort entry buffer full.
+	}
 }
 
 #define PushRenderEntry(pushBuffer, entry) PushRenderEntryStruct(pushBuffer, &entry, sizeof(entry));
@@ -60,7 +62,7 @@ void RendererPushRectangle(RendererPushBuffer * pb, DebugGeoInstanceData instanc
     PushRenderSortEntry(pb, sortEntry);
 }
 
-void RendererPushLine(RendererPushBuffer * pb, vec2 startPos, vec2 endPos, vec3 color, float width, u16 layer)
+void RendererPushLine(RendererPushBuffer * pb, vec2 startPos, vec2 endPos, vec4 color, float width, u16 layer)
 {
     LineInstanceData instanceData = {{startPos.x, startPos.y, 0.0f}, {endPos.x, endPos.y, 0.0f}, color, width};
     RenderEntryLine entry = {RENDER_ENTRY_TYPE_LINE, instanceData};

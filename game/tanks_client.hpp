@@ -5,6 +5,7 @@
 #include "tanks_math.hpp"
 #include "tanks_server.hpp"
 #include "tanks.hpp"
+#include "util.hpp"
 
 #include <cassert>
 #include <charconv>
@@ -63,17 +64,21 @@ typedef struct {
 	Arena permArena;
 	Arena frameArena;
     u32 extraTextureHandle;
+    u32 shellImpactTextureHandle;
     u32 tankAtlasHandle;
 	AtlasEntry * tankAtlasEntries;
 	SpriteSheet fireEffectSheet;
 	SpriteSheet explosionVFXSheet;
 	ParticleEmitter turretFireEmitter;
 	ParticleEmitter explosionEmitter;
+	ParticleEmitter shellTrailEmitter;
+	ParticleEmitter impactEmitter;
 	TankGFX tanks[8]; 
 	u16 playerID;
 	char displayName[32];
 	bool connected;
 	bool helloSent;
+	pcg32_random_t random;
 } GameState;
 
 void ClientStart(GameState * state, GameMemory * gameMemory);

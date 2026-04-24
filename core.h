@@ -108,12 +108,14 @@ typedef struct {
     vec3 position;
     vec2 scale;
     float rotation;
+	float alpha;
 } InstanceData2D;
 
 typedef struct {
     vec3 position;
     vec2 scale;
     float rotation;
+    float alpha;
     u32 textureIndex;
 } TextureInstanceData;
 
@@ -136,7 +138,7 @@ typedef struct {
 typedef struct {
     vec3 startPos;
     vec3 endPos;
-    vec3 color;
+    vec4 color;
     float width;
 } LineInstanceData;
 

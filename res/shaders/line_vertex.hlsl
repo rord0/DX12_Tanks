@@ -10,13 +10,13 @@ struct VertexData
     float3 Position : Position;
     float3 posA: StartPos;
     float2 posB: EndPos;
-    float3 instanceColor : InstanceColor;
+    float4 instanceColor : InstanceColor;
     float  width : InstanceWidth;
 };
 
 struct VSOutput
 {
-	float3 Color : COLOR;
+	float4 Color : COLOR;
     float4 Position : SV_Position;
 };
 
