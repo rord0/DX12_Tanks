@@ -94,6 +94,20 @@ typedef struct ClientHelloPacket {
 	}
 } HelloPacket;
 
+typedef struct ClientInputPacket {
+	u8 input;
+	f32 turretRot;
+	template<typename Stream>
+	bool serialize(Stream & stream)
+	{
+		u8 type = PACKET_TYPE_INPUT;
+		SerializeU8(stream, type);
+		SerializeU8(stream, input);
+		SerializeF32(stream, turretRot);
+		return true;
+	}
+} InputPacket;
+
 typedef struct ServerWelcomePacket {
 	u16 playerID;
 	u8 playerCount;
@@ -124,6 +138,20 @@ typedef struct ServerConnectPacket {
 		return true;
 	}
 } ConnectPacket;
+
+typedef struct PlayerFiredPacket {
+	u16 playerID;
+	vec2 hitPosition;
+	template<typename Stream>
+	bool serialize(Stream & stream)
+	{
+		u8 type = PACKET_TYPE_FIRED;
+		SerializeU8(stream, type);
+		SerializeU16(stream, playerID);
+		SerializeV2(stream, hitPosition);
+		return true;
+	}
+} PlayerFiredPacket;
 
 typedef struct ServerUpdatePacket {
 	u16 count;

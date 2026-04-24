@@ -1,4 +1,5 @@
 #include "tanks_client.hpp"
+#include "serialize.hpp"
 #include "tanks.hpp"
 #include "util.hpp"
 #include <cmath>
@@ -438,10 +439,6 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 		state->tanks[i] = {0};
 	}
 
-	state->tanks[0].style.colorID = 1;
-	state->tanks[1].style.colorID = 2;
-	state->tanks[3].style.colorID = 3;
-
 	const f32 spritesheetAnimFPS = 20;
 	const f32 fireAnimDuration = (1.0 / spritesheetAnimFPS) * state->fireEffectSheet.numFrames;
 	state->turretFireEmitter.startLifetime = fireAnimDuration;
@@ -491,6 +488,11 @@ void ClientProcessUpdatePacket(GameState * state, UpdatePacket * packet)
 	}
 }
 
+void ClientProcessPlayerFiredPacket(GameState * state, PlayerFiredPacket * packet)
+{
+	TankPlayFireEffects(packet->playerID, packet->hitPosition, state);
+}
+
 void ClientHandlePacket(GameState * state, NetworkPacket * packet)
 {
 	PacketType type = (PacketType)(((u8*)packet->data)[0]);
@@ -522,9 +524,40 @@ void ClientHandlePacket(GameState * state, NetworkPacket * packet)
 				ClientProcessUpdatePacket(state, &updatePkt);
 			}
 		} break;
+		case PACKET_TYPE_FIRED:
+		{
+			PlayerFiredPacket firedPkt;
+			if (firedPkt.serialize(stream))
+			{
+				ClientProcessPlayerFiredPacket(state, &firedPkt);
+			}
+		} break;
 		default: break;
 	}
 }
+
+void ClientSendInput(GameState * state, GameInput * input, GameMemory * memory, vec2 mouseWorld)
+{
+	TankGFX * localPlayer = &state->tanks[state->playerID];
+	localPlayer->turretRot = Vec2AngleToRad(localPlayer->position, mouseWorld);
+
+	InputPacket pkt = {0};
+	pkt.turretRot = localPlayer->turretRot;
+
+	if (input->WASD[0].isDown) {pkt.input |= 1 << 0; };
+	if (input->WASD[1].isDown) {pkt.input |= 1 << 1; };
+	if (input->WASD[2].isDown) {pkt.input |= 1 << 2; };
+	if (input->WASD[3].isDown) {pkt.input |= 1 << 3; };
+	if (input->isSpacePressed) {pkt.input |= 1 << 4; };
+
+	ScratchArena temp(&state->frameArena);
+	WriteStream stream = {(u8*)ArenaPush(temp.arena, KB(1)), KB(1)};
+	if (pkt.serialize(stream))
+	{
+		memory->platform.platformClientSend(stream.buffer, stream.pos, 0);
+	}
+}
+
 void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands)
 {
     state->time += input->deltaTime;
@@ -532,9 +565,9 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
 	mat4 projection = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
-    double time = state->time;
 
 	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, input->viewportSize, projection);
+    double time = state->time;
     vec4 color = GetHSVSpectrumColor(time);
 
     float angle = (float)fmod(time * 100, 360.0) * (PI/180.0f);
@@ -577,6 +610,8 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 		state->helloSent = true;
 	}
 
+	ClientSendInput(state, input, gameMemory, mouseWorld);
+
 	Collider2D c = {.position = mouseWorld,
 					.size = vec2{0.5f, 0.5f},
 					.rotation = 0,
@@ -595,8 +630,8 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 
     RendererPushCircle(renderCommands, gdNormal.position, gdEasy.rotation, {0.1f,0.1f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
 
-    RendererPushImage(renderCommands, 2, gdEasy, 4);
-    RendererPushImage(renderCommands, state->extraTextureHandle, gdEasy, 0);
+    //RendererPushImage(renderCommands, 2, gdEasy, 4);
+    //RendererPushImage(renderCommands, state->extraTextureHandle, gdEasy, 0);
 
     RendererPushLine(renderCommands, lineAStart, lineAEnd, lineColor, 0.02f, 0);
 

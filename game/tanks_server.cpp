@@ -27,6 +27,18 @@ PlayerConnectData GetPlayerConnectData(ServerState * state, u32 playerID)
 	return data;
 }
 
+Tank * ServerGetPlayer(ServerState * state, u32 connectionID)
+{
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		if (state->tanks[i].connectionID == connectionID)
+		{
+			return &state->tanks[i];
+		}
+	}
+	return NULL;
+}
+
 void ServerSendWelcomeMessage(ServerState * state, u32 playerIndex)
 {
 	ScratchArena temp(&state->tempArena);
@@ -51,6 +63,27 @@ void ServerSendWelcomeMessage(ServerState * state, u32 playerIndex)
 	if (!packet.serialize(stream)) { return; }
 
 	state->platform.platformServerSend(stream.buffer, stream.pos, 1, player->connectionID);
+}
+
+void ServerSendPlayerFiredMessage(ServerState * state, u16 playerID, vec2 hitPos)
+{
+	ScratchArena temp(&state->tempArena);
+
+	Tank * player = &state->tanks[playerID];
+	PlayerFiredPacket packet = {0};
+	packet.playerID = playerID;
+	packet.hitPosition = hitPos;
+
+	WriteStream stream = {(u8*)ArenaPush(temp.arena, 1024), 1024};
+	if (!packet.serialize(stream)) { return; }
+
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		if (state->tanks[i].active)
+		{
+			state->platform.platformServerSend(stream.buffer, stream.pos, 1, state->tanks[i].connectionID);
+		}
+	}
 }
 
 void ServerSendUpdateMessage(ServerState * state)
@@ -149,6 +182,15 @@ void ServerProcessHelloPacket(ServerState * state, HelloPacket * packet, u32 con
 	ServerBroadcastConnectMessage(state, playerIndex);
 }
 
+void ServerProcessInputPacket(ServerState * state, InputPacket * packet, u32 connID)
+{
+	Tank * player = ServerGetPlayer(state, connID);
+	if (!player) { return; }
+
+	player->input = packet->input;
+	player->turretRot = packet->turretRot;
+}
+
 void ServerHandleDisconnect(ServerState * state, u32 connID)
 {
 	return;
@@ -169,6 +211,14 @@ void ServerHandlePacket(ServerState * state, NetworkPacket * packet)
 				ServerProcessHelloPacket(state, &helloPkt, packet->id);
 			}
 		} break;
+		case PACKET_TYPE_INPUT:
+		{
+			InputPacket inputPkt;
+			if (inputPkt.serialize(stream))
+			{
+				ServerProcessInputPacket(state, &inputPkt, packet->id);
+			}
+		}
 		default: break;
 	}
 }
@@ -221,7 +271,7 @@ void TankShoot(Tank * tank, ServerState * state)
 		TankDamage(hitTank, 10);
 	}
 
-	// TankPlayFireEffects(tank->playerID, hitPos, state);
+	ServerSendPlayerFiredMessage(state, tank->playerID, hitPos);
 	tank->lastFireTime = state->time;
 }
 
@@ -235,7 +285,6 @@ void UpdateTank(Tank * tank, ServerState * state)
 	if ((tank->input >> 3) & 1) { inputAxis.x += 1; } // RIGHT
 	
 	tank->rotation -= inputAxis.x * TANK_ROTATION_SPEED * TICK_DURATION;
-	tank->turretRot = tank->rotation;
 	vec2 tankForward = vec2Rotate({-1.0f, 0.0f}, tank->rotation);
 	tank->position += tankForward * TANK_MOVEMENT_SPEED * inputAxis.y * TICK_DURATION;
 
@@ -250,22 +299,6 @@ void UpdateTank(Tank * tank, ServerState * state)
 
 void ServerTick(ServerState * state, GameInput * input)
 {
-	u8 inputA = 0;
-	if (input->WASD[0].isDown) {inputA |= 1 << 0; };
-	if (input->WASD[1].isDown) {inputA |= 1 << 1; };
-	if (input->WASD[2].isDown) {inputA |= 1 << 2; };
-	if (input->WASD[3].isDown) {inputA |= 1 << 3; };
-	if (input->isSpacePressed) {inputA |= 1 << 4; };
-	u8 inputB = 0;
-	if (input->ARROWS[0].isDown) {inputB |= 1 << 0; };
-	if (input->ARROWS[1].isDown) {inputB |= 1 << 1; };
-	if (input->ARROWS[2].isDown) {inputB |= 1 << 2; };
-	if (input->ARROWS[3].isDown) {inputB |= 1 << 3; };
-	if (input->isEnterPressed)	 {inputB |= 1 << 4; };
-
-	//state->tanks[0].input = inputA;
-	//state->tanks[3].input = inputB;
-
 	NetworkEvent * netEvent;
 	while (state->platform.serverGetEvent(&netEvent))
 	{

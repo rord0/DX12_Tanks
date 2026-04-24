@@ -24,6 +24,7 @@ EXPORT GAME_START_FUNCTION(start)
 	ServerState * serverState = (ServerState*)((u8*)gameMemory->permStorage + sizeof(GameState));
     GameState * state = (GameState*)gameMemory->permStorage;
 	copy_c_str(state->displayName, "Player", 32);
+	const char * ip = "::1";
 
 	for (int i = 1; i < argc; i++)
 	{
@@ -37,12 +38,17 @@ EXPORT GAME_START_FUNCTION(start)
 		{
 			copy_c_str(state->displayName, &argv[i][7], 32);
 		}
+
+		if ((strcmp(argv[i], "--ipv6=") == 0) && argv[i][7] != '\0')
+		{
+		    ip = &argv[i][7];
+		}
 	}
 
 	state->frameArena = ArenaInit((u8*)gameMemory->transientStorage + MB(1), MB(1));
 	ClientStart(state, gameMemory);
 
-	gameMemory->platform.platformStartClient("::1", 7777);
+	gameMemory->platform.platformStartClient(ip, 7777);
 }
 
 EXPORT GAME_UPDATE_FUNCTION(update)
