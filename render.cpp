@@ -387,7 +387,11 @@ ID3DBlob * CompileShader(void * src, size_t size, const char * name, const char 
 {
     ID3DBlob * shaderBlob = nullptr;
     ID3DBlob * errorBlob = nullptr;
-    UINT flags1 = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+	#ifdef _DEBUG
+		UINT flags1 = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+	#else
+		UINT flags1 = D3DCOMPILE_OPTIMIZATION_LEVEL3;
+	#endif
 
     if (FAILED(D3DCompile(src, size, name, NULL, NULL, entry, target, flags1, 0, &shaderBlob, &errorBlob)))
     {

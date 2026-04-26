@@ -10,6 +10,7 @@
 #include "networking.cpp"
 
 #include "render_entry.h"
+#include <cstdio>
 
 #define GAME_CODE_DLL "tanksgame.dll"
 
@@ -329,6 +330,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     char** argv = NULL;
 	GetCLIArguments(&argc, &argv);
 
+	if (AttachConsole(ATTACH_PARENT_PROCESS))
+	{
+		freopen("CONOUT$", "w", stdout);
+		freopen("CONOUT$", "w", stderr);
+	}
+
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     WNDCLASS windowClass = {};
 
@@ -362,7 +369,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
                     0, 0, hInstance, 0);
 
     if (!windowHandle) { return -1; }
-
 
     bool contentLoaded = false;
 

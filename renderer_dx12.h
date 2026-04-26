@@ -13,8 +13,6 @@ using namespace Microsoft::WRL;
 
 //#include <d3dx12.h>
 
-#define _DEBUG
-
 const static UINT NUM_FRAMES = 2;
 
 typedef struct {

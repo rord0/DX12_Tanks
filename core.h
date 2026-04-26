@@ -20,7 +20,7 @@ typedef float f32;    // 32-bit Float
 #define MB(x) (KB(x) * 1024)
 #define GB(x) (MB(x) * 1024)
 
-#define RESOURCES_PATH "../res/"
+#define RESOURCES_PATH "./res/"
 #define PI 3.14159265358979323846
 
 typedef union {

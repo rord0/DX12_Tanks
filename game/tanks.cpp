@@ -39,7 +39,7 @@ EXPORT GAME_START_FUNCTION(start)
 			copy_c_str(state->displayName, &argv[i][7], 32);
 		}
 
-		if ((strcmp(argv[i], "--ipv6=") == 0) && argv[i][7] != '\0')
+		if ((strncmp(argv[i], "--ipv6=", 7) == 0) && argv[i][7] != '\0')
 		{
 		    ip = &argv[i][7];
 		}
