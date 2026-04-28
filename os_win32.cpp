@@ -3,6 +3,10 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#define CJSON_HIDE_SYMBOLS
+#include "cJSON.c"
+#include "cJSON.h"
+
 size_t TOTAL_ALLOCATED_BYTES  = 0;
 void * PlatformAlloc(size_t size)
 {

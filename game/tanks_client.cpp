@@ -151,6 +151,8 @@ void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {turretPos.x, turretPos.y, 0.0f}, tank.turretRot + (PI/2.0f), {0.57f, 1.0f}, turretUV, 2);
 
 	DrawHealthbar(cmdBuffer, vec2{tank.position.x, tank.position.y + 0.3f}, ((float)tank.health / (float)TANK_MAX_HEALTH), tank.healthLerp);
+	vec4 nameColor = {1.0f, 1.0f, 1.0f, 1.0f};
+	RendererPushText(cmdBuffer, tank.displayName, 5.0f, state->interFontHandle, vec2{tank.position.x - 0.2f, tank.position.y + 0.34f}, nameColor, 30);
 
 	// DEBUG VISUALS
     //RendererPushCircle(cmdBuffer, vec3{turretPos.x, turretPos.y, 0}, 0, {0.05f,0.05f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
@@ -462,6 +464,7 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
     state->tankAtlasHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"tank_parts.png");
     state->extraTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"images/platformer/Props_AirDrop.png");
     state->shellImpactTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"shell_impact.png");
+	state->interFontHandle = gameMemory->platform.loadFont(RESOURCES_PATH"fonts/Inter/Inter_18pt-Bold.png", RESOURCES_PATH"fonts/Inter/Inter_18pt-Bold.json");
     ParseTextureAtlasCSV(gameMemory, state, RESOURCES_PATH"tank_parts.csv");
 
 	state->connected = false;
@@ -699,6 +702,11 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
     //RendererPushImage(renderCommands, state->extraTextureHandle, gdEasy, 0);
 
    // RendererPushLine(renderCommands, lineAStart, lineAEnd, lineColor, 0.02f, 0);
+   	const char * text = "This is some text!";
+	vec2 textPos = {0,0};
+	vec4 textColor = {1.0f, 0.0f, 0.0f, 1.0f};
+	f32 fontSize = 10.0f;
+	RendererPushText(renderCommands, text, fontSize, state->interFontHandle, textPos, textColor, 30);
 
 	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
 	SimulateParticles(&state->explosionEmitter,  input->deltaTime);

@@ -11,5 +11,6 @@ typedef struct
 
 bool ArrayPush(Array * array, void * element);
 Array ArrayInit(size_t elementSize, size_t capacity, void * elements);
+bool ArrayFull(const Array * array);
 
 #endif // ARRAY_H

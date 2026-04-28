@@ -20,7 +20,7 @@ struct VSOutput
     float4 Position : SV_Position;
 };
 
-VSOutput main(VertexData IN)
+VSOutput VSmain(VertexData IN)
 {
     VSOutput OUT;
     

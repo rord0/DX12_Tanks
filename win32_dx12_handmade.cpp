@@ -1,3 +1,4 @@
+#include "array.h"
 #include "core.h"
 #include "includes.h"
 
@@ -8,8 +9,11 @@
 
 #include "renderer_dx12.cpp"
 #include "networking.cpp"
+#include "./engine/fonts.cpp"
 
 #include "render_entry.h"
+#include "./engine/fonts.hpp"
+#include <cstddef>
 #include <cstdio>
 
 #define GAME_CODE_DLL "tanksgame.dll"
@@ -304,6 +308,11 @@ PLATFORM_LOAD_TEXTURE(PlatformLoadTexture)
     return textureHandle;
 }
 
+PLATFORM_LOAD_FONT_ATLAS(PlatformLoadFontAtlas)
+{
+	return LoadFontAtlas(metadataPath, atlasPath);
+}
+
 void GetCLIArguments(int * argc, char *** argv)
 {
 	int arg_count;
@@ -402,6 +411,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 	gameMemory.platform.platformClientSend  = &PlatformClientSend;
 	gameMemory.platform.platformServerSend  = &PlatformServerSend;
 	gameMemory.platform.serverGetEvent      = &PlatformServerGetEvent;
+	gameMemory.platform.loadFont 			= &PlatformLoadFontAtlas;
 
 	GameInput gameInput = {0};
 
@@ -413,6 +423,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     pushBuffer.maxSortEntries = 8096;
     pushBuffer.sortEntries = (RenderSortEntry*)PlatformAlloc(pushBuffer.maxSortEntries * sizeof(RenderSortEntry));
 
+	InitializeFonts();
     InitializeRenderer(windowHandle, false, CLIENT_WIDTH, CLIENT_HEIGHT);
 	InitializeNetworking();
 

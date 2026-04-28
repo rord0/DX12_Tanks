@@ -26,3 +26,8 @@ Array ArrayInit(size_t elementSize, size_t capacity, void * elements)
     array.count = 0;
     return array;
 }
+
+bool ArrayFull(const Array * array)
+{
+	return array->count >= array->capacity;
+}

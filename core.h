@@ -13,6 +13,7 @@ typedef uint8_t   u8; // 8-bit unsigned int
 typedef uint16_t u16; // 16-bit unsigned int
 typedef uint32_t u32;
 typedef uint64_t u64;
+typedef int32_t  i32;
 typedef uint32_t b32; // 32-bit Boolean
 typedef float f32;    // 32-bit Float
 
@@ -20,7 +21,7 @@ typedef float f32;    // 32-bit Float
 #define MB(x) (KB(x) * 1024)
 #define GB(x) (MB(x) * 1024)
 
-#define RESOURCES_PATH "./res/"
+#define RESOURCES_PATH "../res/"
 #define PI 3.14159265358979323846
 
 typedef union {
@@ -143,6 +144,14 @@ typedef struct {
 } LineInstanceData;
 
 typedef struct {
+    f32 x0, y0, x1, y1;
+    f32 u0, v0, u1, v1;
+	vec4 color;
+    u32 textureIndex;
+	f32 pad0, pad1, pad2;
+} GlyphInstanceData;
+
+typedef struct {
     void * data;
     u64 size;
 } DEBUG_FileResult;
@@ -172,6 +181,9 @@ typedef struct {
 // Function Typedefs
 #define PLATFORM_LOAD_TEXTURE(name) u32 name(const char * textureName)
 typedef PLATFORM_LOAD_TEXTURE(PlatformLoadTextureFunction);
+
+#define PLATFORM_LOAD_FONT_ATLAS(name) i32 name(const char * atlasPath, const char * metadataPath)
+typedef PLATFORM_LOAD_FONT_ATLAS(PlatformLoadFontAtlasFn);
 
 #define PLATFORM_LOAD_FILE(name) DEBUG_FileResult name(const char * filepath)
 typedef PLATFORM_LOAD_FILE(PlatformLoadFileFunction);
@@ -203,6 +215,7 @@ typedef struct {
 	PlatformClientSendFn * platformClientSend;
 	PlatformServerSendFn * platformServerSend;
 	PlatformServerGetEventFn * serverGetEvent;
+	PlatformLoadFontAtlasFn * loadFont;
 } PlatformAPI;
 
 typedef struct {

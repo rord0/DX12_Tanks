@@ -1,4 +1,21 @@
 #include "render_commands.hpp"
+#include <cstddef>
+#include <cstring>
+
+u32 PushRenderEntryText(RendererPushBuffer * pb, const RenderEntryText * entry, const char * text)
+{
+    u32 entryOffset = 0;
+	size_t totalEntrySize = (sizeof(RenderEntryText) + entry->len);
+    if (pb->index + totalEntrySize < pb->size)
+    {
+        entryOffset = pb->index;
+        memcpy(pb->memory + pb->index, entry, sizeof(RenderEntryText));
+        memcpy(pb->memory + pb->index + sizeof(RenderEntryText), text, entry->len);
+        pb->index += totalEntrySize;
+        pb->entryCount++;
+    }
+    return entryOffset;
+}
 
 u32 PushRenderEntryStruct(RendererPushBuffer * pb, void * entry, size_t entrySize)
 {
@@ -83,10 +100,19 @@ void RendererPushCircle(RendererPushBuffer * pb, vec3 position, f32 rotation, ve
 
 void RendererPushSubTexture(RendererPushBuffer * pb, u32 textureID, vec3 position, f32 rotation, vec2 scale, vec4 uvTransform, u16 layer)
 {
-    // TODO: SubTexture rendering
     RenderEntrySubTexture entry = {RENDER_ENTRY_TYPE_SUB_TEXTURE, textureID, position, rotation, scale, uvTransform};
     u32 entryOffset = PushRenderEntry(pb, entry);
 
     RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_SUB_TEXTURE, layer, entryOffset};
+    PushRenderSortEntry(pb, sortEntry);
+}
+
+void RendererPushText(RendererPushBuffer * pb, const char * text, f32 fontSize, i32 fontID, vec2 startPos, vec4 color, u16 layer)
+{
+	u32 textLen = strlen(text);
+	RenderEntryText entry = {RENDER_ENTRY_TYPE_TEXT, fontID, fontSize, startPos, color, textLen};
+	u32 entryOffset = PushRenderEntryText(pb, &entry, text);
+
+    RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_TEXT, layer, entryOffset};
     PushRenderSortEntry(pb, sortEntry);
 }

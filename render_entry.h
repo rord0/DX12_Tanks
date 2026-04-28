@@ -10,6 +10,7 @@ typedef enum
     RENDER_ENTRY_TYPE_LINE,
     RENDER_ENTRY_TYPE_TEXTURED_QUAD,
     RENDER_ENTRY_TYPE_SUB_TEXTURE,
+    RENDER_ENTRY_TYPE_TEXT,
 } RenderEntryType;
 
 typedef struct {
@@ -59,6 +60,15 @@ typedef struct {
     vec2 scale;
     vec4 uvTransform;
 } RenderEntrySubTexture;
+
+typedef struct {
+    RenderEntryHeader header;
+    i32 fontID;
+	f32 fontSize;
+    vec2 position;
+	vec4 color;
+	u32 len;
+} RenderEntryText;
 
 typedef struct {
     RenderEntryType type;

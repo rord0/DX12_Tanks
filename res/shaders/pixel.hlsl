@@ -9,7 +9,7 @@ struct PixelShaderInput
 Texture2D<float4> texture1[32] : register(t0);
 sampler textureSampler : register(s0);
 
-float4 main(PixelShaderInput IN) : SV_TARGET
+float4 PSmain(PixelShaderInput IN) : SV_TARGET
 {
     float2 uv = IN.UV;
     float2 uvScale = float2(2*0.125f, 2*0.125f);

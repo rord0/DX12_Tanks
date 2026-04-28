@@ -66,6 +66,7 @@ typedef struct {
     u32 extraTextureHandle;
     u32 shellImpactTextureHandle;
     u32 tankAtlasHandle;
+    i32 interFontHandle;
 	AtlasEntry * tankAtlasEntries;
 	SpriteSheet fireEffectSheet;
 	SpriteSheet explosionVFXSheet;

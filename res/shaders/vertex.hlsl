@@ -24,7 +24,7 @@ struct VertexShaderOutput
     float4 Position : SV_Position;
 };
 
-VertexShaderOutput main(VertexData IN)
+VertexShaderOutput VSmain(VertexData IN)
 {
     VertexShaderOutput OUT;
     float4x4 translation = {

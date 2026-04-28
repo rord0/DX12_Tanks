@@ -39,7 +39,7 @@ float circle(float2 uv, float f)
     return outer * inner;
 }
 
-float4 main(PixelShaderInput IN) : SV_TARGET
+float4 PSmain(PixelShaderInput IN) : SV_TARGET
 {
     float4 pixelColor = {IN.color.rgb, circle(IN.UV, IN.fill)};
     return pixelColor;

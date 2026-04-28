@@ -116,7 +116,7 @@ typedef struct {
     Arena instanceDataArena;
     Array instanceDrawCMDs;
 
-    InstanceRenderData IRD[5];
+    InstanceRenderData IRD[6];
 
 	vec4 clearColor;
     // Matrices
