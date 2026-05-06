@@ -26,6 +26,12 @@ enum class LayoutType
 	END,
 };
 
+enum class SizingType
+{
+	HUG,
+	FIXED,
+};
+
 enum class LayoutDirection
 {
 	LEFT_TO_RIGHT,
@@ -39,6 +45,9 @@ typedef struct
 	vec2 size;
 	f32 childGap;
 	LayoutDirection layoutDirection;
+	u32 numChildren;
+	LayoutType justify;
+	SizingType sizing;
 } UINode;
 
 typedef struct UILayout_t
@@ -50,7 +59,7 @@ typedef struct UILayout_t
 	u32 depth;
 
 	void startLayout(f32 frameWidth, f32 frameHeight);
-	u32 begin(const char * label, f32 width, f32 height, f32 childGap, LayoutDirection layoutDirection);
+	u32 begin(const char * label, f32 width, f32 height, f32 childGap, LayoutDirection layoutDirection, LayoutType justify, SizingType sizing);
 	void end();
 	void endLayout();
 } UILayout;

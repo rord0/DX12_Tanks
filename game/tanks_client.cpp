@@ -646,10 +646,16 @@ void DrawMainMenu(RendererPushBuffer * renderCMDs, vec2i screen, vec2i mousePos,
 {
 	UILayout ui = {0};
 	ui.startLayout(screen.x, screen.y);
+		ui.begin("EMPTY", screen.x, 100.0f, 30); ui.end();
 		ui.begin("MENU_OPTION_CONTAINER", 0, 0, 30, LayoutDirection::TOP_TO_BOTTOM);
 			ui.begin("HOST_BUTTON", 390.0f, 100.0f, 0); ui.end();
 			ui.begin("JOIN_BUTTON", 390.0f, 100.0f, 0); ui.end();
 		ui.end();
+		ui.begin("MENU_OPTION_CONTAINER2", 0, 0, 30, LayoutDirection::TOP_TO_BOTTOM);
+			ui.begin("HOST_BUTTON", 390.0f, 100.0f, 0); ui.end();
+			ui.begin("JOIN_BUTTON", 390.0f, 100.0f, 0); ui.end();
+		ui.end();
+		ui.begin("PROFILE_MENU_CONTAINER", screen.x, 100.0f, 30); ui.end();
 	ui.endLayout();
 
 
