@@ -59,5 +59,5 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 
 	ServerUpdate(serverState, input);
 	// DEBUG_SyncTanks(serverState->tanks, state->tanks);
-	ClientUpdate(state, gameMemory, input, renderCommands);
+	ClientUpdate(state, gameMemory, input, renderCommands, uiRenderCMDs);
 }

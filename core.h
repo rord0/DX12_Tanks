@@ -152,6 +152,15 @@ typedef struct {
 } GlyphInstanceData;
 
 typedef struct {
+	vec2 position;
+	vec2 size;
+	vec4 fillColor;
+	vec4 strokeColor;
+	float cornerRadius;
+	f32 pad0, pad1, pad2;
+} SDFRectInstanceData;
+
+typedef struct {
     void * data;
     u64 size;
 } DEBUG_FileResult;
@@ -249,7 +258,7 @@ typedef struct {
 #define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory, int argc, char ** argv)
 typedef GAME_START_FUNCTION(GameStartFunction);
 
-#define GAME_UPDATE_FUNCTION(name) void name(GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands)
+#define GAME_UPDATE_FUNCTION(name) void name(GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands, RendererPushBuffer * uiRenderCMDs)
 typedef GAME_UPDATE_FUNCTION(GameUpdateFunction);
 
 #endif // CORE_H

@@ -11,6 +11,7 @@ typedef enum
     RENDER_ENTRY_TYPE_TEXTURED_QUAD,
     RENDER_ENTRY_TYPE_SUB_TEXTURE,
     RENDER_ENTRY_TYPE_TEXT,
+    RENDER_ENTRY_TYPE_SDF_RECT,
 } RenderEntryType;
 
 typedef struct {
@@ -68,7 +69,17 @@ typedef struct {
     vec2 position;
 	vec4 color;
 	u32 len;
+	b32 isWorldSpace;
 } RenderEntryText;
+
+typedef struct {
+    RenderEntryHeader header;
+    vec2 position;
+    vec2 size;
+	vec4 fillColor;
+	vec4 strokeColor;
+	f32 cornerRadius;
+} RenderEntrySDFRect;
 
 typedef struct {
     RenderEntryType type;

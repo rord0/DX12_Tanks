@@ -18,8 +18,8 @@
 
 #define GAME_CODE_DLL "tanksgame.dll"
 
-const u32 CLIENT_WIDTH = 1280;
-const u32 CLIENT_HEIGHT = 720;
+const u32 CLIENT_WIDTH = 1920;
+const u32 CLIENT_HEIGHT = 1080;
 
 bool RUNNING = false;
 
@@ -331,6 +331,16 @@ void GetCLIArguments(int * argc, char *** argv)
     LocalFree(wargv);
 }
 
+RendererPushBuffer PushBufferCreate(size_t bufferSize, u32 maxSortEntries)
+{
+	RendererPushBuffer pb = {0};
+    pb.memory = (u8*)PlatformAlloc(bufferSize);
+    pb.size = bufferSize;
+    pb.maxSortEntries = maxSortEntries;
+    pb.sortEntries = (RenderSortEntry*)PlatformAlloc(maxSortEntries * sizeof(RenderSortEntry));
+	return pb;
+}
+
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
@@ -417,11 +427,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
     InputState inputState = {};
 
-	RendererPushBuffer pushBuffer = {0};
-    pushBuffer.memory = (u8*)PlatformAlloc(MB(1));
-    pushBuffer.size = MB(1);
-    pushBuffer.maxSortEntries = 8096;
-    pushBuffer.sortEntries = (RenderSortEntry*)PlatformAlloc(pushBuffer.maxSortEntries * sizeof(RenderSortEntry));
+	RendererPushBuffer pushBuffer   = PushBufferCreate(MB(1), 8096);
+	RendererPushBuffer uiPushBuffer = PushBufferCreate(MB(1), 8096);
 
 	InitializeFonts();
     InitializeRenderer(windowHandle, false, CLIENT_WIDTH, CLIENT_HEIGHT);
@@ -488,7 +495,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 		gameInput.viewportSize = vec2i{resolution.x, resolution.y};
 		gameInput.mousePosVP = vec2i{inputState.mousePos.x, inputState.mousePos.y};
 
-        gameCode.Update(&gameMemory, &gameInput, &pushBuffer);
+        gameCode.Update(&gameMemory, &gameInput, &pushBuffer, &uiPushBuffer);
 
 		if (inputState.ESC.isDown)
 		{
@@ -498,6 +505,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         ///////////////
         // Rendering
         RendererProcessPushBuffer(&pushBuffer);
+        RendererProcessPushBuffer(&uiPushBuffer);
         BeginFrame();
         Render();
         EndFrame();

@@ -3,6 +3,8 @@
 #include "tanks.hpp"
 #include "util.hpp"
 #include "render_commands.hpp"
+#include "ui.hpp"
+#include "ui.cpp"
 #include <cmath>
 #include <cstddef>
 
@@ -11,12 +13,10 @@ mat4 orthographicProjection(float right, float left, float top, float bottom, fl
     mat4 m = {};
     m.m[0][0] = 2.0f / (right - left);
     m.m[1][1] = 2.0f / (top - bottom);
-    m.m[2][2] = 2.0f / (f - n);
-
-    m.m[0][3] = -((right + left)/(right - left));
-    m.m[1][3] = -((top + bottom)/(top - bottom));
-    m.m[2][3] = -((f + n)/(f - n));
-
+    m.m[2][2] = 1.0f / (f - n);           // DX12 [0,1] depth
+    m.m[3][0] = -((right + left) / (right - left));  // row-major translation
+    m.m[3][1] = -((top + bottom) / (top - bottom));
+    m.m[3][2] = -n / (f - n);
     m.m[3][3] = 1.0f;
     return m;
 }                      
@@ -34,6 +34,22 @@ mat4 inverseOrthographicProjection(float right, float left, float top, float bot
     m.m[2][3] = (f + n) * 0.5f;
 
     m.m[3][3] = 1.0f;
+
+    return m;
+}
+
+mat4 translationMatrix(float x, float y, float z)
+{
+    mat4 m = {};
+
+    m.m[0][0] = 1.0f;
+    m.m[1][1] = 1.0f;
+    m.m[2][2] = 1.0f;
+    m.m[3][3] = 1.0f;
+
+    m.m[0][3] = x;
+    m.m[1][3] = y;
+    m.m[2][3] = z;
 
     return m;
 }
@@ -152,7 +168,7 @@ void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 
 	DrawHealthbar(cmdBuffer, vec2{tank.position.x, tank.position.y + 0.3f}, ((float)tank.health / (float)TANK_MAX_HEALTH), tank.healthLerp);
 	vec4 nameColor = {1.0f, 1.0f, 1.0f, 1.0f};
-	RendererPushText(cmdBuffer, tank.displayName, 5.0f, state->interFontHandle, vec2{tank.position.x - 0.2f, tank.position.y + 0.34f}, nameColor, 30);
+	RendererPushText(cmdBuffer, tank.displayName, 0.05f, state->interFontHandle, vec2{tank.position.x - 0.2f, tank.position.y + 0.34f}, nameColor, true, 30);
 
 	// DEBUG VISUALS
     //RendererPushCircle(cmdBuffer, vec3{turretPos.x, turretPos.y, 0}, 0, {0.05f,0.05f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
@@ -626,7 +642,36 @@ void ClientSendInput(GameState * state, GameInput * input, GameMemory * memory, 
 	}
 }
 
-void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands)
+void DrawMainMenu(RendererPushBuffer * renderCMDs, vec2i screen, vec2i mousePos, i32 fontHandle)
+{
+	UILayout ui = {0};
+	ui.startLayout(screen.x, screen.y);
+		ui.begin("MENU_OPTION_CONTAINER", 0, 0, 30, LayoutDirection::TOP_TO_BOTTOM);
+			ui.begin("HOST_BUTTON", 390.0f, 100.0f, 0); ui.end();
+			ui.begin("JOIN_BUTTON", 390.0f, 100.0f, 0); ui.end();
+		ui.end();
+	ui.endLayout();
+
+
+	SDFShapeStyle buttonStyle = {.fillColor    = ColorHexToRBGANormalized(0x262D33CC),
+							     .strokeColor  = ColorHexToRBGANormalized(0x262D33FF),
+							     .cornerRadius = 6,
+								 .strokeWidth  = 3};
+
+	for (int i = 1; i < ui.count; i++)
+	{
+		UINode * node = &ui.nodes[i];
+		RendererPushSDFRect(renderCMDs, node->pos, node->size, &buttonStyle, 1);
+	}
+
+   	const char * text = "HOST";
+	vec2 textPos = {0,0};
+	vec4 textColor = {1.0f, 1.0f, 1.0f, 1.0f};
+	f32 fontSize = 40.0f;
+	RendererPushText(renderCMDs, text, fontSize, fontHandle, textPos, textColor, false, 30);
+}
+
+void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands, RendererPushBuffer * uiRenderCMDs)
 {
     state->time += input->deltaTime;
 	ArenaClear(&state->frameArena);
@@ -634,14 +679,14 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
 	mat4 projection = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
 
+	vec2 cameraPos = {0.0f, 0.0f};
+	mat4 view = translationMatrix(cameraPos.x, cameraPos.y, 1.0f);
 	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, input->viewportSize, projection);
     double time = state->time;
     vec4 color = GetHSVSpectrumColor(time);
 
     float angle = (float)fmod(time * 100, 360.0) * (PI/180.0f);
     float angle2 = (float)fmod(time * 10, 360.0) * (PI/180.0f);
-    InstanceData2D gdEasy   = {{mouseWorld.x, mouseWorld.y, 0.0f}, {0.5f, 0.5f}, 0.0f};
-    InstanceData2D gdNormal = {{0, 0, 0.0f}, {0.64f, 1.0f}, 1.57079633f};
     InstanceData2D gdHarder = {{0.0f, sinf(angle), 0.0f}, {0.8f, 1.0f}, angle};
     InstanceData2D gdHard   = {{gdHarder.position.x + sinf(angle) * -0.075f, gdHarder.position.y - cosf(angle) * -0.075f}, {0.57f, 1.0f}, angle};
 
@@ -699,14 +744,17 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
     // RendererPushCircle(renderCommands, gdNormal.position, gdEasy.rotation, {0.1f,0.1f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
 
     //RendererPushImage(renderCommands, 2, gdEasy, 4);
-    //RendererPushImage(renderCommands, state->extraTextureHandle, gdEasy, 0);
+    InstanceData2D gdEasy   = {{1.0f, 1.0f, 0.0f}, {0.5f, 0.5f}, 1.0f, 1.0f};
+    InstanceData2D gdNormal = {{1.0f, 1.0f, 0.0f}, {10.0f, 10.f}, 1.0f, 1.0f};
+    RendererPushImage(renderCommands, 1, gdEasy, 0);
+    //RendererPushImage(renderCommands, 1, gdNormal, 0);
 
    // RendererPushLine(renderCommands, lineAStart, lineAEnd, lineColor, 0.02f, 0);
    	const char * text = "This is some text!";
 	vec2 textPos = {0,0};
 	vec4 textColor = {1.0f, 0.0f, 0.0f, 1.0f};
-	f32 fontSize = 10.0f;
-	RendererPushText(renderCommands, text, fontSize, state->interFontHandle, textPos, textColor, 30);
+	f32 fontSize = 0.1f;
+	RendererPushText(renderCommands, text, fontSize, state->interFontHandle, textPos, textColor, true, 30);
 
 	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
 	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
@@ -720,5 +768,10 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 		UpdateTankGFX(&state->tanks[i], input->deltaTime);
 		DrawTank(state->tanks[i], renderCommands, state);
 	}
+
+	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
+	RendererPushSetProjection(uiRenderCMDs, uiProjection);
+
+	DrawMainMenu(uiRenderCMDs, input->viewportSize, input->mousePosVP, state->interFontHandle);
 }
 
