@@ -23,7 +23,7 @@ u32 UILayout::begin(const char * label,
 
 void UILayout::startLayout(f32 width, f32 height)
 {
-	begin("ROOT", width, height, 0.0f, LayoutDirection::TOP_TO_BOTTOM, LayoutType::SPACE_BETWEEN, SizingType::FIXED);
+	begin("ROOT", width, height, 30.0f, LayoutDirection::TOP_TO_BOTTOM, LayoutType::CENTER, SizingType::FIXED);
 }
 
 f32 CalculateChildGap(UILayout & ui, u32 parentIndex)
@@ -89,9 +89,36 @@ void CalculateChildPositions(UILayout & ui, u32 index)
 
 	u32 end = index + ui.sizes[index];
 	u32 childIndex = index + 1;
-	if (node->justify == LayoutType::SPACE_BETWEEN && node->numChildren > 0)
+	if (node->numChildren > 0)
 	{
-		node->childGap = (NodeAxisSize(node, node->layoutDirection) - CalculateSizeofChildrenOnAxis(ui, index)) / (node->numChildren - 1);
+		if (node->justify == LayoutType::SPACE_BETWEEN && node->numChildren > 0)
+		{
+			node->childGap = (NodeAxisSize(node, node->layoutDirection) - CalculateSizeofChildrenOnAxis(ui, index)) / (node->numChildren - 1);
+		}
+		else if (node->justify == LayoutType::END)
+		{
+			f32 totalChildGap = 0.0f;
+			if (node->layoutDirection == LayoutDirection::LEFT_TO_RIGHT)
+			{
+				curser.x = node->pos.x + (node->size.x - CalculateSizeofChildrenOnAxis(ui, index)) - CalculateChildGap(ui, index);
+			}
+			else
+			{
+				curser.y = node->pos.y + (node->size.y - CalculateSizeofChildrenOnAxis(ui, index)) - CalculateChildGap(ui, index);
+			}
+
+		}
+		else if (node->justify == LayoutType::CENTER)
+		{
+			if (node->layoutDirection == LayoutDirection::LEFT_TO_RIGHT)
+			{
+				curser.x = node->pos.x + (node->size.x - CalculateSizeofChildrenOnAxis(ui, index) - CalculateChildGap(ui, index))/2.0f;
+			}
+			else
+			{
+				curser.y = node->pos.y + (node->size.y - CalculateSizeofChildrenOnAxis(ui, index) - CalculateChildGap(ui, index))/2.0f;
+			}
+		}
 	}
 
 	while (childIndex < end)
