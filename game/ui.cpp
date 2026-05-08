@@ -7,11 +7,12 @@ u32 UILayout::begin(const char * label,
 		f32 width, f32 height, f32 childGap,
 		LayoutDirection layoutDirection = LayoutDirection::LEFT_TO_RIGHT,
 		LayoutType justify = LayoutType::START,
-		SizingType sizing = SizingType::HUG)
+		SizingType sizing = SizingType::HUG,
+		LayoutType align = LayoutType::START)
 {
 	if (count >= 1024) { return 0; }
 	u32 index = count;
-	nodes[index] = {label, {0,0}, {width, height}, childGap, layoutDirection, 0, justify, sizing};
+	nodes[index] = {label, {0,0}, {width, height}, childGap, layoutDirection, 0, justify, sizing, align};
 	stack[depth] = index;
 	sizes[index] = 1; // NOTE(rordon): Placeholder value since size will be 1 + the number of nodes in the subtrees after calling end().
 
@@ -23,7 +24,7 @@ u32 UILayout::begin(const char * label,
 
 void UILayout::startLayout(f32 width, f32 height)
 {
-	begin("ROOT", width, height, 30.0f, LayoutDirection::TOP_TO_BOTTOM, LayoutType::CENTER, SizingType::FIXED);
+	begin("ROOT", width, height, 30.0f, LayoutDirection::TOP_TO_BOTTOM, LayoutType::SPACE_BETWEEN, SizingType::FIXED, LayoutType::CENTER);
 }
 
 f32 CalculateChildGap(UILayout & ui, u32 parentIndex)
@@ -67,6 +68,21 @@ f32 NodeAxisSize(UINode * node, LayoutDirection axis)
 	return axis == LayoutDirection::LEFT_TO_RIGHT ? node->size.x : node->size.y;
 }
 
+f32 CalculateSizeofChildrenOnCrossAxis(UILayout & ui, u32 index)
+{
+	f32 sum = 0.0f;
+	u32 end = index + ui.sizes[index];
+	u32 childIndex = index + 1;
+
+	while (childIndex < end)
+	{
+		UINode * childNode = &ui.nodes[childIndex];
+		sum += NodeAxisSize(childNode, ui.nodes[index].layoutDirection == LayoutDirection::LEFT_TO_RIGHT ? LayoutDirection::TOP_TO_BOTTOM : LayoutDirection::LEFT_TO_RIGHT);
+		childIndex += ui.sizes[childIndex];
+	}
+	return sum;
+}
+
 f32 CalculateSizeofChildrenOnAxis(UILayout & ui, u32 index)
 {
 	f32 sum = 0.0f;
@@ -97,7 +113,6 @@ void CalculateChildPositions(UILayout & ui, u32 index)
 		}
 		else if (node->justify == LayoutType::END)
 		{
-			f32 totalChildGap = 0.0f;
 			if (node->layoutDirection == LayoutDirection::LEFT_TO_RIGHT)
 			{
 				curser.x = node->pos.x + (node->size.x - CalculateSizeofChildrenOnAxis(ui, index)) - CalculateChildGap(ui, index);
@@ -124,6 +139,17 @@ void CalculateChildPositions(UILayout & ui, u32 index)
 	while (childIndex < end)
 	{
 		UINode * childNode = &ui.nodes[childIndex];
+		if (node->align == LayoutType::CENTER)
+		{
+			if (node->layoutDirection == LayoutDirection::LEFT_TO_RIGHT)
+			{
+				curser.y = node->pos.y + (node->size.y - NodeAxisSize(childNode, LayoutDirection::TOP_TO_BOTTOM)) / 2.0f;
+			}
+			else
+			{
+				curser.x = node->pos.x + (node->size.x - NodeAxisSize(childNode, LayoutDirection::LEFT_TO_RIGHT)) / 2.0f;
+			}
+		}
 		childNode->pos = curser;
 		CalculateChildPositions(ui, childIndex);
 		if (node->layoutDirection == LayoutDirection::LEFT_TO_RIGHT)

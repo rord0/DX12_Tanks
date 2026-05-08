@@ -645,15 +645,21 @@ void ClientSendInput(GameState * state, GameInput * input, GameMemory * memory, 
 void DrawMainMenu(RendererPushBuffer * renderCMDs, vec2i screen, vec2i mousePos, i32 fontHandle)
 {
 	UILayout ui = {0};
+	vec2 buttonSize = {390.0f, 100.0f};
+	UINodeLayout n = {.size = buttonSize, .childGap = 2.0f, .padding = {0.0f, 0.0f, 0.0f, 0.0f}};
+
 	ui.startLayout(screen.x, screen.y);
-		ui.begin("EMPTY", screen.x, 100.0f, 30); ui.end();
+		ui.begin("EMPTY", screen.x, 120.0f, 30); ui.end();
 		ui.begin("MENU_OPTION_CONTAINER", 0, 0, 30, LayoutDirection::TOP_TO_BOTTOM);
 			ui.begin("HOST_BUTTON", 390.0f, 100.0f, 0, LayoutDirection::LEFT_TO_RIGHT, LayoutType::CENTER, SizingType::FIXED);
 				ui.begin("HOST_TEXT", 100.0f, 40.0f, 0); ui.end();
 			ui.end();
 			ui.begin("JOIN_BUTTON", 390.0f, 100.0f, 0); ui.end();
 		ui.end();
-		ui.begin("PROFILE_MENU_CONTAINER", screen.x, 100.0f, 30); ui.end();
+		ui.begin("PROFILE_MENU_CONTAINER", screen.x, 120.0f, 30.0f, LayoutDirection::LEFT_TO_RIGHT, LayoutType::END, SizingType::FIXED, LayoutType::CENTER);
+			ui.begin("PLAYER_CARD", 390.0f, 100.0f, 0); ui.end();
+			ui.begin("CUSTOMIZE_BUTTON", 100.0f, 100.0f, 0); ui.end();
+		ui.end();
 	ui.endLayout();
 
 

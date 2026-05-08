@@ -40,6 +40,25 @@ enum class LayoutDirection
 
 typedef struct 
 {
+	f32 left;
+	f32 right;
+	f32 up;
+	f32 down;
+} UIPadding;
+
+typedef struct 
+{
+	vec2 size;
+	f32 childGap;
+	LayoutDirection axis;
+	LayoutType justify;
+	LayoutType align;
+	SizingType sizing;
+	vec4 padding;
+} UINodeLayout;
+
+typedef struct 
+{
 	const char * label;
 	vec2 pos;
 	vec2 size;
@@ -48,6 +67,7 @@ typedef struct
 	u32 numChildren;
 	LayoutType justify;
 	SizingType sizing;
+	LayoutType align;
 } UINode;
 
 typedef struct UILayout_t
@@ -59,7 +79,7 @@ typedef struct UILayout_t
 	u32 depth;
 
 	void startLayout(f32 frameWidth, f32 frameHeight);
-	u32 begin(const char * label, f32 width, f32 height, f32 childGap, LayoutDirection layoutDirection, LayoutType justify, SizingType sizing);
+	u32 begin(const char * label, f32 width, f32 height, f32 childGap, LayoutDirection layoutDirection, LayoutType justify, SizingType sizing, LayoutType align);
 	void end();
 	void endLayout();
 } UILayout;
