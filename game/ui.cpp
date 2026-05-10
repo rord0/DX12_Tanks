@@ -22,6 +22,29 @@ u32 UILayout::begin(const char * label,
 	return 0;
 }
 
+u32 UILayout::begin(const char * label, UINodeLayout layout)
+{
+	if (count >= 1024) { return 0; }
+	u32 index = count;
+	nodes[index] = {label,
+				   {0.0f, 0.0f},
+				   {layout.size.x, layout.size.y},
+				   layout.childGap,
+				   layout.axis,
+				   0,
+				   layout.justify,
+				   layout.sizing,
+				   layout.align,
+				   layout.padding};
+	stack[depth] = index;
+	sizes[index] = 1; // NOTE(rordon): Placeholder value since size will be 1 + the number of nodes in the subtrees after calling end().
+
+	count++;
+	depth++;
+
+	return 0;
+}
+
 void UILayout::startLayout(f32 width, f32 height)
 {
 	begin("ROOT", width, height, 30.0f, LayoutDirection::TOP_TO_BOTTOM, LayoutType::SPACE_BETWEEN, SizingType::FIXED, LayoutType::CENTER);

@@ -54,7 +54,7 @@ typedef struct
 	LayoutType justify;
 	LayoutType align;
 	SizingType sizing;
-	vec4 padding;
+	UIPadding padding;
 } UINodeLayout;
 
 typedef struct 
@@ -68,6 +68,7 @@ typedef struct
 	LayoutType justify;
 	SizingType sizing;
 	LayoutType align;
+	UIPadding padding;
 } UINode;
 
 typedef struct UILayout_t
@@ -80,6 +81,7 @@ typedef struct UILayout_t
 
 	void startLayout(f32 frameWidth, f32 frameHeight);
 	u32 begin(const char * label, f32 width, f32 height, f32 childGap, LayoutDirection layoutDirection, LayoutType justify, SizingType sizing, LayoutType align);
+	u32 begin(const char * label, UINodeLayout layout);
 	void end();
 	void endLayout();
 } UILayout;
