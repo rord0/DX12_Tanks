@@ -88,3 +88,22 @@ i32 LoadFontAtlas(const char *metadataPath, const char *atlasPath)
 
 	return fontHandle;
 }
+
+vec2 MeasureText(i32 fontID, const char * text, u32 len, f32 scale)
+{
+	const FontData * font = GetFontAssetData(fontID);
+	vec2 size = {0.0f, font->ascender * scale};
+	for (int i = 0; i < len; i++)
+	{
+		i32 codepoint = (i32)text[i];
+
+		auto it = font->glyphs.find(codepoint);
+		const GlyphData* glyph = (it == font->glyphs.end()) 
+			? &font->glyphs.at(0)  // fallback
+			: &it->second;
+
+		size.x += glyph->advance * scale;
+		size.y += glyph->advance * scale;
+	}
+	return size;
+}

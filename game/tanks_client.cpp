@@ -651,7 +651,7 @@ void DrawMainMenu(RendererPushBuffer * renderCMDs, vec2i screen, vec2i mousePos,
 	ui.startLayout(screen.x, screen.y);
 		ui.begin("EMPTY", screen.x, 120.0f, 30); ui.end();
 		ui.begin("MENU_OPTION_CONTAINER", 0, 0, 30, LayoutDirection::TOP_TO_BOTTOM);
-			ui.begin("HOST_BUTTON", 390.0f, 100.0f, 0, LayoutDirection::LEFT_TO_RIGHT, LayoutType::CENTER, SizingType::FIXED);
+			ui.begin("HOST_BUTTON", 390.0f, 100.0f, 0, LayoutDirection::LEFT_TO_RIGHT, LayoutType::CENTER, SizingType::FIXED, LayoutType::CENTER);
 				ui.begin("HOST_TEXT", 100.0f, 40.0f, 0); ui.end();
 			ui.end();
 			ui.begin("JOIN_BUTTON", 390.0f, 100.0f, 0); ui.end();
