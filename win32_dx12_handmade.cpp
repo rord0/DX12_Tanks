@@ -422,6 +422,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 	gameMemory.platform.platformServerSend  = &PlatformServerSend;
 	gameMemory.platform.serverGetEvent      = &PlatformServerGetEvent;
 	gameMemory.platform.loadFont 			= &PlatformLoadFontAtlas;
+	gameMemory.platform.measureText 		= &PlatformMeasureText;
 
 	GameInput gameInput = {0};
 

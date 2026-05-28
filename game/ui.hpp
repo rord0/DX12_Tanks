@@ -42,9 +42,44 @@ typedef struct
 {
 	f32 left;
 	f32 right;
-	f32 up;
-	f32 down;
+	f32 top;
+	f32 bottom;
 } UIPadding;
+
+enum class UINodeType {
+	UI_NODE_TYPE_CONTAINER,
+	UI_NODE_TYPE_TEXT,
+	UI_NODE_TYPE_IMAGE
+};
+
+typedef struct 
+{
+	i32 fontHandle;
+	f32 fontSize;
+	const char * text;
+} UIText;
+
+typedef struct
+{
+	bool visible;
+	SDFShapeStyle style;
+} UIContainer;
+
+typedef struct
+{
+	i32 handle;
+} UIImage;
+
+typedef struct 
+{
+	UINodeType type;
+	union
+	{
+		UIText text;
+		UIContainer container;
+		UIImage image;
+	};
+} UINodeData;
 
 typedef struct 
 {
@@ -55,6 +90,7 @@ typedef struct
 	LayoutType align;
 	SizingType sizing;
 	UIPadding padding;
+	UINodeData data;
 } UINodeLayout;
 
 typedef struct 
@@ -69,6 +105,7 @@ typedef struct
 	SizingType sizing;
 	LayoutType align;
 	UIPadding padding;
+	UINodeData data;
 } UINode;
 
 typedef struct UILayout_t
@@ -78,10 +115,12 @@ typedef struct UILayout_t
 	u32	stack[128];
 	u32 count;
 	u32 depth;
+	PlatformMeasureTextFn * measureText;
 
-	void startLayout(f32 frameWidth, f32 frameHeight);
+	void startLayout(f32 frameWidth, f32 frameHeight, PlatformMeasureTextFn * measureTextFn);
 	u32 begin(const char * label, f32 width, f32 height, f32 childGap, LayoutDirection layoutDirection, LayoutType justify, SizingType sizing, LayoutType align);
 	u32 begin(const char * label, UINodeLayout layout);
+	void text(const char * label, i32 fontHandle, f32 fontSize, const char * text);
 	void end();
 	void endLayout();
 } UILayout;

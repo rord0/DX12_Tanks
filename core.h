@@ -194,6 +194,9 @@ typedef PLATFORM_LOAD_TEXTURE(PlatformLoadTextureFunction);
 #define PLATFORM_LOAD_FONT_ATLAS(name) i32 name(const char * atlasPath, const char * metadataPath)
 typedef PLATFORM_LOAD_FONT_ATLAS(PlatformLoadFontAtlasFn);
 
+#define PLATFORM_MEASURE_TEXT(name) vec2 name(i32 fontID, const char * text, u32 len, f32 scale)
+typedef PLATFORM_MEASURE_TEXT(PlatformMeasureTextFn);
+
 #define PLATFORM_LOAD_FILE(name) DEBUG_FileResult name(const char * filepath)
 typedef PLATFORM_LOAD_FILE(PlatformLoadFileFunction);
 
@@ -225,6 +228,7 @@ typedef struct {
 	PlatformServerSendFn * platformServerSend;
 	PlatformServerGetEventFn * serverGetEvent;
 	PlatformLoadFontAtlasFn * loadFont;
+	PlatformMeasureTextFn * measureText;
 } PlatformAPI;
 
 typedef struct {

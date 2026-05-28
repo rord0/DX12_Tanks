@@ -89,7 +89,7 @@ i32 LoadFontAtlas(const char *metadataPath, const char *atlasPath)
 	return fontHandle;
 }
 
-vec2 MeasureText(i32 fontID, const char * text, u32 len, f32 scale)
+PLATFORM_MEASURE_TEXT(PlatformMeasureText)
 {
 	const FontData * font = GetFontAssetData(fontID);
 	vec2 size = {0.0f, font->ascender * scale};
@@ -103,7 +103,6 @@ vec2 MeasureText(i32 fontID, const char * text, u32 len, f32 scale)
 			: &it->second;
 
 		size.x += glyph->advance * scale;
-		size.y += glyph->advance * scale;
 	}
 	return size;
 }

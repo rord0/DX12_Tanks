@@ -35,7 +35,8 @@ u32 UILayout::begin(const char * label, UINodeLayout layout)
 				   layout.justify,
 				   layout.sizing,
 				   layout.align,
-				   layout.padding};
+				   layout.padding,
+				   layout.data};
 	stack[depth] = index;
 	sizes[index] = 1; // NOTE(rordon): Placeholder value since size will be 1 + the number of nodes in the subtrees after calling end().
 
@@ -45,8 +46,16 @@ u32 UILayout::begin(const char * label, UINodeLayout layout)
 	return 0;
 }
 
-void UILayout::startLayout(f32 width, f32 height)
+void UILayout::text(const char * label, i32 fontHandle, f32 fontSize, const char * text)
 {
+	UINodeData data = {.type = UINodeType::UI_NODE_TYPE_TEXT, .text = {fontHandle, fontSize, text}};
+	begin(label, {.size = measureText(fontHandle, text, strlen(text), fontSize), .data = data});
+	end();
+}
+
+void UILayout::startLayout(f32 width, f32 height, PlatformMeasureTextFn * measureTextFn)
+{
+	measureText = measureTextFn;
 	begin("ROOT", width, height, 30.0f, LayoutDirection::TOP_TO_BOTTOM, LayoutType::SPACE_BETWEEN, SizingType::FIXED, LayoutType::CENTER);
 }
 
@@ -69,6 +78,8 @@ void UILayout::end()
 		UINode * parent = &nodes[parentIndex];
 		parent->numChildren++;
 		f32 childGap = CalculateChildGap(*this, parentIndex);
+		node->size.x += node->padding.right + node->padding.left;
+		node->size.y += node->padding.top + node->padding.bottom;
 
 		if (parent->sizing == SizingType::HUG)
 		{
@@ -125,6 +136,8 @@ void CalculateChildPositions(UILayout & ui, u32 index)
 {
 	UINode * node = &ui.nodes[index];
 	vec2 curser = node->pos;
+	curser.x += node->padding.left;
+	curser.y += node->padding.top;
 
 	u32 end = index + ui.sizes[index];
 	u32 childIndex = index + 1;
@@ -138,13 +151,12 @@ void CalculateChildPositions(UILayout & ui, u32 index)
 		{
 			if (node->layoutDirection == LayoutDirection::LEFT_TO_RIGHT)
 			{
-				curser.x = node->pos.x + (node->size.x - CalculateSizeofChildrenOnAxis(ui, index)) - CalculateChildGap(ui, index);
+				curser.x = node->pos.x + (node->size.x - CalculateSizeofChildrenOnAxis(ui, index)) - CalculateChildGap(ui, index) - node->padding.right;
 			}
 			else
 			{
 				curser.y = node->pos.y + (node->size.y - CalculateSizeofChildrenOnAxis(ui, index)) - CalculateChildGap(ui, index);
 			}
-
 		}
 		else if (node->justify == LayoutType::CENTER)
 		{

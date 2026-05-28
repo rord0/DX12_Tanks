@@ -7,6 +7,7 @@
 #include "ui.cpp"
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 
 mat4 orthographicProjection(float right, float left, float top, float bottom, float n, float f)
 {
@@ -642,43 +643,81 @@ void ClientSendInput(GameState * state, GameInput * input, GameMemory * memory, 
 	}
 }
 
-void DrawMainMenu(RendererPushBuffer * renderCMDs, vec2i screen, vec2i mousePos, i32 fontHandle)
+const char * HOST_BUTTON_TEXT = "HOST GAME";
+const char * JOIN_BUTTON_TEXT = "JOIN GAME";
+
+void DrawMainMenu(RendererPushBuffer * renderCMDs, PlatformAPI * platform, vec2i screen, vec2i mousePos, i32 fontHandle)
 {
 	UILayout ui = {0};
 	vec2 buttonSize = {390.0f, 100.0f};
-	UINodeLayout n = {.size = buttonSize, .childGap = 2.0f, .padding = {0.0f, 0.0f, 0.0f, 0.0f}};
-
-	ui.startLayout(screen.x, screen.y);
-		ui.begin("EMPTY", screen.x, 120.0f, 30); ui.end();
-		ui.begin("MENU_OPTION_CONTAINER", 0, 0, 30, LayoutDirection::TOP_TO_BOTTOM);
-			ui.begin("HOST_BUTTON", 390.0f, 100.0f, 0, LayoutDirection::LEFT_TO_RIGHT, LayoutType::CENTER, SizingType::FIXED, LayoutType::CENTER);
-				ui.begin("HOST_TEXT", 100.0f, 40.0f, 0); ui.end();
-			ui.end();
-			ui.begin("JOIN_BUTTON", 390.0f, 100.0f, 0); ui.end();
-		ui.end();
-		ui.begin("PROFILE_MENU_CONTAINER", screen.x, 120.0f, 30.0f, LayoutDirection::LEFT_TO_RIGHT, LayoutType::END, SizingType::FIXED, LayoutType::CENTER);
-			ui.begin("PLAYER_CARD", 390.0f, 100.0f, 0); ui.end();
-			ui.begin("CUSTOMIZE_BUTTON", 100.0f, 100.0f, 0); ui.end();
-		ui.end();
-	ui.endLayout();
-
-
 	SDFShapeStyle buttonStyle = {.fillColor    = ColorHexToRBGANormalized(0x262D33CC),
 							     .strokeColor  = ColorHexToRBGANormalized(0x262D33FF),
 							     .cornerRadius = 6,
 								 .strokeWidth  = 3};
+	UINodeData menuContainerData = {.type = UINodeType::UI_NODE_TYPE_CONTAINER, .container = { .visible = true, .style = buttonStyle}};
+	f32 fontSize = 40.0f;
+	UINodeLayout profileLayout = {.size = {(f32)screen.x, 100.0f},
+								  .childGap = 30.0f,
+								  .axis = LayoutDirection::LEFT_TO_RIGHT,
+								  .justify = LayoutType::END,
+								  .align = LayoutType::CENTER,
+								  .sizing = SizingType::FIXED,
+								  .padding = {.right = 25.0f, .bottom = 25.0f}};
+
+	UINodeLayout optionContainerLayout = {.childGap = 30.0f,
+										  .axis = LayoutDirection::TOP_TO_BOTTOM,
+										  .sizing = SizingType::HUG,
+										  .padding = {50.0f,50.0f,25.0f,25.0f}};
+
+	UINodeLayout buttonLayout = { .size = buttonSize,
+								  .justify = LayoutType::CENTER,
+								  .align = LayoutType::CENTER,
+								  .sizing = SizingType::FIXED,
+								  .data = {.type = UINodeType::UI_NODE_TYPE_CONTAINER, .container = {.visible = true, .style = buttonStyle}}
+	};
+
+	ui.startLayout(screen.x, screen.y, platform->measureText);
+		ui.begin("EMPTY", screen.x, 120.0f, 30); ui.end();
+		ui.begin("MENU_OPTION_CONTAINER", optionContainerLayout);
+			ui.begin("HOST_BUTTON", buttonLayout);
+				ui.text("HOST_TEXT", fontHandle, fontSize, HOST_BUTTON_TEXT);
+			ui.end();
+			ui.begin("JOIN_BUTTON", buttonLayout);
+				ui.text("JOIN_TEXT", fontHandle, fontSize, JOIN_BUTTON_TEXT);
+			ui.end();
+		ui.end();
+		ui.begin("PROFILE_MENU_CONTAINER", profileLayout);
+			ui.begin("PLAYER_CARD", {.size = {390.0f, 100.0f}, .data = menuContainerData}); ui.end();
+			ui.begin("CUSTOMIZE_BUTTON", {.size = {100.0f, 100.0f}, .data = menuContainerData}); ui.end();
+		ui.end();
+	ui.endLayout();
+
+
 
 	for (int i = 1; i < ui.count; i++)
 	{
 		UINode * node = &ui.nodes[i];
-		RendererPushSDFRect(renderCMDs, node->pos, node->size, &buttonStyle, 1);
+		switch (node->data.type)
+		{
+			case UINodeType::UI_NODE_TYPE_CONTAINER:
+			{
+				if (node->data.container.visible)
+				{
+					RendererPushSDFRect(renderCMDs, node->pos, node->size, &node->data.container.style, 1);
+				}
+			} break;
+			case UINodeType::UI_NODE_TYPE_TEXT:
+			{
+				vec4 textColor = {1.0f, 1.0f, 1.0f, 1.0f};
+				RendererPushText(renderCMDs, node->data.text.text, node->data.text.fontSize, node->data.text.fontHandle, node->pos, textColor, false, 30);
+			} break;
+			default:
+			{
+
+			} break;
+		}
 	}
 
-   	const char * text = "HOST";
-	vec2 textPos = {0,0};
-	vec4 textColor = {1.0f, 1.0f, 1.0f, 1.0f};
-	f32 fontSize = 40.0f;
-	RendererPushText(renderCMDs, text, fontSize, fontHandle, textPos, textColor, false, 30);
 }
 
 void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands, RendererPushBuffer * uiRenderCMDs)
@@ -782,6 +821,6 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
 	RendererPushSetProjection(uiRenderCMDs, uiProjection);
 
-	DrawMainMenu(uiRenderCMDs, input->viewportSize, input->mousePosVP, state->interFontHandle);
+	DrawMainMenu(uiRenderCMDs, &gameMemory->platform, input->viewportSize, input->mousePosVP, state->interFontHandle);
 }
 
