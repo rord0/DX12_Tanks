@@ -147,8 +147,9 @@ typedef struct {
     f32 x0, y0, x1, y1;
     f32 u0, v0, u1, v1;
 	vec4 color;
+	f32 strokeWidth;
     u32 textureIndex;
-	f32 pad0, pad1, pad2;
+	f32 pad0, pad1;
 } GlyphInstanceData;
 
 typedef struct {
@@ -159,6 +160,11 @@ typedef struct {
 	float cornerRadius;
 	f32 pad0, pad1, pad2;
 } SDFRectInstanceData;
+
+typedef struct {
+	vec4 fillColor;
+	f32 strokeWidth;
+} TextStyle;
 
 typedef struct {
     void * data;

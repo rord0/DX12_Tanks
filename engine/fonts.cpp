@@ -92,7 +92,7 @@ i32 LoadFontAtlas(const char *metadataPath, const char *atlasPath)
 PLATFORM_MEASURE_TEXT(PlatformMeasureText)
 {
 	const FontData * font = GetFontAssetData(fontID);
-	vec2 size = {0.0f, font->ascender * scale};
+	vec2 size = {0};
 	for (int i = 0; i < len; i++)
 	{
 		i32 codepoint = (i32)text[i];
@@ -103,6 +103,7 @@ PLATFORM_MEASURE_TEXT(PlatformMeasureText)
 			: &it->second;
 
 		size.x += glyph->advance * scale;
+		size.y = std::max(size.y, (glyph->pt - glyph->pb) * scale);
 	}
 	return size;
 }

@@ -13,6 +13,7 @@ struct VSInput
     float4 bounds      : Bounds;
     float4 uv          : UV;
     float4 color       : Color;
+	float  strokeWidth : StrokeWidth;
     uint   textureID   : InstanceTextureID;
     uint   vertexID    : SV_VertexID;
 };
@@ -22,6 +23,7 @@ struct VSOutput
     float4 pos       : SV_Position;
     float2 uv        : TEXCOORD0;
     float4 color     : COLOR;
+	float strokeWidth : STROKE_WIDTH;
     uint   textureID : TEXCOORD1;
 };
 
@@ -38,6 +40,7 @@ VSOutput VSmain(VSInput input)
     output.pos   = mul(ModelViewProjectionCB.MVP, float4(x, y, 0.0, 1.0));
     output.uv    = float2(u, v);
     output.color = input.color;
+	output.strokeWidth = input.strokeWidth;
     output.textureID = input.textureID;
 
     return output;
@@ -52,14 +55,13 @@ float4 PSmain(VSOutput input) : SV_Target
 {
     float dist = texture1[input.textureID].Sample(textureSampler, input.uv).r;
 
-    float sharpness     = 16.0;
-    float outlineWidth  = 0.27;
-    float4 outlineColor = float4(0.12941176470588237, 0.1411764705882353, 0.1450980392156863, 1.0);
+    float sharpness     = 10.0;
+    float4 strokeColor = float4(0.12941176470588237, 0.1411764705882353, 0.1450980392156863, 1.0);
 
     float alpha        = clamp((dist - 0.5) * sharpness + 0.5, 0.0, 1.0);
-    float outlineAlpha = clamp((dist - 0.5 + outlineWidth) * sharpness + 0.5, 0.0, 1.0);
+    float outlineAlpha = clamp((dist - 0.5 + input.strokeWidth) * sharpness + 0.5, 0.0, 1.0);
 
-    float4 color = lerp(outlineColor, input.color, alpha);
+    float4 color = lerp(strokeColor, input.color, alpha);
     color.a = outlineAlpha;
 
     return color;

@@ -331,6 +331,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
         { "Bounds",              0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "UV",    	             0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "Color",	             0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "StrokeWidth",         0, DXGI_FORMAT_R32_FLOAT,			1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "InstanceTextureID",   0, DXGI_FORMAT_R32_UINT,           1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
     InitInstanceRenderData(&res.IRD[5], res.textureVertexBufferView, res.textureIndexBufferView, 0, sizeof(GlyphInstanceData), 128, 5, &res.instanceDataArena);
@@ -649,7 +650,8 @@ void RendererPushGlyphs(const RenderEntryText * entry, const u8 * text, Instance
 			instanceData.textureIndex = fontData->textureHandle;
 		}
 
-        instanceData.color = entry->color;
+        instanceData.color = entry->style.fillColor;
+		instanceData.strokeWidth = entry->style.strokeWidth;
 
 		RendererPushInstance(renderData, drawCMDs, &instanceData, layer);
 

@@ -46,10 +46,17 @@ u32 UILayout::begin(const char * label, UINodeLayout layout)
 	return 0;
 }
 
-void UILayout::text(const char * label, i32 fontHandle, f32 fontSize, const char * text)
+void UILayout::text(const char * label, i32 fontHandle, f32 fontSize, f32 strokeWidth, const char * text)
 {
-	UINodeData data = {.type = UINodeType::UI_NODE_TYPE_TEXT, .text = {fontHandle, fontSize, text}};
+	UINodeData data = {.type = UINodeType::UI_NODE_TYPE_TEXT, .text = {fontHandle, fontSize, strokeWidth, text}};
 	begin(label, {.size = measureText(fontHandle, text, strlen(text), fontSize), .data = data});
+	end();
+}
+
+void UILayout::image(const char * label, f32 width, f32 height, i32 imageHandle)
+{
+	UINodeData data = {.type = UINodeType::UI_NODE_TYPE_IMAGE, .image = {imageHandle}};
+	begin(label, {.size = {width, height}, .sizing = SizingType::FIXED, .data = data});
 	end();
 }
 

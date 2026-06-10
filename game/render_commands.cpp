@@ -102,10 +102,10 @@ void RendererPushSubTexture(RendererPushBuffer * pb, u32 textureID, vec3 positio
     PushRenderSortEntry(pb, sortEntry);
 }
 
-void RendererPushText(RendererPushBuffer * pb, const char * text, f32 fontSize, i32 fontID, vec2 startPos, vec4 color, bool isWorldSpace, u16 layer)
+void RendererPushText(RendererPushBuffer * pb, const char * text, f32 fontSize, i32 fontID, vec2 startPos, TextStyle style, bool isWorldSpace, u16 layer)
 {
 	u32 textLen = strlen(text);
-	RenderEntryText entry = {RENDER_ENTRY_TYPE_TEXT, fontID, fontSize, startPos, color, textLen, isWorldSpace};
+	RenderEntryText entry = {RENDER_ENTRY_TYPE_TEXT, fontID, fontSize, startPos, style, textLen, isWorldSpace};
 	u32 entryOffset = PushRenderEntryText(pb, &entry, text);
 
     RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_TEXT, layer, entryOffset};

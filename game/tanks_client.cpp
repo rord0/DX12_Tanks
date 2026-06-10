@@ -169,7 +169,8 @@ void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 
 	DrawHealthbar(cmdBuffer, vec2{tank.position.x, tank.position.y + 0.3f}, ((float)tank.health / (float)TANK_MAX_HEALTH), tank.healthLerp);
 	vec4 nameColor = {1.0f, 1.0f, 1.0f, 1.0f};
-	RendererPushText(cmdBuffer, tank.displayName, 0.05f, state->interFontHandle, vec2{tank.position.x - 0.2f, tank.position.y + 0.34f}, nameColor, true, 30);
+	TextStyle textStyle = {.fillColor = nameColor, .strokeWidth = 0.27f};
+	RendererPushText(cmdBuffer, tank.displayName, 0.05f, state->interFontHandle, vec2{tank.position.x - 0.2f, tank.position.y + 0.34f}, textStyle, true, 30);
 
 	// DEBUG VISUALS
     //RendererPushCircle(cmdBuffer, vec3{turretPos.x, turretPos.y, 0}, 0, {0.05f,0.05f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
@@ -481,6 +482,7 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
     state->tankAtlasHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"tank_parts.png");
     state->extraTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"images/platformer/Props_AirDrop.png");
     state->shellImpactTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"shell_impact.png");
+    state->customizeIconTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"customize_icon.png");
 	state->interFontHandle = gameMemory->platform.loadFont(RESOURCES_PATH"fonts/Inter/Inter_18pt-Bold.png", RESOURCES_PATH"fonts/Inter/Inter_18pt-Bold.json");
     ParseTextureAtlasCSV(gameMemory, state, RESOURCES_PATH"tank_parts.csv");
 
@@ -646,7 +648,7 @@ void ClientSendInput(GameState * state, GameInput * input, GameMemory * memory, 
 const char * HOST_BUTTON_TEXT = "HOST GAME";
 const char * JOIN_BUTTON_TEXT = "JOIN GAME";
 
-void DrawMainMenu(RendererPushBuffer * renderCMDs, PlatformAPI * platform, vec2i screen, vec2i mousePos, i32 fontHandle)
+void DrawMainMenu(GameState * state, RendererPushBuffer * renderCMDs, PlatformAPI * platform, vec2i screen, vec2i mousePos)
 {
 	UILayout ui = {0};
 	vec2 buttonSize = {390.0f, 100.0f};
@@ -656,6 +658,7 @@ void DrawMainMenu(RendererPushBuffer * renderCMDs, PlatformAPI * platform, vec2i
 								 .strokeWidth  = 3};
 	UINodeData menuContainerData = {.type = UINodeType::UI_NODE_TYPE_CONTAINER, .container = { .visible = true, .style = buttonStyle}};
 	f32 fontSize = 40.0f;
+	UIPadding defaultPadding = {18.0f, 18.0f, 18.0f, 18.0f};
 	UINodeLayout profileLayout = {.size = {(f32)screen.x, 100.0f},
 								  .childGap = 30.0f,
 								  .axis = LayoutDirection::LEFT_TO_RIGHT,
@@ -680,19 +683,22 @@ void DrawMainMenu(RendererPushBuffer * renderCMDs, PlatformAPI * platform, vec2i
 		ui.begin("EMPTY", screen.x, 120.0f, 30); ui.end();
 		ui.begin("MENU_OPTION_CONTAINER", optionContainerLayout);
 			ui.begin("HOST_BUTTON", buttonLayout);
-				ui.text("HOST_TEXT", fontHandle, fontSize, HOST_BUTTON_TEXT);
+				ui.text("HOST_TEXT", state->interFontHandle, fontSize, 0.0f, HOST_BUTTON_TEXT);
 			ui.end();
 			ui.begin("JOIN_BUTTON", buttonLayout);
-				ui.text("JOIN_TEXT", fontHandle, fontSize, JOIN_BUTTON_TEXT);
+				ui.text("JOIN_TEXT", state->interFontHandle, fontSize, 0.0f, JOIN_BUTTON_TEXT);
 			ui.end();
 		ui.end();
 		ui.begin("PROFILE_MENU_CONTAINER", profileLayout);
-			ui.begin("PLAYER_CARD", {.size = {390.0f, 100.0f}, .data = menuContainerData}); ui.end();
-			ui.begin("CUSTOMIZE_BUTTON", {.size = {100.0f, 100.0f}, .data = menuContainerData}); ui.end();
+			ui.begin("PLAYER_CARD", {.childGap = 18.0f, .justify = LayoutType::CENTER, .align = LayoutType::CENTER, .padding = defaultPadding, .data = menuContainerData});
+				ui.text("PLAYER_DISPLAY_NAME_TEXT", state->interFontHandle, 30.0f, 0.0f, "LeekyBandz");
+				ui.image("TANK", 64, 64, 1);
+			ui.end();
+			ui.begin("CUSTOMIZE_BUTTON", { .padding = defaultPadding,.data = menuContainerData});
+				ui.image("CUSTOMIZE_ICON", 56, 56, state->customizeIconTextureHandle);
+			ui.end();
 		ui.end();
 	ui.endLayout();
-
-
 
 	for (int i = 1; i < ui.count; i++)
 	{
@@ -708,8 +714,13 @@ void DrawMainMenu(RendererPushBuffer * renderCMDs, PlatformAPI * platform, vec2i
 			} break;
 			case UINodeType::UI_NODE_TYPE_TEXT:
 			{
-				vec4 textColor = {1.0f, 1.0f, 1.0f, 1.0f};
-				RendererPushText(renderCMDs, node->data.text.text, node->data.text.fontSize, node->data.text.fontHandle, node->pos, textColor, false, 30);
+				TextStyle style = {.fillColor = {1.0f, 1.0f, 1.0f, 1.0f}, .strokeWidth = node->data.text.strokeWidth};
+				RendererPushText(renderCMDs, node->data.text.text, node->data.text.fontSize, node->data.text.fontHandle, node->pos, style, false, 30);
+			} break;
+			case UINodeType::UI_NODE_TYPE_IMAGE:
+			{
+				InstanceData2D imgInstance = {{node->pos.x + node->size.x / 2.0f, node->pos.y + node->size.y / 2.0f, 0.0f}, {node->size.x*2, -node->size.y*2}, 0.0f, 1.0f};
+				RendererPushImage(renderCMDs, node->data.image.handle, imgInstance, 30);
 			} break;
 			default:
 			{
@@ -800,10 +811,11 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 
    // RendererPushLine(renderCommands, lineAStart, lineAEnd, lineColor, 0.02f, 0);
    	const char * text = "This is some text!";
-	vec2 textPos = {0,0};
+	vec2 textPos = {0.5,0};
 	vec4 textColor = {1.0f, 0.0f, 0.0f, 1.0f};
+	TextStyle testTextStyle = {.fillColor = textColor, .strokeWidth = 0.0f};
 	f32 fontSize = 0.1f;
-	RendererPushText(renderCommands, text, fontSize, state->interFontHandle, textPos, textColor, true, 30);
+	RendererPushText(renderCommands, text, fontSize, state->interFontHandle, textPos, testTextStyle, true, 30);
 
 	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
 	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
@@ -821,6 +833,6 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
 	RendererPushSetProjection(uiRenderCMDs, uiProjection);
 
-	DrawMainMenu(uiRenderCMDs, &gameMemory->platform, input->viewportSize, input->mousePosVP, state->interFontHandle);
+	DrawMainMenu(state, uiRenderCMDs, &gameMemory->platform, input->viewportSize, input->mousePosVP);
 }
 

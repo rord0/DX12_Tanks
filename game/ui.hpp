@@ -56,6 +56,7 @@ typedef struct
 {
 	i32 fontHandle;
 	f32 fontSize;
+	f32 strokeWidth;
 	const char * text;
 } UIText;
 
@@ -120,7 +121,8 @@ typedef struct UILayout_t
 	void startLayout(f32 frameWidth, f32 frameHeight, PlatformMeasureTextFn * measureTextFn);
 	u32 begin(const char * label, f32 width, f32 height, f32 childGap, LayoutDirection layoutDirection, LayoutType justify, SizingType sizing, LayoutType align);
 	u32 begin(const char * label, UINodeLayout layout);
-	void text(const char * label, i32 fontHandle, f32 fontSize, const char * text);
+	void text(const char * label, i32 fontHandle, f32 fontSize, f32 strokeWidth, const char * text);
+	void image(const char * label, f32 width, f32 height, i32 imageHandle);
 	void end();
 	void endLayout();
 } UILayout;

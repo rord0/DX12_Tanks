@@ -1,6 +1,7 @@
 #ifndef RENDER_ENTRY_H
 #define RENDER_ENTRY_H
 
+#include "core.h"
 typedef enum 
 {
     RENDER_ENTRY_TYPE_CLEAR,
@@ -67,7 +68,7 @@ typedef struct {
     i32 fontID;
 	f32 fontSize;
     vec2 position;
-	vec4 color;
+	TextStyle style;
 	u32 len;
 	b32 isWorldSpace;
 } RenderEntryText;
