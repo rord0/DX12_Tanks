@@ -519,6 +519,7 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 	state->impactEmitter     = InitEmitter(10.0f, 32, &state->permArena);
 
 	state->random = {0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL};
+	state->ui = (UILayout*)ArenaPush(&state->permArena, sizeof(UILayout));
 }
 
 void ClientProcessWelcomePacket(GameState * state, WelcomePacket * packet, u32 connID)
@@ -648,58 +649,8 @@ void ClientSendInput(GameState * state, GameInput * input, GameMemory * memory, 
 const char * HOST_BUTTON_TEXT = "HOST GAME";
 const char * JOIN_BUTTON_TEXT = "JOIN GAME";
 
-void DrawMainMenu(GameState * state, RendererPushBuffer * renderCMDs, PlatformAPI * platform, vec2i screen, vec2i mousePos)
+void DrawUI(UILayout & ui, RendererPushBuffer * renderCMDs)
 {
-	UILayout ui = {0};
-	vec2 buttonSize = {390.0f, 100.0f};
-	SDFShapeStyle buttonStyle = {.fillColor    = ColorHexToRBGANormalized(0x262D33CC),
-							     .strokeColor  = ColorHexToRBGANormalized(0x262D33FF),
-							     .cornerRadius = 6,
-								 .strokeWidth  = 3};
-	UINodeData menuContainerData = {.type = UINodeType::UI_NODE_TYPE_CONTAINER, .container = { .visible = true, .style = buttonStyle}};
-	f32 fontSize = 40.0f;
-	UIPadding defaultPadding = {18.0f, 18.0f, 18.0f, 18.0f};
-	UINodeLayout profileLayout = {.size = {(f32)screen.x, 100.0f},
-								  .childGap = 30.0f,
-								  .axis = LayoutDirection::LEFT_TO_RIGHT,
-								  .justify = LayoutType::END,
-								  .align = LayoutType::CENTER,
-								  .sizing = SizingType::FIXED,
-								  .padding = {.right = 25.0f, .bottom = 25.0f}};
-
-	UINodeLayout optionContainerLayout = {.childGap = 30.0f,
-										  .axis = LayoutDirection::TOP_TO_BOTTOM,
-										  .sizing = SizingType::HUG,
-										  .padding = {50.0f,50.0f,25.0f,25.0f}};
-
-	UINodeLayout buttonLayout = { .size = buttonSize,
-								  .justify = LayoutType::CENTER,
-								  .align = LayoutType::CENTER,
-								  .sizing = SizingType::FIXED,
-								  .data = {.type = UINodeType::UI_NODE_TYPE_CONTAINER, .container = {.visible = true, .style = buttonStyle}}
-	};
-
-	ui.startLayout(screen.x, screen.y, platform->measureText);
-		ui.begin("EMPTY", screen.x, 120.0f, 30); ui.end();
-		ui.begin("MENU_OPTION_CONTAINER", optionContainerLayout);
-			ui.begin("HOST_BUTTON", buttonLayout);
-				ui.text("HOST_TEXT", state->interFontHandle, fontSize, 0.0f, HOST_BUTTON_TEXT);
-			ui.end();
-			ui.begin("JOIN_BUTTON", buttonLayout);
-				ui.text("JOIN_TEXT", state->interFontHandle, fontSize, 0.0f, JOIN_BUTTON_TEXT);
-			ui.end();
-		ui.end();
-		ui.begin("PROFILE_MENU_CONTAINER", profileLayout);
-			ui.begin("PLAYER_CARD", {.childGap = 18.0f, .justify = LayoutType::CENTER, .align = LayoutType::CENTER, .padding = defaultPadding, .data = menuContainerData});
-				ui.text("PLAYER_DISPLAY_NAME_TEXT", state->interFontHandle, 30.0f, 0.0f, "LeekyBandz");
-				ui.image("TANK", 64, 64, 1);
-			ui.end();
-			ui.begin("CUSTOMIZE_BUTTON", { .padding = defaultPadding,.data = menuContainerData});
-				ui.image("CUSTOMIZE_ICON", 56, 56, state->customizeIconTextureHandle);
-			ui.end();
-		ui.end();
-	ui.endLayout();
-
 	for (int i = 1; i < ui.count; i++)
 	{
 		UINode * node = &ui.nodes[i];
@@ -722,13 +673,188 @@ void DrawMainMenu(GameState * state, RendererPushBuffer * renderCMDs, PlatformAP
 				InstanceData2D imgInstance = {{node->pos.x + node->size.x / 2.0f, node->pos.y + node->size.y / 2.0f, 0.0f}, {node->size.x*2, -node->size.y*2}, 0.0f, 1.0f};
 				RendererPushImage(renderCMDs, node->data.image.handle, imgInstance, 30);
 			} break;
+			case UINodeType::UI_NODE_TYPE_BUTTON:
+			{
+
+				SDFShapeStyle * style = NULL;
+				if (node->id == ui.active)
+				{
+					style = &node->data.button.style->pressed;
+				}
+				else if (node->id == ui.hot)
+				{
+					style = &node->data.button.style->hovered;
+				}
+				else
+				{
+					style = &node->data.button.style->normal;
+				}
+				RendererPushSDFRect(renderCMDs, node->pos, node->size, style, 1);
+			}
 			default:
 			{
 
 			} break;
 		}
 	}
+}
 
+SDFShapeStyle buttonStyle = {.fillColor    = ColorHexToRBGANormalized(0x262D33CC),
+							 .strokeColor  = ColorHexToRBGANormalized(0x262D33FF),
+							 .cornerRadius = 6,
+							 .strokeWidth  = 3};
+
+SDFShapeStyle customizeBtnStyle = {.fillColor    = ColorHexToRBGANormalized(0xFFFFFFFF),
+									  .strokeColor  = ColorHexToRBGANormalized(0x262D33FF),
+									  .cornerRadius = 6,
+									  .strokeWidth  = 3};
+
+SDFShapeStyle customizeBtnHovered = {.fillColor    = ColorHexToRBGANormalized(0xCACACAFF),
+									 .strokeColor  = ColorHexToRBGANormalized(0x262D33FF),
+									 .cornerRadius = 6,
+									 .strokeWidth  = 3};
+
+SDFShapeStyle buttonHoveredStyle = {.fillColor    = ColorHexToRBGANormalized(0x1E2328CC),
+									.strokeColor  = ColorHexToRBGANormalized(0x262D33FF),
+									.cornerRadius = 6,
+									.strokeWidth  = 3};
+
+SDFShapeStyle buttonPressedStyle = {.fillColor    = ColorHexToRBGANormalized(0x262D33CC),
+									.strokeColor  = ColorHexToRBGANormalized(0xFF00C8FF),
+									.cornerRadius = 6,
+									.strokeWidth  = 3};
+ButtonStyle DEFAULT_BUTTON_STYLE = {buttonStyle, buttonHoveredStyle, buttonPressedStyle};
+ButtonStyle CUSTOMIZE_BUTTON_STYLE = {customizeBtnStyle, customizeBtnHovered, buttonPressedStyle};
+
+void DrawMainMenu(GameState * state, GameInput * input, RendererPushBuffer * renderCMDs, PlatformAPI * platform)
+{
+	FontStyle fontStyle = {state->interFontHandle, 40.0f, 0.0f};
+
+	UINodeData menuContainerData = {.type = UINodeType::UI_NODE_TYPE_CONTAINER, .container = { .visible = true, .style = buttonStyle}};
+	f32 fontSize = 40.0f;
+	UIPadding defaultPadding = {18.0f, 18.0f, 18.0f, 18.0f};
+	UINodeLayout profileLayout = {.size = {(f32)input->viewportSize.x, 90.0f},
+								  .childGap = 30.0f,
+								  .axis = LayoutDirection::LEFT_TO_RIGHT,
+								  .justify = LayoutType::END,
+								  .align = LayoutType::CENTER,
+								  .sizing = SizingType::FIXED,
+								  .padding = {.right = 25.0f, .bottom = 25.0f}};
+
+	UINodeLayout optionContainerLayout = {.childGap = 30.0f,
+										  .axis = LayoutDirection::TOP_TO_BOTTOM,
+										  .sizing = SizingType::HUG,
+										  .padding = {50.0f,50.0f,25.0f,25.0f}};
+
+	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL};
+	UILayout & ui = *state->ui;
+	ui.startLayout(input->viewportSize.x, input->viewportSize.y, platform->measureText, uiInput);
+		ui.begin("EMPTY", input->viewportSize.x, 120.0f, 30); ui.end();
+		ui.begin("MENU_OPTION_CONTAINER", optionContainerLayout);
+			ui.button("HOST_BUTTON", {390.0f, 100.0f}, &DEFAULT_BUTTON_STYLE, HOST_BUTTON_TEXT, &fontStyle);
+			ui.button("JOIN_BUTTON", {390.0f, 100.0f}, &DEFAULT_BUTTON_STYLE, JOIN_BUTTON_TEXT, &fontStyle);
+		ui.end();
+		ui.begin("PROFILE_MENU_CONTAINER", profileLayout);
+			ui.begin("PLAYER_CARD", {.childGap = 18.0f, .justify = LayoutType::CENTER, .align = LayoutType::CENTER, .padding = defaultPadding, .data = menuContainerData});
+				ui.text("PLAYER_DISPLAY_NAME_TEXT", state->interFontHandle, 30.0f, 0.0f, "LeekyBandz");
+				ui.image("TANK", 64, 64, 1);
+			ui.end();
+			ui.begin_button("CUSTOMIZE_BUTTON", {100.0f, 100.0f}, &DEFAULT_BUTTON_STYLE);
+				ui.image("CUSTOMIZE_ICON", 56, 56, state->customizeIconTextureHandle);
+			ui.end();
+		ui.end();
+	ui.endLayout();
+
+	if (ui.isButtonPressed("HOST_BUTTON"))
+	{
+		// Host Game.
+	}
+
+	if (ui.isButtonPressed("JOIN_BUTTON"))
+	{
+		// Host Game.
+	}
+
+	if (ui.isButtonPressed("CUSTOMIZE_BUTTON"))
+	{
+		// Host Game.
+	}
+
+	DrawUI(ui, renderCMDs);
+}
+
+void DrawCustomizeMenu(GameState * state, GameInput * input, RendererPushBuffer * renderCMDs, PlatformAPI * platform)
+{
+	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL};
+	UILayout & ui = *state->ui;
+
+	UINodeData menuContainerData = {.type = UINodeType::UI_NODE_TYPE_CONTAINER, .container = { .visible = true, .style = buttonStyle}};
+	UINodeLayout containerLayout = {.childGap = 10.0f,
+								    .axis = LayoutDirection::TOP_TO_BOTTOM,
+								    .sizing = SizingType::HUG};
+	UINodeLayout sectionLayout = {.childGap = 5.0f,
+							      .axis = LayoutDirection::TOP_TO_BOTTOM,
+								  .sizing = SizingType::HUG};
+
+	UINodeLayout containerLeft = {.childGap = 10.0f,
+								  .axis = LayoutDirection::LEFT_TO_RIGHT,
+								  .sizing = SizingType::HUG};
+
+	UINodeLayout tankImageContainer = {.size = {200,200},
+							  .sizing = SizingType::FIXED};
+
+	UINodeLayout optionContainerLayout = {.childGap = 0.0f,
+										  .axis = LayoutDirection::LEFT_TO_RIGHT,
+										  .sizing = SizingType::HUG,
+										  .padding = {50.0f,50.0f,25.0f,25.0f},
+											.data = menuContainerData};
+	UINodeLayout bodyButtonLayout = {.childGap = 5.0f,
+									  .axis = LayoutDirection::TOP_TO_BOTTOM,
+									  .sizing = SizingType::HUG};
+	vec2 customizeBtnSize = {50.0f,50.0f};
+
+	ui.startLayout(input->viewportSize.x, input->viewportSize.y, platform->measureText, uiInput);
+		ui.begin("DISPLAY_NAME_SECTION", sectionLayout);
+			ui.begin("INPUT_PROMPT_CONTAINER", containerLeft);
+				ui.text("DISPLAY_NAME_LABEL", state->interFontHandle, 30.0f, 0.2f, "Display Name:");
+				ui.text("DISPLAY_NAME_LENGTH", state->interFontHandle, 30.0f, 0.0f, "(0/20)");
+			ui.end();
+			ui.begin("PLAYER_CARD", {.size = {390.0f, 70.0f},
+									 .childGap = 18.0f,
+									 .justify = LayoutType::CENTER,
+									 .align = LayoutType::CENTER,
+									 .data = menuContainerData});
+			ui.end();
+		ui.end();
+		ui.begin("TANK_STYLE_SECTION", sectionLayout);
+			ui.text("STYLE_LABEL", state->interFontHandle, 30.0f, 0.2f, "Tank Body:");
+			ui.begin("BODY_STYLE_OPTIONS_CONTAINER", optionContainerLayout);
+				ui.begin("LEFT_STYLE_BUTTONS", bodyButtonLayout);
+					ui.button("STYLE_BTN_TURRET_L", customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+					ui.button("STYLE_BTN_BODY_L",   customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+					ui.button("STYLE_BTN_TRACK_L",  customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+				ui.end();
+				ui.begin("TANK_IMAGE_CONTAINER", tankImageContainer); ui.end();
+				ui.begin("RIGHT_STYLE_BUTTONS", bodyButtonLayout);
+					ui.button("STYLE_BTN_TURRET_R", customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+					ui.button("STYLE_BTN_BODY_R",   customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+					ui.button("STYLE_BTN_TRACK_R",  customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+				ui.end();
+			ui.end();
+		ui.end();
+		ui.begin("COLOR_SECTION", sectionLayout);
+			ui.text("COLOR_LABEL", state->interFontHandle, 30.0f, 0.2f, "Tank Color:");
+			ui.begin("BODY_STYLE_OPTIONS_CONTAINER", optionContainerLayout);
+				ui.begin("LEFT_STYLE_BUTTONS", {.childGap = 5.0f, .axis = LayoutDirection::LEFT_TO_RIGHT, .sizing = SizingType::HUG});
+					ui.button("COLOR_BTN_GREEN", customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+					ui.button("COLOR_BTN_GREY",   customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+					ui.button("COLOR_BTN_DARK_GREY",  customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+					ui.button("COLOR_BTN_TAN",  customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+				ui.end();
+			ui.end();
+		ui.end();
+	ui.endLayout();
+	DrawUI(ui, renderCMDs);
 }
 
 void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands, RendererPushBuffer * uiRenderCMDs)
@@ -810,12 +936,14 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
     //RendererPushImage(renderCommands, 1, gdNormal, 0);
 
    // RendererPushLine(renderCommands, lineAStart, lineAEnd, lineColor, 0.02f, 0);
+    char buf[256];
+	snprintf(buf, sizeof(buf), "MouseVP: %d, %d", input->mousePosVP.x, input->mousePosVP.y);
    	const char * text = "This is some text!";
 	vec2 textPos = {0.5,0};
 	vec4 textColor = {1.0f, 0.0f, 0.0f, 1.0f};
 	TextStyle testTextStyle = {.fillColor = textColor, .strokeWidth = 0.0f};
 	f32 fontSize = 0.1f;
-	RendererPushText(renderCommands, text, fontSize, state->interFontHandle, textPos, testTextStyle, true, 30);
+	RendererPushText(renderCommands, buf, fontSize, state->interFontHandle, textPos, testTextStyle, true, 30);
 
 	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
 	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
@@ -833,6 +961,7 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
 	RendererPushSetProjection(uiRenderCMDs, uiProjection);
 
-	DrawMainMenu(state, uiRenderCMDs, &gameMemory->platform, input->viewportSize, input->mousePosVP);
+	//DrawMainMenu(state, input, uiRenderCMDs, &gameMemory->platform);
+	DrawCustomizeMenu(state, input, uiRenderCMDs, &gameMemory->platform);
 }
 

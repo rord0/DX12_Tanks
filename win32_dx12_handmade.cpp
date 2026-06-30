@@ -51,7 +51,7 @@ typedef struct
     KeyInput ESC;
 	KeyInput SPACE;
 	KeyInput ENTER;
-    KeyInput mouseL;
+    ButtonInput mouseL;
 	vec2i mousePos;
 } InputState;
 
@@ -174,11 +174,13 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
 			case WM_LBUTTONDOWN:
 				{
 					inputState.mouseL.isDown = true;
+					inputState.mouseL.wasPressed = true;
 					OutputDebugStringA("WM_LBUTTONDOWN\n");
 				}break;
 			case WM_LBUTTONUP:
 				{
 					inputState.mouseL.isDown = false;
+					inputState.mouseL.wasReleased = true;
 				}break;
 			case WM_MOUSEMOVE:
 				{
@@ -493,6 +495,9 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 		gameInput.isSpacePressed = inputState.SPACE.isDown;
 		gameInput.isEnterPressed = inputState.ENTER.isDown;
 		gameInput.isMousePressed = inputState.mouseL.isDown;
+		gameInput.mouseL 		 = inputState.mouseL;
+		inputState.mouseL.wasPressed = false;
+		inputState.mouseL.wasReleased = false;
 		gameInput.viewportSize = vec2i{resolution.x, resolution.y};
 		gameInput.mousePosVP = vec2i{inputState.mousePos.x, inputState.mousePos.y};
 
@@ -510,6 +515,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         BeginFrame();
         Render();
         EndFrame();
+		
         
         char buffer[256];
         snprintf(buffer, 256, "MS/Frame: %dms FPS: %d Time: %lf\n", msPerFrame, FPS, time);

@@ -5,6 +5,7 @@
 #include "tanks_math.hpp"
 #include "tanks_server.hpp"
 #include "tanks.hpp"
+#include "ui.hpp"
 #include "util.hpp"
 
 #include <cassert>
@@ -81,6 +82,7 @@ typedef struct {
 	bool connected;
 	bool helloSent;
 	pcg32_random_t random;
+	UILayout * ui;
 } GameState;
 
 void ClientStart(GameState * state, GameMemory * gameMemory);

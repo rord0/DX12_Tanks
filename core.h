@@ -251,9 +251,17 @@ typedef struct
     bool wasDown;
 } KeyInput;
 
+typedef struct
+{
+	bool isDown;
+	bool wasPressed;
+	bool wasReleased;
+} ButtonInput;
+
 typedef struct {
 	KeyInput WASD[4];
 	KeyInput ARROWS[4];
+	ButtonInput mouseL;
 	bool isMousePressed;
 	bool isEnterPressed;
 	bool isSpacePressed;

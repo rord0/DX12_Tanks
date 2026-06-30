@@ -1,4 +1,6 @@
 #include "../core.h"
+#include "util.hpp"
+#include <cstddef>
 #include <numbers>
 #include "ui.hpp"
 
@@ -12,7 +14,7 @@ u32 UILayout::begin(const char * label,
 {
 	if (count >= 1024) { return 0; }
 	u32 index = count;
-	nodes[index] = {label, {0,0}, {width, height}, childGap, layoutDirection, 0, justify, sizing, align};
+	nodes[index] = {label, fn1va_32(label), {0,0}, {width, height}, childGap, layoutDirection, 0, justify, sizing, align};
 	stack[depth] = index;
 	sizes[index] = 1; // NOTE(rordon): Placeholder value since size will be 1 + the number of nodes in the subtrees after calling end().
 
@@ -27,6 +29,7 @@ u32 UILayout::begin(const char * label, UINodeLayout layout)
 	if (count >= 1024) { return 0; }
 	u32 index = count;
 	nodes[index] = {label,
+				   fn1va_32(label),
 				   {0.0f, 0.0f},
 				   {layout.size.x, layout.size.y},
 				   layout.childGap,
@@ -60,8 +63,42 @@ void UILayout::image(const char * label, f32 width, f32 height, i32 imageHandle)
 	end();
 }
 
-void UILayout::startLayout(f32 width, f32 height, PlatformMeasureTextFn * measureTextFn)
+void UILayout::button(const char * label, vec2 size, ButtonStyle * buttonStyle)
 {
+	button(label, size, buttonStyle, NULL, NULL);
+}
+void UILayout::button(const char * label, vec2 size, ButtonStyle * buttonStyle, const char * buttonText, FontStyle * textStyle)
+{
+	UINodeLayout buttonLayout = { .size = size,
+								  .justify = LayoutType::CENTER,
+								  .align = LayoutType::CENTER,
+								  .sizing = SizingType::FIXED,
+								  .data = {.type = UINodeType::UI_NODE_TYPE_BUTTON, .button = {.style = buttonStyle}}};
+
+	begin(label, buttonLayout);
+		if (buttonText != NULL && textStyle != NULL)
+		{
+			text("I_HOPE_THIS_DOESNT_BREAK_ANYTHING", textStyle->fontHandle, textStyle->fontSize, textStyle->strokeWidth, buttonText);
+		}
+	end();
+}
+void UILayout::begin_button(const char * label, vec2 size, ButtonStyle * buttonStyle)
+{
+	UINodeLayout buttonLayout = { .size = size,
+								  .justify = LayoutType::CENTER,
+								  .align = LayoutType::CENTER,
+								  .sizing = SizingType::FIXED,
+								  .data = {.type = UINodeType::UI_NODE_TYPE_BUTTON, .button = {.style = buttonStyle}}};
+
+	begin(label, buttonLayout);
+}
+
+void UILayout::startLayout(f32 width, f32 height, PlatformMeasureTextFn * measureTextFn, UIInput newInput)
+{
+	input = newInput;
+	count = 0;
+	depth = 0;
+	hot = 0;
 	measureText = measureTextFn;
 	begin("ROOT", width, height, 30.0f, LayoutDirection::TOP_TO_BOTTOM, LayoutType::SPACE_BETWEEN, SizingType::FIXED, LayoutType::CENTER);
 }
@@ -205,6 +242,55 @@ void CalculateChildPositions(UILayout & ui, u32 index)
 
 		childIndex += ui.sizes[childIndex];
 	}
+}
+
+UINode * FindNode(UILayout * layout, u32 id)
+{
+	for (int i = 0; i < layout->count; i++)
+	{
+		if (layout->nodes[i].id == id)
+		{
+			return &layout->nodes[i];
+		}
+	}
+	return NULL;
+}
+
+bool isMouseInsideElement(vec2 pos, UINode * node)
+{
+	return (pos.x >= node->pos.x && pos.x <= node->pos.x + node->size.x) &&
+		   (pos.y >= node->pos.y && pos.y <= node->pos.y + node->size.y);
+}
+
+bool UILayout::isButtonPressed(const char * label)
+{
+	u32 id = fn1va_32(label); // calc the hash.
+							  //
+	UINode * node = FindNode(this, id);
+	if (!node) { return false; }
+
+	if (isMouseInsideElement(input.mousePos, node))
+	{
+		hot = id; // Set element to hot. (fire emoji)
+	}
+
+	if (active == node->id)
+	{
+		if (input.mouseL.wasReleased)
+		{
+			active = 0;
+			if (hot == id)
+			{
+				return true;
+			}
+		}
+	}
+	else if (hot == node->id && input.mouseL.wasPressed)
+	{
+		active = id; // Set this to be active element.
+	}
+
+	return false;
 }
 
 void UILayout::endLayout()
