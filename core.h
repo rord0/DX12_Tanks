@@ -34,7 +34,7 @@ typedef union {
     };
 } vec3;
 
-typedef union {
+typedef union vec4 {
     float elements[4];
     struct
     {
@@ -43,7 +43,10 @@ typedef union {
         union { float z, b; };
         union { float w, a; };
     };
+    static const vec4 zero;
 } vec4;
+
+inline const vec4 vec4::zero = {0, 0, 0, 0};
 
 typedef struct 
 {
@@ -59,6 +62,7 @@ vec4 operator*(mat4 m, vec4 V)
 			(V.x * m.m[3][0]) + (V.y * m.m[3][1]) + (V.z * m.m[3][2]) + (V.w * m.m[3][3])};
 }
 
+bool operator==(vec4 A, vec4 B) { return (A.x == B.x) && (A.y == B.y) && (A.z == B.z) && (A.w == B.w); }
 
 struct vec2 {
     union
@@ -67,7 +71,10 @@ struct vec2 {
         struct { float x, y; };
         struct { float u, v; };
     };
+    static const vec2 zero;
 };
+
+inline const vec2 vec2::zero = {0, 0};
 
 vec2 operator+(vec2 A, vec2 B) { return {A.x + B.x, A.y + B.y}; }
 
@@ -77,6 +84,8 @@ vec2 operator-(vec2 A)         { return {-A.x, -A.y}; }
 vec2 operator*(f32 c, vec2 V)  { return {c * V.x, c * V.y}; }
 vec2 operator*(vec2 V, f32 c)  { return c * V; }
 vec2 operator/(vec2 V, f32 c)  { return {V.x / c, V.y / c}; }
+
+bool operator==(vec2 A, vec2 B) { return (A.x == B.x) && (A.y == B.y); }
 
 vec2 & operator*=(vec2 & V, f32 c)
 {
@@ -175,6 +184,7 @@ typedef enum {
 	NET_EVENT_CLIENT_CONNECTED,
 	NET_EVENT_CLIENT_DISCONNECTED,
 	NET_EVENT_PACKET,
+	NET_EVENT_CLIENT_CONNECTION_FAILED
 } NetworkEventType;
 
 typedef struct {
@@ -212,8 +222,14 @@ typedef PLATFORM_FREE_FILE(PlatformFreeFileFunction);
 #define PLATFORM_START_SERVER(name) bool name(uint16_t port, uint16_t maxConnections)
 typedef PLATFORM_START_SERVER(PlatformStartServerFunction);
 
+#define PLATFORM_STOP_SERVER(name) void name(void)
+typedef PLATFORM_STOP_SERVER(PlatformStopServerFn);
+
 #define PLATFORM_START_CLIENT(name) bool name(const char * addressStr, uint16_t serverPort)
 typedef PLATFORM_START_CLIENT(PlatformStartClientFn);
+
+#define PLATFORM_STOP_CLIENT(name) void name(void)
+typedef PLATFORM_STOP_CLIENT(PlatformStopClientFn);
 
 #define PLATFORM_CLIENT_SEND(name) void name(void * data, size_t size, uint16_t sendMode)
 typedef PLATFORM_CLIENT_SEND(PlatformClientSendFn);
@@ -229,7 +245,9 @@ typedef struct {
     PlatformLoadFileFunction * platformLoadFile;
     PlatformFreeFileFunction * platformFreeFile;
     PlatformStartServerFunction * platformStartServer;
+	PlatformStopServerFn * stopServer;
     PlatformStartClientFn * platformStartClient;
+	PlatformStopClientFn * stopClient;
 	PlatformClientSendFn * platformClientSend;
 	PlatformServerSendFn * platformServerSend;
 	PlatformServerGetEventFn * serverGetEvent;
@@ -268,6 +286,8 @@ typedef struct {
 	double deltaTime;
 	vec2i viewportSize;
 	vec2i mousePosVP;
+	u8 charsPressed[128];
+	u32 charCount;
 	// ---- Networking ----
 	NetworkEvent * clientEvents;
 	u32 clientEventCount;

@@ -38,3 +38,23 @@ u32 fn1va_32(const char * s)
     while (*s) { hash = (hash ^ (uint8_t)*s++) * 16777619u; }
     return hash;
 }
+
+vec4 ColorHexToRBGANormalized(u32 color)
+{
+	float r = ((color >> 24) & 0xFF) / 255.0f;
+    float g = ((color >> 16) & 0xFF) / 255.0f;
+    float b = ((color >>  8) & 0xFF) / 255.0f;
+    float a = ((color)       & 0xFF) / 255.0f;
+
+    return vec4{r, g, b, a};
+}
+
+vec3 ColorHexToRBGNormalized(u32 color)
+{
+	float r = ((color >> 16) & 0xFF) / 255.0f;
+    float g = ((color >> 8)  & 0xFF) / 255.0f;
+    float b = ((color)       & 0xFF) / 255.0f;
+
+    return vec3{r, g, b};
+}
+

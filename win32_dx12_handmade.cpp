@@ -15,6 +15,7 @@
 #include "./engine/fonts.hpp"
 #include <cstddef>
 #include <cstdio>
+#include <cstring>
 
 #define GAME_CODE_DLL "tanksgame.dll"
 
@@ -52,6 +53,8 @@ typedef struct
 	KeyInput SPACE;
 	KeyInput ENTER;
     ButtonInput mouseL;
+	char charsPressed[128];
+	u32 charCount;
 	vec2i mousePos;
 } InputState;
 
@@ -63,6 +66,7 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
         switch (msg.message)
         {
             case WM_KEYDOWN:
+                TranslateMessage(&msg);
                 if (msg.wParam == 'W')
                 {
                     inputState.W.isDown = true;
@@ -189,10 +193,20 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
 					inputState.mousePos.x = xPos;
 					inputState.mousePos.y = yPos;
 				}break;
+			case WM_CHAR:
+			{
+				if (inputState.charCount < 128)
+				{
+					char asciiChar = (char)msg.wParam;
+					inputState.charsPressed[inputState.charCount++] = asciiChar;
+					OutputDebugStringA("WM_CHAR\n");
+				}
+			} break;
             default:
+			{
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
-                break;
+			} break;
         }
     }
 }
@@ -425,6 +439,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 	gameMemory.platform.serverGetEvent      = &PlatformServerGetEvent;
 	gameMemory.platform.loadFont 			= &PlatformLoadFontAtlas;
 	gameMemory.platform.measureText 		= &PlatformMeasureText;
+	gameMemory.platform.stopClient		    = &PlatformStopClient;
+	gameMemory.platform.stopServer          = &PlatformStopServer;
 
 	GameInput gameInput = {0};
 
@@ -496,8 +512,11 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 		gameInput.isEnterPressed = inputState.ENTER.isDown;
 		gameInput.isMousePressed = inputState.mouseL.isDown;
 		gameInput.mouseL 		 = inputState.mouseL;
+		memcpy(gameInput.charsPressed, inputState.charsPressed, sizeof(gameInput.charsPressed));
+		gameInput.charCount = inputState.charCount;
 		inputState.mouseL.wasPressed = false;
 		inputState.mouseL.wasReleased = false;
+		inputState.charCount = 0;
 		gameInput.viewportSize = vec2i{resolution.x, resolution.y};
 		gameInput.mousePosVP = vec2i{inputState.mousePos.x, inputState.mousePos.y};
 
@@ -519,7 +538,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         
         char buffer[256];
         snprintf(buffer, 256, "MS/Frame: %dms FPS: %d Time: %lf\n", msPerFrame, FPS, time);
-        if (timer>0.5f)
+        if (timer>2.5f)
         {
             OutputDebugStringA(buffer);
             timer = 0.0f;

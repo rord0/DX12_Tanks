@@ -105,6 +105,7 @@ void RendererPushSubTexture(RendererPushBuffer * pb, u32 textureID, vec3 positio
 void RendererPushText(RendererPushBuffer * pb, const char * text, f32 fontSize, i32 fontID, vec2 startPos, TextStyle style, bool isWorldSpace, u16 layer)
 {
 	u32 textLen = strlen(text);
+	if (textLen == 0) { return; }
 	RenderEntryText entry = {RENDER_ENTRY_TYPE_TEXT, fontID, fontSize, startPos, style, textLen, isWorldSpace};
 	u32 entryOffset = PushRenderEntryText(pb, &entry, text);
 

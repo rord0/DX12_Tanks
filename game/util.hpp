@@ -11,4 +11,7 @@ vec2 RandomDirection(pcg32_random_t * rng);
 
 u32 fn1va_32(const char * s);
 
+vec3 ColorHexToRBGNormalized(u32 color);
+vec4 ColorHexToRBGANormalized(u32 color);
+
 #endif // UTIL_HPP
