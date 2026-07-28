@@ -166,6 +166,16 @@ void ServerStart(ServerState * state, u16 port, u16 maxPlayers)
 	state->serverActive = true;
 }
 
+void ServerStop(ServerState * state)
+{
+	if (!state->serverActive) { return; }
+	
+	state->serverActive = false;
+	state->playerCount = 0;
+	memset(state->tanks,0, sizeof(state->tanks));
+	state->platform.stopServer();
+}
+
 void ServerProcessHelloPacket(ServerState * state, HelloPacket * packet, u32 connID)
 {
 	// Find empty player index

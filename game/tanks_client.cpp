@@ -3,20 +3,23 @@
 #include "tanks.hpp"
 #include "util.hpp"
 #include "render_commands.hpp"
+#include "ui.hpp"
+#include "ui.cpp"
+#include "ui_styles.cpp"
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
+#include <cstring>
 
 mat4 orthographicProjection(float right, float left, float top, float bottom, float n, float f)
 {
     mat4 m = {};
     m.m[0][0] = 2.0f / (right - left);
     m.m[1][1] = 2.0f / (top - bottom);
-    m.m[2][2] = 2.0f / (f - n);
-
-    m.m[0][3] = -((right + left)/(right - left));
-    m.m[1][3] = -((top + bottom)/(top - bottom));
-    m.m[2][3] = -((f + n)/(f - n));
-
+    m.m[2][2] = 1.0f / (f - n);           // DX12 [0,1] depth
+    m.m[3][0] = -((right + left) / (right - left));  // row-major translation
+    m.m[3][1] = -((top + bottom) / (top - bottom));
+    m.m[3][2] = -n / (f - n);
     m.m[3][3] = 1.0f;
     return m;
 }                      
@@ -38,29 +41,26 @@ mat4 inverseOrthographicProjection(float right, float left, float top, float bot
     return m;
 }
 
+mat4 translationMatrix(float x, float y, float z)
+{
+    mat4 m = {};
+
+    m.m[0][0] = 1.0f;
+    m.m[1][1] = 1.0f;
+    m.m[2][2] = 1.0f;
+    m.m[3][3] = 1.0f;
+
+    m.m[0][3] = x;
+    m.m[1][3] = y;
+    m.m[2][3] = z;
+
+    return m;
+}
+
 vec4 CalculateUVTransform(AtlasEntry entry, u32 atlasHeight, u32 atlasWidth)
 {
 	vec4 uv = {(f32)entry.width / (f32)atlasWidth, (f32)entry.height / (f32)atlasHeight, (f32)entry.x / (f32)atlasWidth, (f32)entry.y / (f32)atlasHeight};
 	return uv;
-}
-
-vec4 ColorHexToRBGANormalized(u32 color)
-{
-	float r = ((color >> 24) & 0xFF) / 255.0f;
-    float g = ((color >> 16) & 0xFF) / 255.0f;
-    float b = ((color >>  8) & 0xFF) / 255.0f;
-    float a = ((color)       & 0xFF) / 255.0f;
-
-    return vec4{r, g, b, a};
-}
-
-vec3 ColorHexToRBGNormalized(u32 color)
-{
-	float r = ((color >> 16) & 0xFF) / 255.0f;
-    float g = ((color >> 8)  & 0xFF) / 255.0f;
-    float b = ((color)       & 0xFF) / 255.0f;
-
-    return vec3{r, g, b};
 }
 
 f32 easeOutExpo(f32 x)  { return (x == 1.0f) ? 1.0f : 1.0f - powf(2.0f, -10.0f * x); }
@@ -121,6 +121,24 @@ void DrawHealthbar(RendererPushBuffer * cmdBuffer, vec2 center, f32 remaining, f
 	RendererPushRectangle(cmdBuffer, hbRemaining, 5);
 }
 
+void CalculateTankUVs(TankStyle style, AtlasEntry * atlasEntries, vec4 * uvs)
+{
+	const u32 atlasWidth  = 4096;
+	const u32 atlasHeight = 4096;
+
+    u32 trackIndex  =  0 + (4 * style.trackType)  + style.colorID;
+    u32 bodyIndex   = 12 + (4 * style.bodyType)   + style.colorID;
+    u32 turretIndex = 24 + (4 * style.turretType) + style.colorID;
+
+	vec4 trackUV  = CalculateUVTransform(atlasEntries[trackIndex], atlasHeight, atlasWidth);
+	vec4 bodyUV   = CalculateUVTransform(atlasEntries[bodyIndex], atlasHeight, atlasWidth);
+	vec4 turretUV = CalculateUVTransform(atlasEntries[turretIndex], atlasHeight, atlasWidth);
+
+	uvs[0] = trackUV;
+	uvs[1] = bodyUV;
+	uvs[2] = turretUV;
+}
+
 void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 {
 	if (!tank.active) { return; }
@@ -133,9 +151,8 @@ void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 	u32 atlasWidth  = 4096;
 	u32 atlasHeight = 4096;
 
-	vec4 trackUV  = CalculateUVTransform(state->tankAtlasEntries[trackIndex], atlasHeight, atlasWidth);
-	vec4 bodyUV   = CalculateUVTransform(state->tankAtlasEntries[bodyIndex], atlasHeight, atlasWidth);
-	vec4 turretUV = CalculateUVTransform(state->tankAtlasEntries[turretIndex], atlasHeight, atlasWidth);
+	vec4 uvs[3];
+	CalculateTankUVs(tank.style, state->tankAtlasEntries, uvs);
 
 	vec2 turretDir = vec2{cosf(tank.turretRot), sinf(tank.turretRot)};
 	vec2 tankDir   = vec2{cosf(tank.rotation),  sinf(tank.rotation)};
@@ -146,13 +163,15 @@ void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 
 	f32 tankRot = tank.rotation + (PI/2.0f);
 
-	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.8f, 1.0f}, trackUV, 0);
-	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.64f, 1.0f}, bodyUV, 1);
-	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {turretPos.x, turretPos.y, 0.0f}, tank.turretRot + (PI/2.0f), {0.57f, 1.0f}, turretUV, 2);
+	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.8f, 1.0f}, uvs[0], 0);
+	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.64f, 1.0f}, uvs[1], 1);
+	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {turretPos.x, turretPos.y, 0.0f}, tank.turretRot + (PI/2.0f), {0.57f, 1.0f}, uvs[2], 2);
 
 	DrawHealthbar(cmdBuffer, vec2{tank.position.x, tank.position.y + 0.3f}, ((float)tank.health / (float)TANK_MAX_HEALTH), tank.healthLerp);
-	vec4 nameColor = {1.0f, 1.0f, 1.0f, 1.0f};
-	RendererPushText(cmdBuffer, tank.displayName, 5.0f, state->interFontHandle, vec2{tank.position.x - 0.2f, tank.position.y + 0.34f}, nameColor, 30);
+	bool isEnemyTank = tank.playerID != state->playerID;
+	vec4 nameColor = isEnemyTank ? ColorHexToRBGANormalized(0xFF6D5DFF) : ColorHexToRBGANormalized(0xFFFFFFFF);
+	TextStyle textStyle = {.fillColor = nameColor, .strokeWidth = 0.27f};
+	RendererPushText(cmdBuffer, tank.displayName, 0.05f, state->interFontHandle, vec2{tank.position.x - 0.2f, tank.position.y + 0.34f}, textStyle, true, 30);
 
 	// DEBUG VISUALS
     //RendererPushCircle(cmdBuffer, vec3{turretPos.x, turretPos.y, 0}, 0, {0.05f,0.05f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
@@ -464,6 +483,9 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
     state->tankAtlasHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"tank_parts.png");
     state->extraTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"images/platformer/Props_AirDrop.png");
     state->shellImpactTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"shell_impact.png");
+    state->customizeIconTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"customize_icon.png");
+    state->targetIconTextureHandle    = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"target_icon.png");
+    state->hamburgerIconTextureHandle    = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"hamburger_icon.png");
 	state->interFontHandle = gameMemory->platform.loadFont(RESOURCES_PATH"fonts/Inter/Inter_18pt-Bold.png", RESOURCES_PATH"fonts/Inter/Inter_18pt-Bold.json");
     ParseTextureAtlasCSV(gameMemory, state, RESOURCES_PATH"tank_parts.csv");
 
@@ -500,6 +522,19 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 	state->impactEmitter     = InitEmitter(10.0f, 32, &state->permArena);
 
 	state->random = {0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL};
+	state->ui = (UILayout*)ArenaPush(&state->permArena, sizeof(UILayout));
+}
+
+void ClientStop(GameState * state, PlatformAPI * platform)
+{
+	if (state->connected == false) { return; }
+
+	memset(state->tanks, 0, sizeof(state->tanks));
+	state->clientState = CLIENT_STATE_MAIN_MENU;
+	state->welcomeReceived = false;
+	state->helloSent = false;
+	state->connected = false;
+	platform->stopClient();
 }
 
 void ClientProcessWelcomePacket(GameState * state, WelcomePacket * packet, u32 connID)
@@ -514,6 +549,7 @@ void ClientProcessWelcomePacket(GameState * state, WelcomePacket * packet, u32 c
 		tank->style = connectData->style;
 		copy_c_str(tank->displayName, connectData->displayName, sizeof(tank->displayName));
 	}
+	state->welcomeReceived = true;
 }
 
 void ClientProcessConnectPacket(GameState * state, ConnectPacket * packet)
@@ -596,12 +632,12 @@ void ClientHandlePacket(GameState * state, NetworkPacket * packet)
 			{
 				ClientProcessDisconnectPacket(state, &disconnectPkt);
 			}
-		}
+		}break;
 		default: break;
 	}
 }
 
-void ClientSendInput(GameState * state, GameInput * input, GameMemory * memory, vec2 mouseWorld)
+void ClientSendInput(GameState * state, GameInput * input, PlatformAPI * platform, vec2 mouseWorld)
 {
 	if (state->time - state->timeSinceLastUpdate < 0.016) { return; }
 	state->timeSinceLastUpdate = state->time;
@@ -622,11 +658,567 @@ void ClientSendInput(GameState * state, GameInput * input, GameMemory * memory, 
 	WriteStream stream = {(u8*)ArenaPush(temp.arena, KB(1)), KB(1)};
 	if (pkt.serialize(stream))
 	{
-		memory->platform.platformClientSend(stream.buffer, stream.pos, 0);
+		platform->platformClientSend(stream.buffer, stream.pos, 0);
 	}
 }
 
-void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands)
+void DrawUI(UILayout & ui, RendererPushBuffer * renderCMDs)
+{
+	for (int i = 1; i < ui.count; i++)
+	{
+		UINode * node = &ui.nodes[i];
+		switch (node->data.type)
+		{
+			case UINodeType::UI_NODE_TYPE_CONTAINER:
+			{
+				if (node->data.container.visible)
+				{
+					RendererPushSDFRect(renderCMDs, node->pos, node->size, &node->data.container.style, 1);
+				}
+			} break;
+			case UINodeType::UI_NODE_TYPE_TEXT:
+			{
+				vec4 fillColor = {node->data.text.fillColor.r, node->data.text.fillColor.g, node->data.text.fillColor.b, 1.0f};
+				TextStyle style = {.fillColor = fillColor, .strokeWidth = node->data.text.strokeWidth};
+				RendererPushText(renderCMDs, node->data.text.text, node->data.text.fontSize, node->data.text.fontHandle, node->pos, style, false, 30);
+			} break;
+			case UINodeType::UI_NODE_TYPE_IMAGE:
+			{
+				vec3 imagePos = {node->pos.x + node->size.x / 2.0f, node->pos.y + node->size.y / 2.0f, 0.0f};
+				vec2 imageSize = {node->size.x*2, -node->size.y*2};
+				if (node->data.image.uv == vec4::zero)
+				{
+					InstanceData2D imgInstance = {imagePos, imageSize, 0.0f, 1.0f};
+					RendererPushImage(renderCMDs, node->data.image.handle, imgInstance, 30);
+				}
+				else // Atlas Image
+				{
+					RendererPushSubTexture(renderCMDs, node->data.image.handle, imagePos, 0.0f, imageSize, node->data.image.uv, 31);
+				}
+			} break;
+			case UINodeType::UI_NODE_TYPE_BUTTON:
+			{
+
+				SDFShapeStyle style;
+				style.cornerRadius = node->data.button.style->cornerRadius;
+				style.strokeWidth  = node->data.button.style->strokeWidth;
+				if (node->id == ui.active)
+				{
+					style.fillColor = node->data.button.style->pressed.fillColor;
+					style.strokeColor = node->data.button.style->pressed.strokeColor;
+				}
+				else if (node->id == ui.hot)
+				{
+					style.fillColor = node->data.button.style->hovered.fillColor;
+					style.strokeColor = node->data.button.style->hovered.strokeColor;
+				}
+				else
+				{
+					style.fillColor = node->data.button.style->normal.fillColor;
+					style.strokeColor = node->data.button.style->normal.strokeColor;
+				}
+				RendererPushSDFRect(renderCMDs, node->pos, node->size, &style, 1);
+			}break;
+			case UINodeType::UI_NODE_TYPE_INPUT_FIELD:
+			{
+				SDFShapeStyle style;
+				style.cornerRadius = node->data.input.style->cornerRadius;
+				style.strokeWidth  = node->data.input.style->strokeWidth;
+				if (node->id == ui.active)
+				{
+					style.fillColor = node->data.input.style->pressed.fillColor;
+					style.strokeColor = node->data.input.style->pressed.strokeColor;
+				}
+				else if (node->id == ui.hot)
+				{
+					style.fillColor = node->data.input.style->hovered.fillColor;
+					style.strokeColor = node->data.input.style->hovered.strokeColor;
+				}
+				else
+				{
+					style.fillColor = node->data.input.style->normal.fillColor;
+					style.strokeColor = node->data.input.style->normal.strokeColor;
+				}
+				RendererPushSDFRect(renderCMDs, node->pos, node->size, &style, 1);
+			} break;
+			default:
+			{
+
+			} break;
+		}
+	}
+
+	ui.hot = 0;
+	ui.depth = 0;
+	ui.count = 0;
+}
+
+ShapeColor BUTTON_STYLE = {.fillColor    = ColorHexToRBGANormalized(0x262D33CC),
+					       .strokeColor  = ColorHexToRBGANormalized(0x262D33FF)};
+
+ShapeColor CUSTOMIZE_BTN_COLOR = {.fillColor    = ColorHexToRBGANormalized(0xFFFFFFFF),
+								  .strokeColor  = ColorHexToRBGANormalized(0x262D33FF)};
+
+ShapeColor CUSTOMIZE_BTN_HOVERED = {.fillColor    = ColorHexToRBGANormalized(0xCACACAFF),
+									.strokeColor  = ColorHexToRBGANormalized(0x262D33FF)};
+
+ShapeColor BUTTON_HOVERED_COLOR = {.fillColor   = ColorHexToRBGANormalized(0x1E2328CC),
+							       .strokeColor = ColorHexToRBGANormalized(0x262D33FF)};
+
+ShapeColor BUTTON_PRESSED_COLOR = {.fillColor    = ColorHexToRBGANormalized(0x262D33CC),
+								   .strokeColor  = ColorHexToRBGANormalized(0xFF00C8FF)};
+
+ButtonStyle DEFAULT_BUTTON_STYLE = {BUTTON_STYLE, BUTTON_HOVERED_COLOR, BUTTON_PRESSED_COLOR, 6, 3};
+ButtonStyle CUSTOMIZE_BUTTON_STYLE = {CUSTOMIZE_BTN_COLOR, CUSTOMIZE_BTN_HOVERED, BUTTON_PRESSED_COLOR, 6, 3};
+
+SDFShapeStyle DEFAULT_CONTAINER_STYLE = {BUTTON_STYLE.fillColor, BUTTON_STYLE.strokeColor, 6, 3};
+
+void UITank(UILayout & ui, TankStyle style, f32 scale, AtlasEntry * tankAtlasEntries, i32 tankAtlasHandle)
+{
+	UINodeLayout tankImageContainer = {.size = {640 * scale, 800 * scale}, .sizing = SizingType::FIXED};
+	ui.begin("TANK_IMAGE_CONTAINER", tankImageContainer);
+		vec4 tankUVs[3];
+		CalculateTankUVs(style, tankAtlasEntries, &tankUVs[0]);
+		ui.image("TANK_TRACK_IMAGE",  640 * scale, 800 * scale, tankAtlasHandle, {0, 0},  tankUVs[0]);
+		ui.image("TANK_BODY_IMAGE",   512 * scale, 800 * scale, tankAtlasHandle, {65 * scale, 0}, tankUVs[1]);
+		ui.image("TANK_TURRET_IMAGE", 456 * scale, 800 * scale, tankAtlasHandle, {92 * scale, -50 * scale}, tankUVs[2]);
+	ui.end();
+}
+
+void ErrorPopupUI(UILayout & ui, u32 fontHandle, const char * message)
+{
+	UINodeData popupContainerData = {.type = UINodeType::UI_NODE_TYPE_CONTAINER, .container = { .visible = true, .style = POPUP_CONTAINER_STYLE}};
+	UINodeLayout popupContainerLayout = {.childGap = 16.0f,
+										 .justify = LayoutType::CENTER,
+										 .align = LayoutType::CENTER,
+										 .sizingY = SizingType::HUG,
+										 .padding = {32,16,16,16},
+										 .data = popupContainerData};
+	ui.begin("PLAYER_CARD", popupContainerLayout);
+		ui.text("PLAYER_DISPLAY_NAME_TEXT", fontHandle, 56.0f, ColorHexToRBGNormalized(0xFF3838), "!");
+		ui.text("PLAYER_DISPLAY_NAME_TEXT", fontHandle, 30.0f, ColorHexToRBGNormalized(0xFF3838), message);
+	ui.end();
+}
+
+void MainMenu(GameState * state, GameMemory * gameMemory, GameInput * input, PlatformAPI * platform)
+{
+	FontStyle fontStyle = {state->interFontHandle, 40.0f, 0.0f};
+
+	UINodeData menuContainerData = {.type = UINodeType::UI_NODE_TYPE_CONTAINER, .container = { .visible = true, .style = DEFAULT_CONTAINER_STYLE}};
+	f32 fontSize = 40.0f;
+	UIPadding defaultPadding = {18.0f, 18.0f, 18.0f, 18.0f};
+	UINodeLayout profileLayout = {.size = {0.0, 0.0f},
+								  .childGap = 12.0f,
+								  .axis = LayoutDirection::LEFT_TO_RIGHT,
+								  .justify = LayoutType::END,
+								  .align = LayoutType::START,
+								  .sizing = SizingType::FILL,
+								  .sizingY = SizingType::HUG,
+								  .padding = {.right = 25.0f, .bottom = 20.0f}};
+
+	UINodeLayout optionContainerLayout = {.childGap = 30.0f,
+										  .axis = LayoutDirection::TOP_TO_BOTTOM,
+										  .sizing = SizingType::HUG,
+										  .padding = {50.0f,50.0f,25.0f,25.0f}};
+
+	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL};
+	UILayout & ui = *state->ui;
+	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
+	ui.startLayout(frameStartSize, LayoutType::SPACE_BETWEEN, LayoutType::CENTER, platform->measureText, uiInput);
+		ui.begin("EMPTY", {.size = {(f32)input->viewportSize.x, 120.0f}}); ui.end();
+		ui.begin("MENU_OPTION_CONTAINER", optionContainerLayout);
+			ui.button("HOST_BUTTON", {390.0f, 100.0f}, &DEFAULT_BUTTON_STYLE, "HOST GAME", &fontStyle);
+			ui.button("JOIN_BUTTON", {390.0f, 100.0f}, &DEFAULT_BUTTON_STYLE, "JOIN GAME", &fontStyle);
+		ui.end();
+		ui.begin("PROFILE_MENU_CONTAINER", profileLayout);
+			ui.begin("PLAYER_CARD", {.childGap = 12.0f, .justify = LayoutType::CENTER, .align = LayoutType::CENTER, .sizingY = SizingType::FILL, .padding = {25,25,0,4},.data = menuContainerData});
+				ui.text("PLAYER_DISPLAY_NAME_TEXT", state->interFontHandle, 30.0f, 0.0f, state->displayName);
+				UITank(ui, state->playerStyle, 0.11f, state->tankAtlasEntries, state->tankAtlasHandle);
+			ui.end();
+			ui.begin_button("CUSTOMIZE_BUTTON", {100.0f, 100.0f}, &DEFAULT_BUTTON_STYLE);
+				ui.image("CUSTOMIZE_ICON", 60, 60, state->customizeIconTextureHandle);
+			ui.end();
+		ui.end();
+	ui.endLayout();
+
+	if (ui.isButtonPressed("HOST_BUTTON"))
+	{
+		copy_c_str(state->serverIP, "::1", 64);
+		ServerState * serverState = (ServerState*)((u8*)gameMemory->permStorage + sizeof(GameState));
+		ServerStart(serverState, 7777, 8);
+		platform->platformStartClient(state->serverIP, 7777);
+		state->clientState = CLIENT_STATE_CONNECTING;
+	}
+
+	if (ui.isButtonPressed("JOIN_BUTTON"))
+	{
+		state->clientState = CLIENT_STATE_JOIN_MENU;
+	}
+
+	if (ui.isButtonPressed("CUSTOMIZE_BUTTON"))
+	{
+		state->clientState = CLIENT_STATE_CUSTOMIZE_MENU;
+	}
+}
+
+bool ClientSendHelloMessage(GameState * state, PlatformAPI * platform)
+{
+	u8 buf[64] = {0};
+	WriteStream stream(buf, sizeof(buf));
+	HelloPacket packet = {state->playerStyle};
+	copy_c_str(packet.displayName, state->displayName, sizeof(packet.displayName));
+
+	if (packet.serialize(stream))
+	{
+		platform->platformClientSend(stream.buffer, stream.pos, 1);
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+void ConnectingScreen(GameState * state, GameInput * input, PlatformAPI * platform)
+{
+	static double nextSwapTime = 0;
+	static u32 currentText = 0;
+	const char * texts[] = {"Connecting.", "Connecting..", "Connecting..."};
+	if (state->time > nextSwapTime)
+	{
+		nextSwapTime = state->time + 0.3f;
+		currentText = (currentText + 1) % 3;
+	}
+
+	if (state->connected)
+	{
+		if (state->helloSent)
+		{
+			if (state->welcomeReceived)
+			{
+				state->clientState = CLIENT_STATE_CONNECTED;
+			}
+		}
+		else // Send hello message
+		{
+			ClientSendHelloMessage(state, platform);
+			state->helloSent = true;
+		}
+	}
+
+	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL};
+	uiInput.charsPressed = input->charsPressed;
+	uiInput.charCount = input->charCount;
+	UILayout & ui = *state->ui;
+
+	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
+	ui.startLayout(frameStartSize, LayoutType::CENTER, LayoutType::CENTER, platform->measureText, uiInput);
+		ui.text("CONNECTING_TEXT", state->interFontHandle, 48.0f, 0.2f, texts[currentText]);
+	ui.endLayout();
+}
+
+void DirectJoinMenu(GameState * state, GameInput * input, PlatformAPI * platform)
+{
+	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL, input->charsPressed, input->charCount};
+	UILayout & ui = *state->ui;
+	UINodeLayout sectionLayout = {.childGap = 6.0f,
+							      .axis = LayoutDirection::TOP_TO_BOTTOM,
+								  .sizing = SizingType::HUG};
+	UINodeLayout profileLayout = {.size = {0.0, 120.0f},
+								  .axis = LayoutDirection::LEFT_TO_RIGHT,
+								  .align = LayoutType::START,
+								  .sizing = SizingType::FILL,
+								  .sizingY = SizingType::FIXED,
+								  .padding = {.left = 16.0f, .top = 16.0f}};
+
+
+	FontStyle btnFontStyle = {state->interFontHandle, 40.0f, 0.0f};
+	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
+	ui.startLayout(frameStartSize, LayoutType::SPACE_BETWEEN, LayoutType::CENTER, platform->measureText, uiInput);
+		ui.begin("POPUP_CONTAINER", profileLayout);
+			if (state->showBadIPPopup) { ErrorPopupUI(ui, state->interFontHandle, "invalid IP entered"); }
+			if (state->showConnFailedPopup) { ErrorPopupUI(ui, state->interFontHandle, "failed to connect to server"); }
+		ui.end();
+		ui.begin("IP_SECTION", sectionLayout);
+			ui.text("IP_LABEL", state->interFontHandle, 30.0f, 0.2f, "IPv6 Address:");
+			ui.inputField("IP_INPUT", {360.0f, 70.0f}, state->serverIP, 64, &DEFAULT_BUTTON_STYLE, btnFontStyle,
+						 											UI_INPUT_ALLOW_DIGITS | UI_INPUT_ALLOW_PERIODS | UI_INPUT_ALLOW_COLONS);
+			ui.button("CONNECT_BTN",{360,80.f}, &DEFAULT_BUTTON_STYLE, "CONNECT", &btnFontStyle);
+			ui.button("BACK_BTN",{150,60}, &DEFAULT_BUTTON_STYLE, "BACK", &btnFontStyle);
+		ui.end();
+		ui.begin("EMPTY", {.size = {(f32)input->viewportSize.x, 120.0f}}); ui.end();
+	ui.endLayout();
+
+	if (ui.isButtonPressed("CONNECT_BTN"))
+	{
+		if (platform->platformStartClient(state->serverIP, 7777))
+		{
+			state->clientState = CLIENT_STATE_CONNECTING;
+			state->showBadIPPopup = false;
+		}
+		else
+		{
+			state->showBadIPPopup = true;
+		}
+		
+	}
+	if (ui.isButtonPressed("BACK_BTN"))
+	{
+		state->clientState = CLIENT_STATE_MAIN_MENU;
+		state->showBadIPPopup = false;
+		state->showConnFailedPopup = false;
+	}
+
+	if (ui.inputEntered("IP_INPUT"))
+	{
+
+	}
+}
+
+void PlayerCard(UILayout & ui, GameState * state, TankGFX * player)
+{
+	UINodeLayout cardLayout = {.childGap = 12.0f,
+							   .axis = LayoutDirection::LEFT_TO_RIGHT,
+								  .justify = LayoutType::START,
+								  .align = LayoutType::CENTER,
+								  .sizing = SizingType::HUG,
+								  .sizingY = SizingType::HUG};
+	UINodeLayout nameKillsLayout = {.childGap = 4,
+									.axis = LayoutDirection::TOP_TO_BOTTOM,
+									.justify = LayoutType::START,
+									.align = LayoutType::START,
+									.sizing = SizingType::HUG,
+									.sizingY = SizingType::HUG};
+
+	char killsText[32];
+	snprintf(killsText, sizeof(killsText), "%d", player->kills); 
+	ui.begin("CARD_CONTAINER", cardLayout);
+		UITank(ui, player->style, 0.12f, state->tankAtlasEntries, state->tankAtlasHandle);
+		ui.begin("NAME_KILLS_CONTAINER", nameKillsLayout);
+			ui.text("PLAYER_CARD_DISPLAY_NAME", state->interFontHandle, 24.0f, 0.2f, player->displayName);
+			ui.begin("KILLS_CONTAINER", {.childGap = 6.0f, .axis = LayoutDirection::LEFT_TO_RIGHT, .align = LayoutType::CENTER});
+				ui.image("TARGET_ICON_IMAGE", 24, 24, state->targetIconTextureHandle);
+				ui.text("PLAYER_CARD_KILLS", state->interFontHandle, 24.0f, 0.0f, killsText);
+			ui.end();
+		ui.end();
+	ui.end();
+}
+
+void EscapeMenu(GameState * state, GameInput * input, GameMemory * gameMemory, PlatformAPI * platform, RendererPushBuffer * renderCMDs)
+{
+	if (!state->optionsMenuOpen) { return; }
+	UILayout & ui = *state->ui;
+	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL, input->charsPressed, input->charCount};
+	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
+	FontStyle fontStyle = {state->interFontHandle, 40.0f, 0.0f};
+
+	UINodeLayout optionContainerLayout = {.childGap = 30.0f,
+										  .axis = LayoutDirection::TOP_TO_BOTTOM,
+										  .sizing = SizingType::HUG,
+										  .padding = {50.0f,50.0f,25.0f,25.0f}};
+
+	ui.startLayout(frameStartSize, LayoutType::CENTER, LayoutType::CENTER, platform->measureText, uiInput);
+		ui.begin("MENU_OPTION_CONTAINER", optionContainerLayout);
+			ui.button("QUIT_BTN", {390.0f, 100.0f}, &DEFAULT_BUTTON_STYLE, "QUIT", &fontStyle);
+			ui.button("RESUME_BTN", {390.0f, 100.0f}, &DEFAULT_BUTTON_STYLE, "RESUME", &fontStyle);
+		ui.end();
+	ui.endLayout();
+
+	if (ui.isButtonPressed("RESUME_BTN"))
+	{
+		state->optionsMenuOpen = false;
+	}
+	if (ui.isButtonPressed("QUIT_BTN"))
+	{
+		state->optionsMenuOpen = false;
+		ClientStop(state, platform);
+		ServerState * serverState = (ServerState*)((u8*)gameMemory->permStorage + sizeof(GameState));
+		ServerStop(serverState);
+	}
+	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
+	RendererPushSetProjection(renderCMDs, uiProjection);
+	DrawUI(*state->ui, renderCMDs);
+}
+
+void GameHUD(GameState * state, GameInput * input, PlatformAPI * platform)
+{
+	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL};
+	uiInput.charsPressed = input->charsPressed;
+	uiInput.charCount = input->charCount;
+	UILayout & ui = *state->ui;
+
+	UINodeLayout cardContainerLayout = {.childGap = 12.0f,
+							            .axis = LayoutDirection::TOP_TO_BOTTOM,
+										.justify = LayoutType::START,
+									    .align = LayoutType::START,
+										.padding = {}};
+	
+	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
+	ui.startLayout(frameStartSize, LayoutType::START, LayoutType::START, platform->measureText, uiInput);
+		ui.begin("CONTAINER_I_HARDLY_KNOW_HER", {.size = {0,0.0f}, .axis = LayoutDirection::LEFT_TO_RIGHT,
+												 .justify = LayoutType::SPACE_BETWEEN,
+												 .sizing = SizingType::FILL,
+												 .padding = {.left = 16, .right = 16, .top = 16.0f}});
+			ui.begin("PLAYER_CARDS_CONTAINER", cardContainerLayout);
+				for (int i = 0; i < MAX_PLAYERS; i++)
+				{
+					TankGFX * player = &state->tanks[i];
+					if (player->active)
+					{
+						PlayerCard(ui, state, player);
+					}
+				}
+			ui.end();
+
+			ui.begin_button("OPTIONS_BUTTON", {75.0f, 75.0f}, &DEFAULT_BUTTON_STYLE);
+				ui.image("HAMBURGER_ICON", 42, 28, state->hamburgerIconTextureHandle);
+			ui.end();
+		ui.end();
+
+	ui.endLayout();
+
+	if (ui.isButtonPressed("OPTIONS_BUTTON")) { state->optionsMenuOpen = !state->optionsMenuOpen; }
+}
+
+void CustomizeMenu(GameState * state, GameInput * input, PlatformAPI * platform)
+{
+	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL};
+	uiInput.charsPressed = input->charsPressed;
+	uiInput.charCount = input->charCount;
+	UILayout & ui = *state->ui;
+
+	UINodeData menuContainerData = {.type = UINodeType::UI_NODE_TYPE_CONTAINER, .container = { .visible = true, .style = DEFAULT_CONTAINER_STYLE}};
+	UINodeLayout sectionContainerLayout = {.childGap = 12.0f,
+										   .axis = LayoutDirection::TOP_TO_BOTTOM,
+										   .sizing = SizingType::HUG,
+										   .sizingY = SizingType::HUG};
+	UINodeLayout sectionLayout = {.childGap = 6.0f,
+								.axis = LayoutDirection::TOP_TO_BOTTOM,
+									 .sizing = SizingType::FILL,
+									 .sizingY = SizingType::HUG};
+	UINodeLayout doneSectionLayout = {.childGap = 6.0f,
+									.axis = LayoutDirection::TOP_TO_BOTTOM,
+									.align = LayoutType::END,
+									 .sizing = SizingType::FILL,
+									 .sizingY = SizingType::HUG,
+	};
+
+	UINodeLayout containerLeft = {.childGap = 16.0f,
+								  .axis = LayoutDirection::LEFT_TO_RIGHT,
+								  .sizing = SizingType::HUG};
+	UINodeLayout colorBtnContainer = {.childGap = 10.0f,
+									  .axis = LayoutDirection::LEFT_TO_RIGHT,
+									  .sizing = SizingType::FILL,
+									  .sizingY = SizingType::HUG,
+									  .padding = {25,25,16,16},
+									  .data = menuContainerData};
+
+	UINodeLayout tankImageContainer = {.size = {640 * 0.33, 220}, .sizing = SizingType::FIXED};
+
+	UINodeLayout optionContainerLayout = {.childGap = 7.0f,
+										  .axis = LayoutDirection::LEFT_TO_RIGHT,
+										  .align = LayoutType::CENTER,
+										  .sizing = SizingType::HUG,
+										  .padding = {26.0f,26.0f,25.0f,25.0f},
+										  .data = menuContainerData};
+	UINodeLayout bodyButtonLayout = {.childGap = 20.0f,
+									 .axis = LayoutDirection::TOP_TO_BOTTOM,
+									 .sizing = SizingType::HUG};
+
+	FontStyle btnFontStyle = {state->interFontHandle, 40.0f, 0.0f};
+
+	FontStyle nameCharCountFontStyle = {state->interFontHandle, 30.0f, 0.0f, ColorHexToRBGNormalized(0x827A5D)};
+	vec2 customizeBtnSize = {50.0f,50.0f};
+	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
+	ui.startLayout(frameStartSize, LayoutType::CENTER, LayoutType::CENTER, platform->measureText, uiInput);
+		ui.begin("SECTION_CONTAINER", sectionContainerLayout);
+			ui.begin("DISPLAY_NAME_SECTION", sectionLayout);
+				ui.begin("INPUT_PROMPT_CONTAINER", containerLeft);
+					ui.text("DISPLAY_NAME_LABEL", state->interFontHandle, 30.0f, 0.2f, "Display Name:");
+
+					char buf[32];
+					snprintf(buf, sizeof(buf), "(%d/20)", (i32)strnlen(state->displayName, 32));
+					ui.text("DISPLAY_NAME_LENGTH", nameCharCountFontStyle, buf);
+				ui.end();
+				ui.inputField("DISPLAY_NAME_INPUT", {360.0f, 70.0f}, state->displayName, 32, &DEFAULT_BUTTON_STYLE, btnFontStyle,
+																		UI_INPUT_ALLOW_ALPHANUM | UI_INPUT_ALLOW_UNDERSCORES);
+			ui.end();
+			ui.begin("TANK_STYLE_SECTION", sectionLayout);
+				ui.text("STYLE_LABEL", state->interFontHandle, 30.0f, 0.2f, "Tank Body:");
+				ui.begin("BODY_STYLE_OPTIONS_CONTAINER", optionContainerLayout);
+					ui.begin("LEFT_STYLE_BUTTONS", bodyButtonLayout);
+						ui.button("STYLE_BTN_TURRET_L", customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+						ui.button("STYLE_BTN_BODY_L",   customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+						ui.button("STYLE_BTN_TRACK_L",  customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+					ui.end();
+					UITank(ui, state->playerStyle, 0.33f, state->tankAtlasEntries, state->tankAtlasHandle);
+					ui.begin("RIGHT_STYLE_BUTTONS", bodyButtonLayout);
+						ui.button("STYLE_BTN_TURRET_R", customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+						ui.button("STYLE_BTN_BODY_R",   customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+						ui.button("STYLE_BTN_TRACK_R",  customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+					ui.end();
+				ui.end();
+			ui.end();
+			ui.begin("COLOR_SECTION", sectionLayout);
+				ui.text("COLOR_LABEL", state->interFontHandle, 30.0f, 0.2f, "Tank Color:");
+					ui.begin("LEFT_STYLE_BUTTONS", colorBtnContainer);
+						ui.button("COLOR_BTN_GREEN",     customizeBtnSize, &BTN_GREEN_STYLE);
+						ui.button("COLOR_BTN_GREY",      customizeBtnSize, &BTN_GREY_STYLE);
+						ui.button("COLOR_BTN_DARK_GREY", customizeBtnSize, &BTN_DARK_GREY_STYLE);
+						ui.button("COLOR_BTN_TAN",       customizeBtnSize, &BTN_TAN_STYLE);
+					ui.end();
+			ui.end();
+			ui.begin("DONE_SECTION", doneSectionLayout);
+				ui.button("BACK_BTN",{200,75.f}, &DEFAULT_BUTTON_STYLE, "DONE", &btnFontStyle);
+			ui.end();
+		ui.end();
+	ui.endLayout();
+
+	if (ui.isButtonPressed("STYLE_BTN_TURRET_R")) { state->playerStyle.turretType = (state->playerStyle.turretType  + 1) % 3; }
+	if (ui.isButtonPressed("STYLE_BTN_TRACK_R")) { state->playerStyle.trackType = (state->playerStyle.trackType + 1) % 3; }
+	if (ui.isButtonPressed("STYLE_BTN_BODY_R")) { state->playerStyle.bodyType = (state->playerStyle.bodyType + 1) % 3; }
+
+	if (ui.isButtonPressed("STYLE_BTN_TURRET_L")) { state->playerStyle.turretType = (state->playerStyle.turretType + 2) % 3; }
+	if (ui.isButtonPressed("STYLE_BTN_TRACK_L")) { state->playerStyle.trackType = (state->playerStyle.trackType + 2) % 3; }
+	if (ui.isButtonPressed("STYLE_BTN_BODY_L")) { state->playerStyle.bodyType = (state->playerStyle.bodyType + 2) % 3; }
+
+	if (ui.isButtonPressed("COLOR_BTN_DARK_GREY")) { state->playerStyle.colorID = 0; }
+	if (ui.isButtonPressed("COLOR_BTN_GREEN"))     { state->playerStyle.colorID = 1; }
+	if (ui.isButtonPressed("COLOR_BTN_GREY"))      { state->playerStyle.colorID = 2; }
+	if (ui.isButtonPressed("COLOR_BTN_TAN"))       { state->playerStyle.colorID = 3; }
+
+	if (ui.inputEntered("DISPLAY_NAME_INPUT"))
+	{
+
+	}
+
+	if (ui.isButtonPressed("BACK_BTN")) { state->clientState = CLIENT_STATE_MAIN_MENU; }
+}
+
+void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, RendererPushBuffer * renderCommands)
+{
+	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
+	mat4 projection = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
+	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, input->viewportSize, projection);
+	ClientSendInput(state, input, platform, mouseWorld);
+
+    InstanceData2D gdEasy   = {{1.0f, 1.0f, 0.0f}, {0.5f, 0.5f}, 1.0f, 1.0f};
+    RendererPushImage(renderCommands, 1, gdEasy, 0);
+
+	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
+	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
+	SimulateParticles(&state->shellTrailEmitter, input->deltaTime);
+	SimulateParticles(&state->impactEmitter,     input->deltaTime);
+	DrawParticles(renderCommands, state);
+
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		UpdateTankGFX(&state->tanks[i], input->deltaTime);
+		DrawTank(state->tanks[i], renderCommands, state);
+	}
+}
+
+void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands, RendererPushBuffer * uiRenderCMDs)
 {
     state->time += input->deltaTime;
 	ArenaClear(&state->frameArena);
@@ -634,16 +1226,11 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
 	mat4 projection = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
 
+	vec2 cameraPos = {0.0f, 0.0f};
+	mat4 view = translationMatrix(cameraPos.x, cameraPos.y, 1.0f);
 	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, input->viewportSize, projection);
     double time = state->time;
     vec4 color = GetHSVSpectrumColor(time);
-
-    float angle = (float)fmod(time * 100, 360.0) * (PI/180.0f);
-    float angle2 = (float)fmod(time * 10, 360.0) * (PI/180.0f);
-    InstanceData2D gdEasy   = {{mouseWorld.x, mouseWorld.y, 0.0f}, {0.5f, 0.5f}, 0.0f};
-    InstanceData2D gdNormal = {{0, 0, 0.0f}, {0.64f, 1.0f}, 1.57079633f};
-    InstanceData2D gdHarder = {{0.0f, sinf(angle), 0.0f}, {0.8f, 1.0f}, angle};
-    InstanceData2D gdHard   = {{gdHarder.position.x + sinf(angle) * -0.075f, gdHarder.position.y - cosf(angle) * -0.075f}, {0.57f, 1.0f}, angle};
 
 	for (int i = 0; i < input->clientEventCount; i++)
 	{
@@ -653,72 +1240,67 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 				state->connected = true;
 				break;
 			case NET_EVENT_CLIENT_DISCONNECTED:
-				state->connected = false;
+				ClientStop(state, &gameMemory->platform);
 				break;
 			case NET_EVENT_PACKET:
 				ClientHandlePacket(state, event->packet);
+				break;
+			case NET_EVENT_CLIENT_CONNECTION_FAILED:
+				state->clientState = CLIENT_STATE_JOIN_MENU;
+				state->showConnFailedPopup = true;
+				state->showBadIPPopup = false;
+				ClientStop(state, &gameMemory->platform);
 				break;
 			default:
 				break;
 		}
 	}
 
-	if (state->connected && !state->helloSent)
-	{
-		u8 buf[64] = {0};
-		WriteStream stream(buf, sizeof(buf));
-		HelloPacket packet = {{0,0,0,2}};
-		copy_c_str(packet.displayName, state->displayName, sizeof(packet.displayName));
-
-		if (packet.serialize(stream))
-		{
-			gameMemory->platform.platformClientSend(stream.buffer, stream.pos, 1);
-		}
-		
-		state->helloSent = true;
-	}
-
-	ClientSendInput(state, input, gameMemory, mouseWorld);
-
-	Collider2D c = {.position = mouseWorld,
-					.size = vec2{0.5f, 0.5f},
-					.rotation = 0,
-					.type = COLLIDER_CIRCLE};
-
 	vec4 clearColorGreen = {0.5f, 0.714f, 0.486f, 1.0f};
 	vec4 clearColor = ColorHexToRBGANormalized(0xC3B67CFF);
 
-	vec2 lineAStart = {0,0};
-	vec2 lineAEnd = mouseWorld;
-	
-	bool lineColliding  = false;
-	vec3 lineColor = lineColliding ? vec3{1.0,0,0} : vec3{0,1,0};
 	RendererPushSetClear(renderCommands, clearColor);
 	RendererPushSetProjection(renderCommands, projection);
 
-    // RendererPushCircle(renderCommands, gdNormal.position, gdEasy.rotation, {0.1f,0.1f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
 
-    //RendererPushImage(renderCommands, 2, gdEasy, 4);
-    //RendererPushImage(renderCommands, state->extraTextureHandle, gdEasy, 0);
-
-   // RendererPushLine(renderCommands, lineAStart, lineAEnd, lineColor, 0.02f, 0);
+    char buf[256];
+	snprintf(buf, sizeof(buf), "MouseVP: %d, %d", input->mousePosVP.x, input->mousePosVP.y);
    	const char * text = "This is some text!";
-	vec2 textPos = {0,0};
+	vec2 textPos = {0.5,0};
 	vec4 textColor = {1.0f, 0.0f, 0.0f, 1.0f};
-	f32 fontSize = 10.0f;
-	RendererPushText(renderCommands, text, fontSize, state->interFontHandle, textPos, textColor, 30);
-
-	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
-	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
-	SimulateParticles(&state->shellTrailEmitter, input->deltaTime);
-	SimulateParticles(&state->impactEmitter,     input->deltaTime);
-	DrawParticles(renderCommands, state);
+	TextStyle testTextStyle = {.fillColor = textColor, .strokeWidth = 0.0f};
+	f32 fontSize = 0.1f;
+	RendererPushText(renderCommands, buf, fontSize, state->interFontHandle, textPos, testTextStyle, true, 30);
 
 
-	for (int i = 0; i < MAX_PLAYERS; i++)
+	switch (state->clientState)
 	{
-		UpdateTankGFX(&state->tanks[i], input->deltaTime);
-		DrawTank(state->tanks[i], renderCommands, state);
+		case CLIENT_STATE_MAIN_MENU:
+		{
+			MainMenu(state, gameMemory, input, &gameMemory->platform);
+		} break;
+		case CLIENT_STATE_CUSTOMIZE_MENU:
+		{
+			CustomizeMenu(state, input, &gameMemory->platform);
+		} break;
+		case CLIENT_STATE_JOIN_MENU:
+		{
+			DirectJoinMenu(state, input, &gameMemory->platform);
+		} break;
+		case CLIENT_STATE_CONNECTING:
+		{
+			ConnectingScreen(state, input, &gameMemory->platform);
+		} break;
+		case CLIENT_STATE_CONNECTED:
+		{
+			UpdateGame(state, input, &gameMemory->platform, renderCommands);
+			EscapeMenu(state, input, gameMemory, &gameMemory->platform, uiRenderCMDs);
+			GameHUD(state, input, &gameMemory->platform);
+		} break;
 	}
+
+	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
+	RendererPushSetProjection(uiRenderCMDs, uiProjection);
+	DrawUI(*state->ui, uiRenderCMDs);
 }
 

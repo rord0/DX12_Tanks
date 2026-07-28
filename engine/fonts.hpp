@@ -9,6 +9,8 @@ bool InitializeFonts();
 
 i32 LoadFontAtlas(const char * metadataPath, const char * atlasPath);
 
+PLATFORM_MEASURE_TEXT(PlatformMeasureText);
+
 const FontData * GetFontAssetData(i32 fontID);
 
 #endif // FONTS_HPP

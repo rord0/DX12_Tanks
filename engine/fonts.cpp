@@ -88,3 +88,22 @@ i32 LoadFontAtlas(const char *metadataPath, const char *atlasPath)
 
 	return fontHandle;
 }
+
+PLATFORM_MEASURE_TEXT(PlatformMeasureText)
+{
+	const FontData * font = GetFontAssetData(fontID);
+	vec2 size = {0};
+	for (int i = 0; i < len; i++)
+	{
+		i32 codepoint = (i32)text[i];
+
+		auto it = font->glyphs.find(codepoint);
+		const GlyphData* glyph = (it == font->glyphs.end()) 
+			? &font->glyphs.at(0)  // fallback
+			: &it->second;
+
+		size.x += glyph->advance * scale;
+		size.y = std::max(size.y, (glyph->pt - glyph->pb) * scale);
+	}
+	return size;
+}

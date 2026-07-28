@@ -44,11 +44,6 @@ void PushRenderSortEntry(RendererPushBuffer * pb, RenderSortEntry sortEntry)
 
 #define PushRenderEntry(pushBuffer, entry) PushRenderEntryStruct(pushBuffer, &entry, sizeof(entry));
 
-#define PushRenderEntry2(entryType, pushBuffer, entry)							\
-	u32 entryOffset = PushRenderEntryStruct(pushBuffer, &entry, sizeof(entry)); \
-	RenderSortEntry sortEntry = {entryType, layer, entryOffset};				\
-	PushRenderSortEntry(pushBuffer, sortEntry)
-
 void RendererPushImage(RendererPushBuffer * pb, u32 textureID, InstanceData2D instanceData, u16 layer)
 {
     RenderEntryTexturedQuad entry = {RENDER_ENTRY_TYPE_TEXTURED_QUAD, textureID, instanceData};
@@ -58,9 +53,9 @@ void RendererPushImage(RendererPushBuffer * pb, u32 textureID, InstanceData2D in
     PushRenderSortEntry(pb, sortEntry);
 }
 
-void RendererPushSetProjection(RendererPushBuffer * pb, mat4 projectionMatrix)
+void RendererPushSetProjection(RendererPushBuffer * pb, mat4 projection)
 {
-	RenderEntrySetProj entry = {RENDER_ENTRY_TYPE_SET_PROJ, projectionMatrix};
+	RenderEntrySetProj entry = {RENDER_ENTRY_TYPE_SET_PROJ, projection};
 	PushRenderEntry(pb, entry);
 }
 
@@ -107,12 +102,25 @@ void RendererPushSubTexture(RendererPushBuffer * pb, u32 textureID, vec3 positio
     PushRenderSortEntry(pb, sortEntry);
 }
 
-void RendererPushText(RendererPushBuffer * pb, const char * text, f32 fontSize, i32 fontID, vec2 startPos, vec4 color, u16 layer)
+void RendererPushText(RendererPushBuffer * pb, const char * text, f32 fontSize, i32 fontID, vec2 startPos, TextStyle style, bool isWorldSpace, u16 layer)
 {
 	u32 textLen = strlen(text);
-	RenderEntryText entry = {RENDER_ENTRY_TYPE_TEXT, fontID, fontSize, startPos, color, textLen};
+	if (textLen == 0) { return; }
+	RenderEntryText entry = {RENDER_ENTRY_TYPE_TEXT, fontID, fontSize, startPos, style, textLen, isWorldSpace};
 	u32 entryOffset = PushRenderEntryText(pb, &entry, text);
 
     RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_TEXT, layer, entryOffset};
+    PushRenderSortEntry(pb, sortEntry);
+}
+
+void RendererPushSDFRect(RendererPushBuffer * pb, vec2 pos, vec2 scale, const SDFShapeStyle * style, u16 layer)
+{
+	if (style == NULL) { return; }
+	
+	RenderEntrySDFRect entry = {RENDER_ENTRY_TYPE_SDF_RECT, pos, scale, style->fillColor, style->strokeColor, style->cornerRadius};
+
+    u32 entryOffset = PushRenderEntry(pb, entry);
+
+    RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_SDF_RECT, layer, entryOffset};
     PushRenderSortEntry(pb, sortEntry);
 }

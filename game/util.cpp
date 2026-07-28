@@ -31,3 +31,30 @@ vec2 RandomDirection(pcg32_random_t* rng)
     float angle = (float)pcg32_random_r(rng) / (float)0x100000000ULL * 6.28318530717958647692f;
     return { cosf(angle), sinf(angle) };
 }
+
+u32 fn1va_32(const char * s)
+{
+ 	u32 hash = 2166136261u;
+    while (*s) { hash = (hash ^ (uint8_t)*s++) * 16777619u; }
+    return hash;
+}
+
+vec4 ColorHexToRBGANormalized(u32 color)
+{
+	float r = ((color >> 24) & 0xFF) / 255.0f;
+    float g = ((color >> 16) & 0xFF) / 255.0f;
+    float b = ((color >>  8) & 0xFF) / 255.0f;
+    float a = ((color)       & 0xFF) / 255.0f;
+
+    return vec4{r, g, b, a};
+}
+
+vec3 ColorHexToRBGNormalized(u32 color)
+{
+	float r = ((color >> 16) & 0xFF) / 255.0f;
+    float g = ((color >> 8)  & 0xFF) / 255.0f;
+    float b = ((color)       & 0xFF) / 255.0f;
+
+    return vec3{r, g, b};
+}
+

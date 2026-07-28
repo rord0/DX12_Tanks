@@ -47,6 +47,26 @@ typedef struct
     u32 offset;
 } DrawInstanceCMD;
 
+typedef struct
+{
+	mat4 projection;
+} SetProjCMD;
+
+enum class DrawCommandType {
+	DRAW_COMMAND_INSTANCE,
+	DRAW_COMMAND_SET_PROJ,
+};
+
+typedef struct 
+{
+	DrawCommandType type;
+	union
+	{
+		SetProjCMD proj;
+		DrawInstanceCMD instance;
+	};
+} DrawCMD;
+
 typedef struct 
 {
     ID3D12Resource * resource;
@@ -114,9 +134,9 @@ typedef struct {
     ComPtr<ID3D12Resource> textureResources[32];
 
     Arena instanceDataArena;
-    Array instanceDrawCMDs;
+    Array drawCMDs;
 
-    InstanceRenderData IRD[6];
+    InstanceRenderData IRD[7];
 
 	vec4 clearColor;
     // Matrices

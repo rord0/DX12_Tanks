@@ -10,8 +10,9 @@ typedef struct {
 	PortalClient client;
 	NetworkEvent * clientEvents;
 	RingBuffer * serverEvents;
-	clientState lastClientState;
+	PortalClientState lastClientState;
 	Arena framePackets;
+	double time;
 } NetworkState;
 
 NetworkState NETWORK_STATE = {0};
@@ -23,11 +24,27 @@ PLATFORM_START_SERVER(PlatformStartServer)
 	return false;
 }
 
+PLATFORM_STOP_SERVER(PlatformStopServer)
+{
+	PortalServerDestroy(&NETWORK_STATE.server);
+}
+
 PLATFORM_START_CLIENT(PlatformStartClient)
 {
+	PortalAddress serverAddress = PortalStrToIPv6Address(addressStr, serverPort);
+	if (serverAddress.type != ADDRESS_IPV6) { return false; }
+
 	NETWORK_STATE.client = PortalCreateClient(SOCKET_TYPE_IPV6, 0);
-	PortalClientConnect(&NETWORK_STATE.client, PortalStrToIPv6Address(addressStr, serverPort));
+	NETWORK_STATE.client.lastPacketReceiveTime = NETWORK_STATE.time;
+	NETWORK_STATE.client.time = NETWORK_STATE.time;
+	PortalClientConnect(&NETWORK_STATE.client, serverAddress);
 	return true;
+}
+
+PLATFORM_STOP_CLIENT(PlatformStopClient)
+{
+	if (NETWORK_STATE.client.state == PORTAL_CLIENT_STATE_DISCONNECTED) {return;}
+	PortalClientDestroy(&NETWORK_STATE.client);
 }
 
 PLATFORM_CLIENT_SEND(PlatformClientSend)
@@ -57,7 +74,7 @@ void InitializeNetworking()
 	NETWORK_STATE.clientEvents = (NetworkEvent*)PlatformAlloc(sizeof(NetworkEvent) * 1024);
 	NETWORK_STATE.serverEvents = RingBufferCreate(KB(16));
 	NETWORK_STATE.framePackets = ArenaAlloc(KB(16));
-	NETWORK_STATE.lastClientState = CLIENT_DISCONNECTED;
+	NETWORK_STATE.lastClientState = PORTAL_CLIENT_STATE_DISCONNECTED;
 }
 
 void NetworkingHandleServerPacket(PortalPacket * packet)
@@ -80,22 +97,37 @@ void NetworkingHandleServerPacket(PortalPacket * packet)
 
 void NetworkingUpdate(GameInput * input, double time)
 {
+	NETWORK_STATE.time = time;
 	PortalServerUpdate(&NETWORK_STATE.server, time);
 	PortalClientUpdate(&NETWORK_STATE.client, time);
 	ArenaClear(&NETWORK_STATE.framePackets);
 
 	u32 clientEventCount = 0;
 	u32 serverEventCount = 0;
-	if (NETWORK_STATE.lastClientState != CLIENT_CONNECTED && NETWORK_STATE.client.state == CLIENT_CONNECTED)
+	if (NETWORK_STATE.lastClientState != PORTAL_CLIENT_STATE_CONNECTED && NETWORK_STATE.client.state == PORTAL_CLIENT_STATE_CONNECTED)
 	{
 		// add connected event to thingy.
 		NetworkEvent event = {NET_EVENT_CLIENT_CONNECTED, 0, NULL};
 		NETWORK_STATE.clientEvents[clientEventCount] = event;
 		clientEventCount++;
 	}
+	if (NETWORK_STATE.lastClientState == PORTAL_CLIENT_STATE_CONNECTED && NETWORK_STATE.client.state == PORTAL_CLIENT_STATE_DISCONNECTED)
+	{
+		NetworkEvent event = {NET_EVENT_CLIENT_DISCONNECTED, 0, NULL};
+		NETWORK_STATE.clientEvents[clientEventCount] = event;
+		clientEventCount++;
+	}
+	if ((NETWORK_STATE.lastClientState == PORTAL_CLIENT_STATE_REQUESTING_CONNECTION
+	|| NETWORK_STATE.lastClientState == PORTAL_CLIENT_STATE_SENDING_CHALLENGE_RESPONSE)
+	&& NETWORK_STATE.client.state == PORTAL_CLIENT_STATE_DISCONNECTED)
+	{
+		NetworkEvent event = {NET_EVENT_CLIENT_CONNECTION_FAILED, 0, NULL};
+		NETWORK_STATE.clientEvents[clientEventCount] = event;
+		clientEventCount++;
+	}
 	NETWORK_STATE.lastClientState = NETWORK_STATE.client.state;
 
-	if (NETWORK_STATE.client.state == CLIENT_CONNECTED)
+	if (NETWORK_STATE.client.state == PORTAL_CLIENT_STATE_CONNECTED)
 	{
 		PortalPacket packet;
 		while(PortalClientReceive(&NETWORK_STATE.client, &packet))

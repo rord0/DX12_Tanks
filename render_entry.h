@@ -1,6 +1,7 @@
 #ifndef RENDER_ENTRY_H
 #define RENDER_ENTRY_H
 
+#include "core.h"
 typedef enum 
 {
     RENDER_ENTRY_TYPE_CLEAR,
@@ -11,6 +12,7 @@ typedef enum
     RENDER_ENTRY_TYPE_TEXTURED_QUAD,
     RENDER_ENTRY_TYPE_SUB_TEXTURE,
     RENDER_ENTRY_TYPE_TEXT,
+    RENDER_ENTRY_TYPE_SDF_RECT,
 } RenderEntryType;
 
 typedef struct {
@@ -66,9 +68,19 @@ typedef struct {
     i32 fontID;
 	f32 fontSize;
     vec2 position;
-	vec4 color;
+	TextStyle style;
 	u32 len;
+	b32 isWorldSpace;
 } RenderEntryText;
+
+typedef struct {
+    RenderEntryHeader header;
+    vec2 position;
+    vec2 size;
+	vec4 fillColor;
+	vec4 strokeColor;
+	f32 cornerRadius;
+} RenderEntrySDFRect;
 
 typedef struct {
     RenderEntryType type;

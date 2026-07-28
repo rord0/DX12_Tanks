@@ -34,7 +34,7 @@ typedef union {
     };
 } vec3;
 
-typedef union {
+typedef union vec4 {
     float elements[4];
     struct
     {
@@ -43,7 +43,10 @@ typedef union {
         union { float z, b; };
         union { float w, a; };
     };
+    static const vec4 zero;
 } vec4;
+
+inline const vec4 vec4::zero = {0, 0, 0, 0};
 
 typedef struct 
 {
@@ -59,6 +62,7 @@ vec4 operator*(mat4 m, vec4 V)
 			(V.x * m.m[3][0]) + (V.y * m.m[3][1]) + (V.z * m.m[3][2]) + (V.w * m.m[3][3])};
 }
 
+bool operator==(vec4 A, vec4 B) { return (A.x == B.x) && (A.y == B.y) && (A.z == B.z) && (A.w == B.w); }
 
 struct vec2 {
     union
@@ -67,7 +71,10 @@ struct vec2 {
         struct { float x, y; };
         struct { float u, v; };
     };
+    static const vec2 zero;
 };
+
+inline const vec2 vec2::zero = {0, 0};
 
 vec2 operator+(vec2 A, vec2 B) { return {A.x + B.x, A.y + B.y}; }
 
@@ -77,6 +84,8 @@ vec2 operator-(vec2 A)         { return {-A.x, -A.y}; }
 vec2 operator*(f32 c, vec2 V)  { return {c * V.x, c * V.y}; }
 vec2 operator*(vec2 V, f32 c)  { return c * V; }
 vec2 operator/(vec2 V, f32 c)  { return {V.x / c, V.y / c}; }
+
+bool operator==(vec2 A, vec2 B) { return (A.x == B.x) && (A.y == B.y); }
 
 vec2 & operator*=(vec2 & V, f32 c)
 {
@@ -147,9 +156,24 @@ typedef struct {
     f32 x0, y0, x1, y1;
     f32 u0, v0, u1, v1;
 	vec4 color;
+	f32 strokeWidth;
     u32 textureIndex;
-	f32 pad0, pad1, pad2;
+	f32 pad0, pad1;
 } GlyphInstanceData;
+
+typedef struct {
+	vec2 position;
+	vec2 size;
+	vec4 fillColor;
+	vec4 strokeColor;
+	float cornerRadius;
+	f32 pad0, pad1, pad2;
+} SDFRectInstanceData;
+
+typedef struct {
+	vec4 fillColor;
+	f32 strokeWidth;
+} TextStyle;
 
 typedef struct {
     void * data;
@@ -160,6 +184,7 @@ typedef enum {
 	NET_EVENT_CLIENT_CONNECTED,
 	NET_EVENT_CLIENT_DISCONNECTED,
 	NET_EVENT_PACKET,
+	NET_EVENT_CLIENT_CONNECTION_FAILED
 } NetworkEventType;
 
 typedef struct {
@@ -185,6 +210,9 @@ typedef PLATFORM_LOAD_TEXTURE(PlatformLoadTextureFunction);
 #define PLATFORM_LOAD_FONT_ATLAS(name) i32 name(const char * atlasPath, const char * metadataPath)
 typedef PLATFORM_LOAD_FONT_ATLAS(PlatformLoadFontAtlasFn);
 
+#define PLATFORM_MEASURE_TEXT(name) vec2 name(i32 fontID, const char * text, u32 len, f32 scale)
+typedef PLATFORM_MEASURE_TEXT(PlatformMeasureTextFn);
+
 #define PLATFORM_LOAD_FILE(name) DEBUG_FileResult name(const char * filepath)
 typedef PLATFORM_LOAD_FILE(PlatformLoadFileFunction);
 
@@ -194,8 +222,14 @@ typedef PLATFORM_FREE_FILE(PlatformFreeFileFunction);
 #define PLATFORM_START_SERVER(name) bool name(uint16_t port, uint16_t maxConnections)
 typedef PLATFORM_START_SERVER(PlatformStartServerFunction);
 
+#define PLATFORM_STOP_SERVER(name) void name(void)
+typedef PLATFORM_STOP_SERVER(PlatformStopServerFn);
+
 #define PLATFORM_START_CLIENT(name) bool name(const char * addressStr, uint16_t serverPort)
 typedef PLATFORM_START_CLIENT(PlatformStartClientFn);
+
+#define PLATFORM_STOP_CLIENT(name) void name(void)
+typedef PLATFORM_STOP_CLIENT(PlatformStopClientFn);
 
 #define PLATFORM_CLIENT_SEND(name) void name(void * data, size_t size, uint16_t sendMode)
 typedef PLATFORM_CLIENT_SEND(PlatformClientSendFn);
@@ -211,11 +245,14 @@ typedef struct {
     PlatformLoadFileFunction * platformLoadFile;
     PlatformFreeFileFunction * platformFreeFile;
     PlatformStartServerFunction * platformStartServer;
+	PlatformStopServerFn * stopServer;
     PlatformStartClientFn * platformStartClient;
+	PlatformStopClientFn * stopClient;
 	PlatformClientSendFn * platformClientSend;
 	PlatformServerSendFn * platformServerSend;
 	PlatformServerGetEventFn * serverGetEvent;
 	PlatformLoadFontAtlasFn * loadFont;
+	PlatformMeasureTextFn * measureText;
 } PlatformAPI;
 
 typedef struct {
@@ -232,15 +269,25 @@ typedef struct
     bool wasDown;
 } KeyInput;
 
+typedef struct
+{
+	bool isDown;
+	bool wasPressed;
+	bool wasReleased;
+} ButtonInput;
+
 typedef struct {
 	KeyInput WASD[4];
 	KeyInput ARROWS[4];
+	ButtonInput mouseL;
 	bool isMousePressed;
 	bool isEnterPressed;
 	bool isSpacePressed;
 	double deltaTime;
 	vec2i viewportSize;
 	vec2i mousePosVP;
+	u8 charsPressed[128];
+	u32 charCount;
 	// ---- Networking ----
 	NetworkEvent * clientEvents;
 	u32 clientEventCount;
@@ -249,7 +296,7 @@ typedef struct {
 #define GAME_START_FUNCTION(name) void name(GameMemory * gameMemory, int argc, char ** argv)
 typedef GAME_START_FUNCTION(GameStartFunction);
 
-#define GAME_UPDATE_FUNCTION(name) void name(GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands)
+#define GAME_UPDATE_FUNCTION(name) void name(GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands, RendererPushBuffer * uiRenderCMDs)
 typedef GAME_UPDATE_FUNCTION(GameUpdateFunction);
 
 #endif // CORE_H

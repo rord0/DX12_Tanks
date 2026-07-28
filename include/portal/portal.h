@@ -67,8 +67,8 @@ typedef enum
 {
     SERVER_CONNECTION_TIMED_OUT,
     SERVER_KICKED,
-    SERVER_STOPPED,
-    DISCONNECT_REQUEST
+    PORTAL_SERVER_STOPPED,
+    PORTAL_DISCONNECT_REQUESTED
 } PortalDisconnectReason;
 
 typedef enum
@@ -83,11 +83,11 @@ typedef struct {
 } PortalEvent;
 
 typedef enum {
-    CLIENT_DISCONNECTED,
-    CLIENT_REQUESTING_CONNECTION,
-    CLIENT_SENDING_CHALLENGE_RESPONSE,
-    CLIENT_CONNECTED,
-} clientState;
+    PORTAL_CLIENT_STATE_DISCONNECTED,
+    PORTAL_CLIENT_STATE_REQUESTING_CONNECTION,
+    PORTAL_CLIENT_STATE_SENDING_CHALLENGE_RESPONSE,
+    PORTAL_CLIENT_STATE_CONNECTED,
+} PortalClientState;
 
 typedef struct
 {
@@ -198,7 +198,7 @@ typedef struct {
     double lastPacketSendTime;
     double lastPacketReceiveTime;
     PortalAddress serverAddress;
-    clientState state;
+    PortalClientState state;
     PortalQueue receiveQueue;
     reliableChannel * rChannel;
 } PortalClient;

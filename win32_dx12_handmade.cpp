@@ -15,11 +15,12 @@
 #include "./engine/fonts.hpp"
 #include <cstddef>
 #include <cstdio>
+#include <cstring>
 
 #define GAME_CODE_DLL "tanksgame.dll"
 
-const u32 CLIENT_WIDTH = 1280;
-const u32 CLIENT_HEIGHT = 720;
+const u32 CLIENT_WIDTH = 1920;
+const u32 CLIENT_HEIGHT = 1080;
 
 bool RUNNING = false;
 
@@ -51,7 +52,9 @@ typedef struct
     KeyInput ESC;
 	KeyInput SPACE;
 	KeyInput ENTER;
-    KeyInput mouseL;
+    ButtonInput mouseL;
+	char charsPressed[128];
+	u32 charCount;
 	vec2i mousePos;
 } InputState;
 
@@ -63,6 +66,7 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
         switch (msg.message)
         {
             case WM_KEYDOWN:
+                TranslateMessage(&msg);
                 if (msg.wParam == 'W')
                 {
                     inputState.W.isDown = true;
@@ -174,11 +178,13 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
 			case WM_LBUTTONDOWN:
 				{
 					inputState.mouseL.isDown = true;
+					inputState.mouseL.wasPressed = true;
 					OutputDebugStringA("WM_LBUTTONDOWN\n");
 				}break;
 			case WM_LBUTTONUP:
 				{
 					inputState.mouseL.isDown = false;
+					inputState.mouseL.wasReleased = true;
 				}break;
 			case WM_MOUSEMOVE:
 				{
@@ -187,10 +193,20 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
 					inputState.mousePos.x = xPos;
 					inputState.mousePos.y = yPos;
 				}break;
+			case WM_CHAR:
+			{
+				if (inputState.charCount < 128)
+				{
+					char asciiChar = (char)msg.wParam;
+					inputState.charsPressed[inputState.charCount++] = asciiChar;
+					OutputDebugStringA("WM_CHAR\n");
+				}
+			} break;
             default:
+			{
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
-                break;
+			} break;
         }
     }
 }
@@ -331,6 +347,16 @@ void GetCLIArguments(int * argc, char *** argv)
     LocalFree(wargv);
 }
 
+RendererPushBuffer PushBufferCreate(size_t bufferSize, u32 maxSortEntries)
+{
+	RendererPushBuffer pb = {0};
+    pb.memory = (u8*)PlatformAlloc(bufferSize);
+    pb.size = bufferSize;
+    pb.maxSortEntries = maxSortEntries;
+    pb.sortEntries = (RenderSortEntry*)PlatformAlloc(maxSortEntries * sizeof(RenderSortEntry));
+	return pb;
+}
+
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
@@ -412,16 +438,16 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 	gameMemory.platform.platformServerSend  = &PlatformServerSend;
 	gameMemory.platform.serverGetEvent      = &PlatformServerGetEvent;
 	gameMemory.platform.loadFont 			= &PlatformLoadFontAtlas;
+	gameMemory.platform.measureText 		= &PlatformMeasureText;
+	gameMemory.platform.stopClient		    = &PlatformStopClient;
+	gameMemory.platform.stopServer          = &PlatformStopServer;
 
 	GameInput gameInput = {0};
 
     InputState inputState = {};
 
-	RendererPushBuffer pushBuffer = {0};
-    pushBuffer.memory = (u8*)PlatformAlloc(MB(1));
-    pushBuffer.size = MB(1);
-    pushBuffer.maxSortEntries = 8096;
-    pushBuffer.sortEntries = (RenderSortEntry*)PlatformAlloc(pushBuffer.maxSortEntries * sizeof(RenderSortEntry));
+	RendererPushBuffer pushBuffer   = PushBufferCreate(MB(1), 8096);
+	RendererPushBuffer uiPushBuffer = PushBufferCreate(MB(1), 8096);
 
 	InitializeFonts();
     InitializeRenderer(windowHandle, false, CLIENT_WIDTH, CLIENT_HEIGHT);
@@ -485,10 +511,16 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 		gameInput.isSpacePressed = inputState.SPACE.isDown;
 		gameInput.isEnterPressed = inputState.ENTER.isDown;
 		gameInput.isMousePressed = inputState.mouseL.isDown;
+		gameInput.mouseL 		 = inputState.mouseL;
+		memcpy(gameInput.charsPressed, inputState.charsPressed, sizeof(gameInput.charsPressed));
+		gameInput.charCount = inputState.charCount;
+		inputState.mouseL.wasPressed = false;
+		inputState.mouseL.wasReleased = false;
+		inputState.charCount = 0;
 		gameInput.viewportSize = vec2i{resolution.x, resolution.y};
 		gameInput.mousePosVP = vec2i{inputState.mousePos.x, inputState.mousePos.y};
 
-        gameCode.Update(&gameMemory, &gameInput, &pushBuffer);
+        gameCode.Update(&gameMemory, &gameInput, &pushBuffer, &uiPushBuffer);
 
 		if (inputState.ESC.isDown)
 		{
@@ -498,13 +530,15 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         ///////////////
         // Rendering
         RendererProcessPushBuffer(&pushBuffer);
+        RendererProcessPushBuffer(&uiPushBuffer);
         BeginFrame();
         Render();
         EndFrame();
+		
         
         char buffer[256];
         snprintf(buffer, 256, "MS/Frame: %dms FPS: %d Time: %lf\n", msPerFrame, FPS, time);
-        if (timer>0.5f)
+        if (timer>2.5f)
         {
             OutputDebugStringA(buffer);
             timer = 0.0f;

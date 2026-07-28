@@ -5,6 +5,7 @@
 #include "tanks_math.hpp"
 #include "tanks_server.hpp"
 #include "tanks.hpp"
+#include "ui.hpp"
 #include "util.hpp"
 
 #include <cassert>
@@ -55,7 +56,17 @@ typedef struct
 	f32 healthLerp;
 	TankStyle style;
 	char displayName[32];
+	u32 kills;
 } TankGFX;
+
+typedef enum ClientState
+{
+	CLIENT_STATE_MAIN_MENU,
+	CLIENT_STATE_CUSTOMIZE_MENU,
+	CLIENT_STATE_JOIN_MENU,
+	CLIENT_STATE_CONNECTING,
+	CLIENT_STATE_CONNECTED
+} ClientState;
 
 typedef struct {
     double time;
@@ -66,6 +77,9 @@ typedef struct {
     u32 extraTextureHandle;
     u32 shellImpactTextureHandle;
     u32 tankAtlasHandle;
+	u32 customizeIconTextureHandle;
+	u32 hamburgerIconTextureHandle;
+	u32 targetIconTextureHandle;
     i32 interFontHandle;
 	AtlasEntry * tankAtlasEntries;
 	SpriteSheet fireEffectSheet;
@@ -76,10 +90,18 @@ typedef struct {
 	ParticleEmitter impactEmitter;
 	TankGFX tanks[8]; 
 	u16 playerID;
-	char displayName[32];
+	TankStyle playerStyle;
 	bool connected;
 	bool helloSent;
+	bool welcomeReceived;
+	bool optionsMenuOpen;
+	bool showBadIPPopup;
+	bool showConnFailedPopup;
 	pcg32_random_t random;
+	UILayout * ui;
+	ClientState clientState;
+	char serverIP[64];
+	char displayName[32];
 } GameState;
 
 void ClientStart(GameState * state, GameMemory * gameMemory);

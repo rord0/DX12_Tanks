@@ -37,6 +37,7 @@ typedef struct {
 const vec2 RR_SPAWN_POSITIONS[4] = {{-0.5f, 0.5f}, {0.5f, 0.5f}, {-0.5f, -0.5f}, {0.5f, -0.5f}};
 
 void ServerStart(ServerState * state, u16 port, u16 maxPlayers);
+void ServerStop(ServerState * state);
 void ServerUpdate(ServerState * state, GameInput * input);
 
 #endif // TANKS_SERVER_H
