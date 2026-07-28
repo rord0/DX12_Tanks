@@ -116,9 +116,7 @@ void InitInstanceRenderData(InstanceRenderData * data,
                                    D3D12_INDEX_BUFFER_VIEW indexBufferView,
                                    u32 indexCountPerInstance,
                                    u32 instanceSize,
-                                   u32 maxInstances,
-                                   u32 id,
-                                   Arena * arena)
+                                   u32 id)
 {
     data->instanceID = id;
 
@@ -131,7 +129,8 @@ void InitInstanceRenderData(InstanceRenderData * data,
     data->instanceBufferView.BufferLocation = D3D12_GPU_VIRTUAL_ADDRESS(0);
     data->instanceBufferView.SizeInBytes = 0;
 
-    data->instanceData = ArrayInit(instanceSize, maxInstances, ArenaPush(arena, instanceSize * maxInstances));
+	data->instanceSize = instanceSize;
+    data->instanceData = {0};
 }
 
 RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
@@ -146,11 +145,11 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
 
     /////////////////////
     // Create Allocators
-    res.frameUploadArena = UploadArenaAlloc(state.device, KB(6));
+    res.frameUploadArena = UploadArenaAlloc(state.device, MB(1));
     res.frameUploadArena.resource->SetName(L"Frame Upload Resource");
 
-    const u64 instanceArenaSize = (sizeof(TextureInstanceData) * 64) + (sizeof(GlyphInstanceData) * 128)+(sizeof(DebugGeoInstanceData) * 128) + (sizeof(LineInstanceData) * 32) + (sizeof(SubTextureInstanceData) * 32);
     res.instanceDataArena = ArenaAlloc(MB(1));
+	res.permanentArena = ArenaAlloc(MB(1));
 
     ////////////
     // Geometry
@@ -259,7 +258,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
     res.lineIndexBufferView.Format = DXGI_FORMAT_R16_UINT; 
 
     // Free temp upload arena.
-    res.drawCMDs = ArrayInit(sizeof(DrawCMD), 128, ArenaPush(&res.instanceDataArena, sizeof(DrawCMD) * 512));
+    res.drawCMDs = ArrayInit(sizeof(DrawCMD), 1024, ArenaPush(&res.permanentArena, sizeof(DrawCMD) * 1024));
 
     UploadArenaRelease(&tempUploadArena);
 
@@ -273,7 +272,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
             { "InstanceAlpha",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
             { "InstanceTextureID", 0, DXGI_FORMAT_R32_UINT,        1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
-    InitInstanceRenderData(&res.IRD[0], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(TextureInstanceData), 32, 0, &res.instanceDataArena);
+    InitInstanceRenderData(&res.IRD[0], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(TextureInstanceData), 0);
     CreateInstancePipelineState(&res.IRD[0].PSO, state.device, res.rootSignature.Get(), &texturedQuadInputElementDescs[0], _countof(texturedQuadInputElementDescs), RESOURCES_PATH"shaders/vertex.hlsl", RESOURCES_PATH"shaders/pixel.hlsl");
 
     // Create Rectangle Instance Data
@@ -286,7 +285,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
         { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "InstanceFill",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
-    InitInstanceRenderData(&res.IRD[1], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(DebugGeoInstanceData), 32, 1, &res.instanceDataArena);
+    InitInstanceRenderData(&res.IRD[1], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(DebugGeoInstanceData), 1);
     CreateInstancePipelineState(&res.IRD[1].PSO, state.device, res.rootSignature.Get(), &rectangleInputElementDescs[0], _countof(rectangleInputElementDescs), RESOURCES_PATH"shaders/rectangle_vertex.hlsl", RESOURCES_PATH"shaders/rectangle_pixel.hlsl");
     
     // Create Line Instance Data
@@ -297,7 +296,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
         { "InstanceColor", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "InstanceWidth", 0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1}
     };
-    InitInstanceRenderData(&res.IRD[2], res.lineVertexBufferView, res.lineIndexBufferView, lineIndexCount, sizeof(LineInstanceData), 32, 2, &res.instanceDataArena);
+    InitInstanceRenderData(&res.IRD[2], res.lineVertexBufferView, res.lineIndexBufferView, lineIndexCount, sizeof(LineInstanceData), 2);
     CreateInstancePipelineState(&res.IRD[2].PSO, state.device, res.rootSignature.Get(), &lineInputElementDescs[0], _countof(lineInputElementDescs), RESOURCES_PATH"shaders/line_vertex.hlsl", RESOURCES_PATH"shaders/line_pixel.hlsl");
 
     // Create Circle Instance Data
@@ -310,7 +309,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
         { "InstanceRotZ",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "InstanceFill",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
-    InitInstanceRenderData(&res.IRD[3], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(DebugGeoInstanceData), 32, 3, &res.instanceDataArena);
+    InitInstanceRenderData(&res.IRD[3], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(DebugGeoInstanceData), 3);
     CreateInstancePipelineState(&res.IRD[3].PSO, state.device, res.rootSignature.Get(), &circleInputElementDescs[0], _countof(circleInputElementDescs), RESOURCES_PATH"shaders/circle_vertex.hlsl", RESOURCES_PATH"shaders/circle_pixel.hlsl");
 
     // Create Sub Texture Instance Data
@@ -323,7 +322,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
         { "InstanceTextureID",   0, DXGI_FORMAT_R32_UINT,           1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "InstanceUVTransform", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
-    InitInstanceRenderData(&res.IRD[4], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(SubTextureInstanceData), 32, 4, &res.instanceDataArena);
+    InitInstanceRenderData(&res.IRD[4], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(SubTextureInstanceData), 4);
     CreateInstancePipelineState(&res.IRD[4].PSO, state.device, res.rootSignature.Get(), &subTextureInputElementDescs[0], _countof(subTextureInputElementDescs), RESOURCES_PATH"shaders/subtexture_vertex.hlsl", RESOURCES_PATH"shaders/subtexture_pixel.hlsl");
 
 	// Create Glyph Instance Data 
@@ -334,7 +333,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
         { "StrokeWidth",         0, DXGI_FORMAT_R32_FLOAT,			1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "InstanceTextureID",   0, DXGI_FORMAT_R32_UINT,           1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
-    InitInstanceRenderData(&res.IRD[5], res.textureVertexBufferView, res.textureIndexBufferView, 0, sizeof(GlyphInstanceData), 128, 5, &res.instanceDataArena);
+    InitInstanceRenderData(&res.IRD[5], res.textureVertexBufferView, res.textureIndexBufferView, 0, sizeof(GlyphInstanceData), 5);
     CreateInstancePipelineState(&res.IRD[5].PSO, state.device, res.rootSignature.Get(), &glyphInputElementDescs[0], _countof(glyphInputElementDescs), RESOURCES_PATH"shaders/glyph.hlsl", RESOURCES_PATH"shaders/glyph.hlsl");
 
 	// Create SDF Rect Instance Data 
@@ -345,7 +344,7 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
         { "StrokeColor",         0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "CornerRadius",        0, DXGI_FORMAT_R32_FLOAT,			1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
-    InitInstanceRenderData(&res.IRD[6], res.textureVertexBufferView, res.textureIndexBufferView, 0, sizeof(SDFRectInstanceData), 64, 6, &res.instanceDataArena);
+    InitInstanceRenderData(&res.IRD[6], res.textureVertexBufferView, res.textureIndexBufferView, 0, sizeof(SDFRectInstanceData), 6);
     CreateInstancePipelineState(&res.IRD[6].PSO, state.device, res.rootSignature.Get(), &sdfRectInputElementDescs[0], _countof(sdfRectInputElementDescs), RESOURCES_PATH"shaders/sdf_rect.hlsl", RESOURCES_PATH"shaders/sdf_rect.hlsl");
 
     return res;
@@ -487,6 +486,7 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
 
 
     res.drawCMDs.count = 0;
+	ArenaClear(&res.instanceDataArena);
 }
 
 void DX12_EndFrame(RendererState & state)
@@ -532,7 +532,9 @@ void RendererPushInstance(InstanceRenderData * renderData, Array * drawCMDs, voi
     {
         if (renderData->frameInstanceCounter.layerInstanceCount > 0)
         {
-            DrawInstanceCMD instance = {renderData->instanceID, renderData->frameInstanceCounter.layerInstanceCount, renderData->frameInstanceCounter.totalInstances};
+            DrawInstanceCMD instance = {renderData->instanceID,
+										renderData->frameInstanceCounter.layerInstanceCount,
+										renderData->frameInstanceCounter.totalInstances};
 			DrawCMD cmd;
 			cmd.type = DrawCommandType::DRAW_COMMAND_INSTANCE;
 			cmd.instance = instance;
@@ -659,6 +661,48 @@ void RendererPushGlyphs(const RenderEntryText * entry, const u8 * text, Instance
 	}
 }
 
+void ReserveInstanceMemory(RendererPushBuffer ** pushBuffers, u32 pbCount, InstanceRenderData * IRD, u32 irdCount)
+{
+	u32 counts[12] = {0};
+	for (int i = 0; i < pbCount; i++)
+	{
+		RendererPushBuffer * pb = pushBuffers[i];
+		for (int i = 0; i < pb->sortEntryCount; i++)
+		{
+			RenderSortEntry sortEntry = pb->sortEntries[i];
+
+			switch (sortEntry.type)
+			{
+				case RENDER_ENTRY_TYPE_TEXT:
+				{
+					RenderEntryText * textEntry = (RenderEntryText*)(pb->memory + sortEntry.pushBufferOffset);
+					counts[sortEntry.type] += textEntry->len;
+				} break;
+				default:
+				{
+					counts[sortEntry.type]++; 
+				} break;
+			}
+		}
+	}
+
+	for (int i = 0; i < irdCount; i++)
+	{
+		size_t instanceSize = IRD[i].instanceSize;
+		size_t instanceCount = (size_t)counts[i];
+		if (instanceCount > 0)
+		{
+			void * instances = ArenaPush(&RENDERER_PIPELINE.instanceDataArena, instanceSize * instanceCount);
+			if (!instances)
+			{
+				OutputDebugStringA("FUCK");
+			}
+			IRD[i].instanceData = ArrayInit(instanceSize, instanceCount, instances);
+		}
+	}
+
+}
+
 void ProcessSortEntries(RendererPushBuffer * pb, InstanceRenderData * instanceRenderData, u32 instanceRenderDataCount, Array * drawCMDs)
 {
     InsertionSortRenderEntries(pb->sortEntries, pb->sortEntryCount);
@@ -755,14 +799,24 @@ void ProcessSortEntries(RendererPushBuffer * pb, InstanceRenderData * instanceRe
     pb->sortEntryCount = 0;
 }
 
-void DX12_RendererProcessPushBuffer(RendererPushBuffer * pb, InstanceRenderData * instanceRenderData, u32 instanceRenderDataCount, Array * drawCMDs)
+void DX12_RendererProcessPushBuffers(RendererPushBuffer ** pushBuffers,
+									u32 pbCount,
+									InstanceRenderData * instanceRenderData,
+									u32 instanceRenderDataCount,
+									Array * drawCMDs)
 {
-	RendererProcessFrameSetupCMDs(pb, drawCMDs);
-	ProcessSortEntries(pb, instanceRenderData, instanceRenderDataCount, drawCMDs);
+	ReserveInstanceMemory(pushBuffers, pbCount, instanceRenderData, instanceRenderDataCount);
 
-    pb->entryCount = 0;
-    pb->sortEntryCount = 0;
-    pb->index = 0;
+	for (int i = 0; i < pbCount; i++)
+	{
+		RendererPushBuffer * pb = pushBuffers[i];
+		RendererProcessFrameSetupCMDs(pb, drawCMDs);
+		ProcessSortEntries(pb, instanceRenderData, instanceRenderDataCount, drawCMDs);
+
+		pb->entryCount = 0;
+		pb->sortEntryCount = 0;
+		pb->index = 0;
+	}
 }
 
 int DX12_RendererCreateTexture(const ImageData * image, RendererState & state, RendererResourcesDX12  & res)
@@ -807,9 +861,9 @@ int RendererCreateTexture(const ImageData * image)
     return DX12_RendererCreateTexture(image, RENDERER_STATE, RENDERER_PIPELINE);
 }
 
-void RendererProcessPushBuffer(RendererPushBuffer * pb)
+void RendererProcessPushBuffers(RendererPushBuffer ** pushBuffers, u32 pbCount)
 {
-    DX12_RendererProcessPushBuffer(pb, &RENDERER_PIPELINE.IRD[0], 7, &RENDERER_PIPELINE.drawCMDs);
+    DX12_RendererProcessPushBuffers(pushBuffers,pbCount, &RENDERER_PIPELINE.IRD[0], 7, &RENDERER_PIPELINE.drawCMDs);
 }
 
 void BeginFrame()

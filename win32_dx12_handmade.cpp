@@ -529,8 +529,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
         ///////////////
         // Rendering
-        RendererProcessPushBuffer(&pushBuffer);
-        RendererProcessPushBuffer(&uiPushBuffer);
+		RendererPushBuffer * pushBuffers[2] = {&pushBuffer, &uiPushBuffer};
+        RendererProcessPushBuffers(pushBuffers, 2);
         BeginFrame();
         Render();
         EndFrame();

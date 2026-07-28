@@ -4,6 +4,7 @@
 #include "core.h"
 #include "arena.h"
 
+#include <cstddef>
 #include <wrl.h>
 using namespace Microsoft::WRL;
 
@@ -100,6 +101,7 @@ typedef struct
     D3D12_INDEX_BUFFER_VIEW indexBufferView;
 
     u32 indexCountPerInstance;
+	size_t instanceSize;
 
     TEMP_Frame_Instance_Counter frameInstanceCounter;
     Array instanceData;
@@ -133,6 +135,7 @@ typedef struct {
     u32 maxTexures;
     ComPtr<ID3D12Resource> textureResources[32];
 
+	Arena permanentArena;
     Arena instanceDataArena;
     Array drawCMDs;
 

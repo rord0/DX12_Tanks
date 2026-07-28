@@ -22,5 +22,6 @@ void * ArenaPush(Arena * arena, size_t size)
 
 void ArenaClear(Arena * arena)
 {
+	if (arena == NULL) { return; }
 	arena->pos = 0;
 }
