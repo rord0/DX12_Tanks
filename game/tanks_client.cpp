@@ -57,6 +57,15 @@ mat4 translationMatrix(float x, float y, float z)
     return m;
 }
 
+mat4 transpose(mat4 m)
+{
+    mat4 result;
+    for (int row = 0; row < 4; row++)
+        for (int col = 0; col < 4; col++)
+            result.m[row][col] = m.m[col][row];
+    return result;
+}
+
 vec4 CalculateUVTransform(AtlasEntry entry, u32 atlasHeight, u32 atlasWidth)
 {
 	vec4 uv = {(f32)entry.width / (f32)atlasWidth, (f32)entry.height / (f32)atlasHeight, (f32)entry.x / (f32)atlasWidth, (f32)entry.y / (f32)atlasHeight};
@@ -219,7 +228,7 @@ vec4 GetHSVSpectrumColor(float time, float speed = 1.0f)
     return HSVtoRGBA(hue, 1.0f, 1.0f);
 }
 
-vec2 MousePosToWorld(vec2i mousePos, vec2i viewportSize, mat4 proj)
+vec2 MousePosToWorld(vec2i mousePos, vec2 cameraPos, vec2i viewportSize, mat4 proj)
 {
 	float aspect = (float)viewportSize.x / (float)viewportSize.y;
 	vec2 mouseNDC;
@@ -229,7 +238,7 @@ vec2 MousePosToWorld(vec2i mousePos, vec2i viewportSize, mat4 proj)
 	vec4 mouseClip = {mouseNDC.x, mouseNDC.y, 0.0f, 1.0f};
 	vec4 worldPos = inverseOrthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f) * mouseClip;
 
-	return {worldPos.x, worldPos.y};
+	return {worldPos.x + cameraPos.x, worldPos.y + cameraPos.y};
 }
 
 bool CSVParseU32Field(const char *& ptr, const char *& end, u32 & out)
@@ -586,7 +595,7 @@ void ClientProcessPlayerFiredPacket(GameState * state, PlayerFiredPacket * packe
 	TankPlayFireEffects(packet->playerID, packet->hitPosition, state);
 }
 
-void ClientHandlePacket(GameState * state, NetworkPacket * packet)
+void lientHandlePacket(GameState * state, NetworkPacket * packet)
 {
 	PacketType type = (PacketType)(((u8*)packet->data)[0]);
 	ReadStream stream((u8*)packet->data, packet->size);
@@ -1207,8 +1216,20 @@ void CustomizeMenu(GameState * state, GameInput * input, PlatformAPI * platform)
 void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, RendererPushBuffer * renderCommands)
 {
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
-	mat4 projection = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
-	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, input->viewportSize, projection);
+	mat4 view = translationMatrix(-state->cameraPos.x, -state->cameraPos.y, -1.0f);
+	f32 zoom = 1.25f;
+	mat4 projection = orthographicProjection(aspect*zoom, -aspect*zoom, 1.0f*zoom, -1.0f*zoom, -0.01f, 100.0f);
+	projection = projection * view;
+	projection = transpose(projection);
+	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, state->cameraPos, input->viewportSize, projection);
+
+
+	vec4 clearColorGreen = {0.5f, 0.714f, 0.486f, 1.0f};
+	vec4 clearColor = ColorHexToRBGANormalized(0xC3B67CFF);
+
+	RendererPushSetClear(renderCommands, clearColor);
+	RendererPushSetProjection(renderCommands, projection);
+
 	ClientSendInput(state, input, platform, mouseWorld);
 
     InstanceData2D gdEasy   = {{1.0f, 1.0f, 0.0f}, {0.5f, 0.5f}, 1.0f, 1.0f};
@@ -1219,6 +1240,11 @@ void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, Re
 	SimulateParticles(&state->shellTrailEmitter, input->deltaTime);
 	SimulateParticles(&state->impactEmitter,     input->deltaTime);
 	DrawParticles(renderCommands, state);
+
+
+	SDFShapeStyle TRI_STYLE = {ColorHexToRBGANormalized(0x402525CC), ColorHexToRBGANormalized(0x332626FF), 16, 3};
+	TankGFX * localPlayer = &state->tanks[state->playerID];
+	state->cameraPos = vec2SmoothDamp(state->cameraPos, localPlayer->position, &state->cameraVelocity, 1.0f, 100.0f, input->deltaTime);
 
 	for (int i = 0; i < MAX_PLAYERS; i++)
 	{
@@ -1235,9 +1261,6 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
 	mat4 projection = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
 
-	vec2 cameraPos = {0.0f, 0.0f};
-	mat4 view = translationMatrix(cameraPos.x, cameraPos.y, 1.0f);
-	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, input->viewportSize, projection);
     double time = state->time;
     vec4 color = GetHSVSpectrumColor(time);
 
@@ -1265,11 +1288,6 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 		}
 	}
 
-	vec4 clearColorGreen = {0.5f, 0.714f, 0.486f, 1.0f};
-	vec4 clearColor = ColorHexToRBGANormalized(0xC3B67CFF);
-
-	RendererPushSetClear(renderCommands, clearColor);
-	RendererPushSetProjection(renderCommands, projection);
 
 
     char buf[256];
@@ -1311,8 +1329,6 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
 	RendererPushSetProjection(uiRenderCMDs, uiProjection);
 
-	SDFShapeStyle TRI_STYLE = {ColorHexToRBGANormalized(0x402525CC), ColorHexToRBGANormalized(0x332626FF), 16, 3};
-	RendererPushSDFTriangle(uiRenderCMDs, {100,100}, 0,{100,100}, &TRI_STYLE, 30);
 	DrawUI(*state->ui, uiRenderCMDs);
 }
 

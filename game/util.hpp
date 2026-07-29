@@ -14,4 +14,6 @@ u32 fn1va_32(const char * s);
 vec3 ColorHexToRBGNormalized(u32 color);
 vec4 ColorHexToRBGANormalized(u32 color);
 
+vec2 vec2SmoothDamp(vec2 currentPos, vec2 targetPos, vec2 * currentVelocity, float smoothTime, float maxSpeed, float deltaTime);
+
 #endif // UTIL_HPP

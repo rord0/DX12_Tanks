@@ -71,7 +71,7 @@ typedef enum ClientState
 typedef struct {
     double time;
     double timeSinceLastUpdate;
-    vec3 cameraPos;
+    vec2 cameraPos;
 	Arena permArena;
 	Arena frameArena;
     u32 extraTextureHandle;
@@ -97,6 +97,7 @@ typedef struct {
 	bool optionsMenuOpen;
 	bool showBadIPPopup;
 	bool showConnFailedPopup;
+	vec2 cameraVelocity;
 	pcg32_random_t random;
 	UILayout * ui;
 	ClientState clientState;

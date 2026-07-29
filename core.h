@@ -62,6 +62,23 @@ vec4 operator*(mat4 m, vec4 V)
 			(V.x * m.m[3][0]) + (V.y * m.m[3][1]) + (V.z * m.m[3][2]) + (V.w * m.m[3][3])};
 }
 
+mat4 operator*(mat4 a, mat4 b)
+{
+    mat4 result;
+    for (int row = 0; row < 4; row++)
+    {
+        for (int col = 0; col < 4; col++)
+        {
+            result.m[row][col] =
+                  (a.m[row][0] * b.m[0][col])
+                + (a.m[row][1] * b.m[1][col])
+                + (a.m[row][2] * b.m[2][col])
+                + (a.m[row][3] * b.m[3][col]);
+        }
+    }
+    return result;
+}
+
 bool operator==(vec4 A, vec4 B) { return (A.x == B.x) && (A.y == B.y) && (A.z == B.z) && (A.w == B.w); }
 
 struct vec2 {
