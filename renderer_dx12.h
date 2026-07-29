@@ -139,7 +139,7 @@ typedef struct {
     Arena instanceDataArena;
     Array drawCMDs;
 
-    InstanceRenderData IRD[7];
+    InstanceRenderData IRD[8];
 
 	vec4 clearColor;
     // Matrices

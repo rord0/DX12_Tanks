@@ -717,7 +717,14 @@ void DrawUI(UILayout & ui, RendererPushBuffer * renderCMDs)
 					style.fillColor = node->data.button.style->normal.fillColor;
 					style.strokeColor = node->data.button.style->normal.strokeColor;
 				}
-				RendererPushSDFRect(renderCMDs, node->pos, node->size, &style, 1);
+				if (node->data.button.style->isTriangle)
+				{
+					RendererPushSDFTriangle(renderCMDs, node->pos, node->data.button.style->rotation, node->size, &style, 1);
+				}
+				else
+				{
+					RendererPushSDFRect(renderCMDs, node->pos, node->size, &style, 1);
+				}
 			}break;
 			case UINodeType::UI_NODE_TYPE_INPUT_FIELD:
 			{
@@ -769,7 +776,9 @@ ShapeColor BUTTON_PRESSED_COLOR = {.fillColor    = ColorHexToRBGANormalized(0x26
 								   .strokeColor  = ColorHexToRBGANormalized(0xFF00C8FF)};
 
 ButtonStyle DEFAULT_BUTTON_STYLE = {BUTTON_STYLE, BUTTON_HOVERED_COLOR, BUTTON_PRESSED_COLOR, 6, 3};
-ButtonStyle CUSTOMIZE_BUTTON_STYLE = {CUSTOMIZE_BTN_COLOR, CUSTOMIZE_BTN_HOVERED, BUTTON_PRESSED_COLOR, 6, 3};
+
+ButtonStyle CUSTOMIZE_BUTTON_STYLE_R = {CUSTOMIZE_BTN_COLOR, CUSTOMIZE_BTN_HOVERED, BUTTON_PRESSED_COLOR, 6, 3, true, 0.523599};
+ButtonStyle CUSTOMIZE_BUTTON_STYLE_L = {CUSTOMIZE_BTN_COLOR, CUSTOMIZE_BTN_HOVERED, BUTTON_PRESSED_COLOR, 6, 3, true,-0.523599};
 
 SDFShapeStyle DEFAULT_CONTAINER_STYLE = {BUTTON_STYLE.fillColor, BUTTON_STYLE.strokeColor, 6, 3};
 
@@ -1115,20 +1124,20 @@ void CustomizeMenu(GameState * state, GameInput * input, PlatformAPI * platform)
 
 	UINodeLayout tankImageContainer = {.size = {640 * 0.33, 220}, .sizing = SizingType::FIXED};
 
-	UINodeLayout optionContainerLayout = {.childGap = 7.0f,
-										  .axis = LayoutDirection::LEFT_TO_RIGHT,
+	UINodeLayout optionContainerLayout = {.axis = LayoutDirection::LEFT_TO_RIGHT,
 										  .align = LayoutType::CENTER,
 										  .sizing = SizingType::HUG,
-										  .padding = {26.0f,26.0f,25.0f,25.0f},
+										  .padding = {16.0f,16.0f,25.0f,25.0f},
 										  .data = menuContainerData};
-	UINodeLayout bodyButtonLayout = {.childGap = 20.0f,
+	UINodeLayout bodyButtonLayout = {.childGap = 16.0f,
 									 .axis = LayoutDirection::TOP_TO_BOTTOM,
 									 .sizing = SizingType::HUG};
 
 	FontStyle btnFontStyle = {state->interFontHandle, 40.0f, 0.0f};
 
 	FontStyle nameCharCountFontStyle = {state->interFontHandle, 30.0f, 0.0f, ColorHexToRBGNormalized(0x827A5D)};
-	vec2 customizeBtnSize = {50.0f,50.0f};
+	vec2 customizeBtnSize = {60.0f,60.0f};
+	vec2 colorBtnSize = {50.0f, 50.0f};
 	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
 	ui.startLayout(frameStartSize, LayoutType::CENTER, LayoutType::CENTER, platform->measureText, uiInput);
 		ui.begin("SECTION_CONTAINER", sectionContainerLayout);
@@ -1147,25 +1156,25 @@ void CustomizeMenu(GameState * state, GameInput * input, PlatformAPI * platform)
 				ui.text("STYLE_LABEL", state->interFontHandle, 30.0f, 0.2f, "Tank Body:");
 				ui.begin("BODY_STYLE_OPTIONS_CONTAINER", optionContainerLayout);
 					ui.begin("LEFT_STYLE_BUTTONS", bodyButtonLayout);
-						ui.button("STYLE_BTN_TURRET_L", customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
-						ui.button("STYLE_BTN_BODY_L",   customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
-						ui.button("STYLE_BTN_TRACK_L",  customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+						ui.button("STYLE_BTN_TURRET_L", customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE_L);
+						ui.button("STYLE_BTN_BODY_L",   customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE_L);
+						ui.button("STYLE_BTN_TRACK_L",  customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE_L);
 					ui.end();
 					UITank(ui, state->playerStyle, 0.33f, state->tankAtlasEntries, state->tankAtlasHandle);
 					ui.begin("RIGHT_STYLE_BUTTONS", bodyButtonLayout);
-						ui.button("STYLE_BTN_TURRET_R", customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
-						ui.button("STYLE_BTN_BODY_R",   customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
-						ui.button("STYLE_BTN_TRACK_R",  customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE);
+						ui.button("STYLE_BTN_TURRET_R", customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE_R);
+						ui.button("STYLE_BTN_BODY_R",   customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE_R);
+						ui.button("STYLE_BTN_TRACK_R",  customizeBtnSize, &CUSTOMIZE_BUTTON_STYLE_R);
 					ui.end();
 				ui.end();
 			ui.end();
 			ui.begin("COLOR_SECTION", sectionLayout);
 				ui.text("COLOR_LABEL", state->interFontHandle, 30.0f, 0.2f, "Tank Color:");
 					ui.begin("LEFT_STYLE_BUTTONS", colorBtnContainer);
-						ui.button("COLOR_BTN_GREEN",     customizeBtnSize, &BTN_GREEN_STYLE);
-						ui.button("COLOR_BTN_GREY",      customizeBtnSize, &BTN_GREY_STYLE);
-						ui.button("COLOR_BTN_DARK_GREY", customizeBtnSize, &BTN_DARK_GREY_STYLE);
-						ui.button("COLOR_BTN_TAN",       customizeBtnSize, &BTN_TAN_STYLE);
+						ui.button("COLOR_BTN_GREEN",     colorBtnSize, &BTN_GREEN_STYLE);
+						ui.button("COLOR_BTN_GREY",      colorBtnSize, &BTN_GREY_STYLE);
+						ui.button("COLOR_BTN_DARK_GREY", colorBtnSize, &BTN_DARK_GREY_STYLE);
+						ui.button("COLOR_BTN_TAN",       colorBtnSize, &BTN_TAN_STYLE);
 					ui.end();
 			ui.end();
 			ui.begin("DONE_SECTION", doneSectionLayout);
@@ -1301,6 +1310,9 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 
 	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
 	RendererPushSetProjection(uiRenderCMDs, uiProjection);
+
+	SDFShapeStyle TRI_STYLE = {ColorHexToRBGANormalized(0x402525CC), ColorHexToRBGANormalized(0x332626FF), 16, 3};
+	RendererPushSDFTriangle(uiRenderCMDs, {100,100}, 0,{100,100}, &TRI_STYLE, 30);
 	DrawUI(*state->ui, uiRenderCMDs);
 }
 

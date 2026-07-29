@@ -124,3 +124,15 @@ void RendererPushSDFRect(RendererPushBuffer * pb, vec2 pos, vec2 scale, const SD
     RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_SDF_RECT, layer, entryOffset};
     PushRenderSortEntry(pb, sortEntry);
 }
+
+void RendererPushSDFTriangle(RendererPushBuffer * pb, vec2 pos, f32 rotation, vec2 scale, const SDFShapeStyle * style, u16 layer)
+{
+	if (style == NULL) { return; }
+	
+	RenderEntrySDFTriangle entry = {RENDER_ENTRY_TYPE_SDF_TRIANGLE, {pos, scale, style->fillColor, style->strokeColor, rotation}};
+
+    u32 entryOffset = PushRenderEntry(pb, entry);
+
+    RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_SDF_TRIANGLE, layer, entryOffset};
+    PushRenderSortEntry(pb, sortEntry);
+}

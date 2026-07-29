@@ -15,4 +15,6 @@ void RendererPushSetProjection(RendererPushBuffer * pb, mat4 projection);
 
 void RendererPushSDFRect(RendererPushBuffer * pb, vec2 pos, vec2 scale, const SDFShapeStyle * style, u16 layer);
 
+void RendererPushSDFTriangle(RendererPushBuffer * pb, vec2 pos, f32 rotation, vec2 scale, const SDFShapeStyle * style, u16 layer);
+
 #endif

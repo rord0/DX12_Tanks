@@ -25,6 +25,8 @@ typedef struct
 	ShapeColor pressed;
 	f32 cornerRadius;
 	f32 strokeWidth;
+	bool isTriangle;
+	f32 rotation;
 } ButtonStyle;
 
 typedef struct

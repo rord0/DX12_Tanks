@@ -11,6 +11,7 @@ typedef enum
     RENDER_ENTRY_TYPE_SUB_TEXTURE,
     RENDER_ENTRY_TYPE_TEXT,
     RENDER_ENTRY_TYPE_SDF_RECT,
+    RENDER_ENTRY_TYPE_SDF_TRIANGLE,
     RENDER_ENTRY_TYPE_CLEAR,
 	RENDER_ENTRY_TYPE_SET_PROJ,
 } RenderEntryType;
@@ -81,6 +82,11 @@ typedef struct {
 	vec4 strokeColor;
 	f32 cornerRadius;
 } RenderEntrySDFRect;
+
+typedef struct {
+    RenderEntryHeader header;
+	SDFRectInstanceData instanceData;
+} RenderEntrySDFTriangle;
 
 typedef struct {
     RenderEntryType type;

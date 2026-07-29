@@ -347,6 +347,21 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
     InitInstanceRenderData(&res.IRD[6], res.textureVertexBufferView, res.textureIndexBufferView, 0, sizeof(SDFRectInstanceData), 6);
     CreateInstancePipelineState(&res.IRD[6].PSO, state.device, res.rootSignature.Get(), &sdfRectInputElementDescs[0], _countof(sdfRectInputElementDescs), RESOURCES_PATH"shaders/sdf_rect.hlsl", RESOURCES_PATH"shaders/sdf_rect.hlsl");
 
+    const D3D12_INPUT_ELEMENT_DESC sdfTriangleInputElementDescs[] = {
+        { "Position",            0, DXGI_FORMAT_R32G32_FLOAT,		1, 0, 							 D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "Size",  	             0, DXGI_FORMAT_R32G32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "FillColor",           0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "StrokeColor",         0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "Rotation",        	 0, DXGI_FORMAT_R32_FLOAT,			1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+    };
+    InitInstanceRenderData(&res.IRD[7], res.textureVertexBufferView, res.textureIndexBufferView, 0, sizeof(SDFRectInstanceData), 7);
+    CreateInstancePipelineState(&res.IRD[7].PSO,
+								state.device,
+								res.rootSignature.Get(),
+								&sdfTriangleInputElementDescs[0],
+								_countof(sdfTriangleInputElementDescs),
+								RESOURCES_PATH"shaders/sdf_triangle.hlsl",
+								RESOURCES_PATH"shaders/sdf_triangle.hlsl");
     return res;
 }
 
@@ -405,6 +420,7 @@ void DrawInstance(const DrawInstanceCMD * cmd, RendererState & state, RendererRe
 {
 	switch (cmd->instanceID)
 	{
+		case 7:
 		case 6:
 		case 5:
 		{
@@ -437,7 +453,7 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
 {
     // Upload Instace Buffers to GPU
     UploadArenaClear(&res.frameUploadArena);
-    for (int i = 0; i < 7; i++)
+    for (int i = 0; i < 8; i++)
     {
         if (res.IRD[i].instanceData.count > 0)
         {
@@ -479,7 +495,7 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
 		}
     }
 
-    for (int i = 0; i < 7; i++)
+    for (int i = 0; i < 8; i++)
     {
         RendererClearInstances(&res.IRD[i]);
     }
@@ -573,6 +589,7 @@ size_t RenderEntrySizeof(void * entry)
 		case RENDER_ENTRY_TYPE_LINE:			return sizeof(RenderEntryLine);
 		case RENDER_ENTRY_TYPE_TEXTURED_QUAD:	return sizeof(RenderEntryTexturedQuad);
 		case RENDER_ENTRY_TYPE_SDF_RECT:		return sizeof(RenderEntrySDFRect);
+		case RENDER_ENTRY_TYPE_SDF_TRIANGLE:	return sizeof(RenderEntrySDFTriangle);
 		case RENDER_ENTRY_TYPE_TEXT:
 		{
 			RenderEntryText * textEntry = (RenderEntryText*)entry;
@@ -783,7 +800,12 @@ void ProcessSortEntries(RendererPushBuffer * pb, InstanceRenderData * instanceRe
                 instanceData.cornerRadius = entry->cornerRadius;
                 instanceData.strokeColor  = entry->strokeColor;
                 RendererPushInstance(&instanceRenderData[6], drawCMDs, &instanceData, sortEntry.layer);
-            }break;
+            } break;
+			case RENDER_ENTRY_TYPE_SDF_TRIANGLE:
+			{
+                RenderEntrySDFTriangle * entry = (RenderEntrySDFTriangle*)(pb->memory + sortEntry.pushBufferOffset);
+                RendererPushInstance(&instanceRenderData[7], drawCMDs, &entry->instanceData, sortEntry.layer);
+			} break;
             default:
             {
                 // TODO: crashout here...
@@ -863,7 +885,11 @@ int RendererCreateTexture(const ImageData * image)
 
 void RendererProcessPushBuffers(RendererPushBuffer ** pushBuffers, u32 pbCount)
 {
-    DX12_RendererProcessPushBuffers(pushBuffers,pbCount, &RENDERER_PIPELINE.IRD[0], 7, &RENDERER_PIPELINE.drawCMDs);
+    DX12_RendererProcessPushBuffers(pushBuffers,
+									pbCount,
+									&RENDERER_PIPELINE.IRD[0],
+									sizeof(RENDERER_PIPELINE.IRD)/sizeof(InstanceRenderData),
+									&RENDERER_PIPELINE.drawCMDs);
 }
 
 void BeginFrame()
