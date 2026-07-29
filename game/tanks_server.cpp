@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstring>
 #include "tanks_server.hpp"
+#include "tanks_math.hpp"
 #include "util.hpp"
 
 void DEBUG_DrawCollider(RendererPushBuffer * renderCmds, Collider2D * collider, b32 colliding)
@@ -105,7 +106,7 @@ void ServerSendUpdateMessage(ServerState * state)
 			playerData->pos       = player->position;
 			playerData->rotation  = player->rotation;
 			playerData->turretRot = player->turretRot;
-			playerData->wasTeleport = 0;
+			playerData->kills	  = player->kills;
 		}
 	}
 
@@ -160,6 +161,34 @@ void ServerBroadcastDisconnectMessage(ServerState * state, u32 playerID)
 	}
 }
 
+vec2 FindSpawnPosition(ServerState * state)
+{
+	vec2 safestSpawn = RR_SPAWN_POSITIONS[0];
+	f32 nearestPlayerDist = -1.0f;
+	for (int i = 0; i < sizeof(RR_SPAWN_POSITIONS)/sizeof(vec2); i++)
+	{
+		vec2 currentSpawnPos = RR_SPAWN_POSITIONS[i];
+		f32 currentNearestPlayerDist = std::numeric_limits<f32>::max();
+		for (int p = 0; p < MAX_PLAYERS; p++)
+		{
+			Tank * player = &state->tanks[p];
+			if (player->active)
+			{
+				f32 dist = vec2Dist(player->position, currentSpawnPos);
+				if (dist < currentNearestPlayerDist) { currentNearestPlayerDist = dist; }
+			}
+		}
+
+		if (currentNearestPlayerDist > nearestPlayerDist)
+		{
+			safestSpawn = currentSpawnPos;
+			nearestPlayerDist = currentNearestPlayerDist;
+		}
+	}
+
+	return safestSpawn;
+}
+
 void ServerStart(ServerState * state, u16 port, u16 maxPlayers)
 {
 	state->platform.platformStartServer(7777, maxPlayers);
@@ -204,7 +233,7 @@ void ServerProcessHelloPacket(ServerState * state, HelloPacket * packet, u32 con
 	player->collider.size = {0.75f, 0.65f};
 	memcpy(player->displayName, packet->displayName, 32);
 	player->displayName[31] = '\0';
-	player->position = RR_SPAWN_POSITIONS[state->playerCount % 4];
+	player->position = FindSpawnPosition(state);
 
 	state->playerCount++;
 	ServerSendWelcomeMessage(state, playerIndex);
@@ -258,14 +287,13 @@ void ServerHandlePacket(ServerState * state, NetworkPacket * packet)
 
 void TankDamage(Tank * tank, u16 amount)
 {
-	if (tank->health > amount)
+	i32 health = (i32)tank->health;
+	health -= amount;
+	if (health < 0)
 	{
-		tank->health -= amount;
+		health = 0;
 	}
-	else
-	{
-		tank->health = TANK_MAX_HEALTH;
-	}
+	tank->health = (u16)health;
 }
 
 void TankShoot(Tank * tank, ServerState * state)
@@ -302,6 +330,11 @@ void TankShoot(Tank * tank, ServerState * state)
 	if (hitTank != NULL)
 	{
 		TankDamage(hitTank, 10);
+		if (hitTank->health == 0)
+		{
+			tank->kills++;
+			tank->killsChanged = true;
+		}
 	}
 
 	ServerSendPlayerFiredMessage(state, tank->playerID, hitPos);
@@ -310,6 +343,12 @@ void TankShoot(Tank * tank, ServerState * state)
 
 void UpdateTank(Tank * tank, ServerState * state)
 {
+	if (tank->health == 0)
+	{
+		tank->position = FindSpawnPosition(state);
+		tank->health = TANK_MAX_HEALTH;
+	}
+
 	vec2i inputAxis = {0, 0};
 	bool shootPressed = ((tank->input >> 4) & 1);
 	if ((tank->input >> 0) & 1) { inputAxis.y += 1; } // UP

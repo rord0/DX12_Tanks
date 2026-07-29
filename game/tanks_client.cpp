@@ -587,6 +587,7 @@ void ClientProcessUpdatePacket(GameState * state, UpdatePacket * packet)
 		player->position = updateData->pos;
 		player->turretRot = updateData->turretRot;
 		player->rotation = updateData->rotation;
+		player->kills = updateData->kills;
 	}
 }
 
@@ -595,7 +596,7 @@ void ClientProcessPlayerFiredPacket(GameState * state, PlayerFiredPacket * packe
 	TankPlayFireEffects(packet->playerID, packet->hitPosition, state);
 }
 
-void lientHandlePacket(GameState * state, NetworkPacket * packet)
+void ClientHandlePacket(GameState * state, NetworkPacket * packet)
 {
 	PacketType type = (PacketType)(((u8*)packet->data)[0]);
 	ReadStream stream((u8*)packet->data, packet->size);

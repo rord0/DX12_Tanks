@@ -14,6 +14,8 @@ typedef struct {
 	u32 connectionID;
 	u16 playerID;
 	u16 health;
+	u16 kills;
+	bool killsChanged;
 	vec2 position;
 	f32 turretRot;
 	f32 rotation;

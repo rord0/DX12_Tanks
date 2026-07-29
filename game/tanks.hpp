@@ -32,12 +32,17 @@ typedef struct PlayerConnectData_t {
 
 typedef struct PlayerUpdateData_t {
 	u16 playerID;
-	u8 health;
-	u8 wasTeleport;
+	u16 kills;
 	vec2 pos;
 	f32 rotation;
 	f32 turretRot;
+	u8 health;
 } PlayerUpdateData;
+
+typedef struct PlayerKillData_t {
+	u16 playerID;
+	u16 kills;
+} PlayerKillData;
 
 typedef enum {
 	PACKET_TYPE_HELLO = 10,
@@ -72,11 +77,19 @@ template<typename Stream>
 bool serializePlayerUpdateData(Stream & stream, PlayerUpdateData & data)
 {
 	SerializeU16(stream, data.playerID);
-	SerializeU8(stream, data.health);
-	SerializeU8(stream, data.wasTeleport);
+	SerializeU16(stream, data.kills);
 	SerializeV2(stream, data.pos);
 	SerializeF32(stream, data.rotation);
 	SerializeF32(stream, data.turretRot);
+	SerializeU8(stream, data.health);
+	return true;
+}
+
+template<typename Stream>
+bool serializePlayerKillData(Stream & stream, PlayerKillData & data)
+{
+	SerializeU16(stream, data.playerID);
+	SerializeU16(stream, data.kills);
 	return true;
 }
 
