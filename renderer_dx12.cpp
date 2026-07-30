@@ -2,6 +2,7 @@
 #include "arena.h"
 
 #include "core.h"
+#include "dxgiformat.h"
 #include "includes.h"
 
 #include "renderer_dx12.h"
@@ -362,6 +363,23 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
 								_countof(sdfTriangleInputElementDescs),
 								RESOURCES_PATH"shaders/sdf_triangle.hlsl",
 								RESOURCES_PATH"shaders/sdf_triangle.hlsl");
+
+    const D3D12_INPUT_ELEMENT_DESC scrollTextureInputElementDescs[] = {
+        { "Position",      0, DXGI_FORMAT_R32G32_FLOAT,	1, 0, 							 D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "Size",  	       0, DXGI_FORMAT_R32G32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "UVOffset",      0, DXGI_FORMAT_R32G32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "TilingAmount",  0, DXGI_FORMAT_R32G32_FLOAT,	1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "TextureID",     0, DXGI_FORMAT_R32_UINT,		1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+    };
+
+    InitInstanceRenderData(&res.IRD[8], res.textureVertexBufferView, res.textureIndexBufferView, 0, sizeof(SDFRectInstanceData), 8);
+    CreateInstancePipelineState(&res.IRD[8].PSO,
+								state.device,
+								res.rootSignature.Get(),
+								&scrollTextureInputElementDescs[0],
+								_countof(scrollTextureInputElementDescs),
+								RESOURCES_PATH"shaders/scrolling_texture.hlsl",
+								RESOURCES_PATH"shaders/scrolling_texture.hlsl");
     return res;
 }
 
@@ -420,6 +438,7 @@ void DrawInstance(const DrawInstanceCMD * cmd, RendererState & state, RendererRe
 {
 	switch (cmd->instanceID)
 	{
+		case 8:
 		case 7:
 		case 6:
 		case 5:
@@ -453,7 +472,7 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
 {
     // Upload Instace Buffers to GPU
     UploadArenaClear(&res.frameUploadArena);
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < res.instanceCount; i++)
     {
         if (res.IRD[i].instanceData.count > 0)
         {
@@ -467,7 +486,6 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
 
     // NOTE(rordon): shouldn't change much....
     state.cmdList->SetGraphicsRootSignature(res.rootSignature.Get());
-    //state.cmdList->SetGraphicsRoot32BitConstants(0, 16, &res.projection.m, 0);
     ID3D12DescriptorHeap * heaps[] = { res.textureSRVHeap.Get() };
     state.cmdList->SetDescriptorHeaps(1, heaps);
     state.cmdList->RSSetViewports(1, &state.viewport);
@@ -485,7 +503,8 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
 		{
 			case DrawCommandType::DRAW_COMMAND_SET_PROJ:
 			{
-				state.cmdList->SetGraphicsRoot32BitConstants(0, 16, &cmd->proj.projection.m, 0);
+				state.cmdList->SetGraphicsRoot32BitConstants(0, 16, &cmd->setProj.VP.m, 0);
+				state.cmdList->SetGraphicsRoot32BitConstants(0, 16, &cmd->setProj.projection.m, 16);
 			} break;
 			case DrawCommandType::DRAW_COMMAND_INSTANCE:
 			{
@@ -495,7 +514,7 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
 		}
     }
 
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < res.instanceCount; i++)
     {
         RendererClearInstances(&res.IRD[i]);
     }
@@ -590,6 +609,7 @@ size_t RenderEntrySizeof(void * entry)
 		case RENDER_ENTRY_TYPE_TEXTURED_QUAD:	return sizeof(RenderEntryTexturedQuad);
 		case RENDER_ENTRY_TYPE_SDF_RECT:		return sizeof(RenderEntrySDFRect);
 		case RENDER_ENTRY_TYPE_SDF_TRIANGLE:	return sizeof(RenderEntrySDFTriangle);
+		case RENDER_ENTRY_TYPE_SCROLL_TEXTURE:	return sizeof(RenderEntryScrollTexture);
 		case RENDER_ENTRY_TYPE_TEXT:
 		{
 			RenderEntryText * textEntry = (RenderEntryText*)entry;
@@ -617,7 +637,8 @@ void RendererProcessFrameSetupCMDs(RendererPushBuffer * pb, Array * drawCMDs)
 				RenderEntrySetProj * entry = (RenderEntrySetProj*)entryHeader;
 				DrawCMD cmd;
 				cmd.type = DrawCommandType::DRAW_COMMAND_SET_PROJ;
-				cmd.proj.projection = entry->projection;
+				cmd.setProj.VP = entry->VP;
+				cmd.setProj.projection = entry->projection;
 				ArrayPush(drawCMDs, &cmd);
 			} break;
 			default: break; // Skip.
@@ -805,6 +826,11 @@ void ProcessSortEntries(RendererPushBuffer * pb, InstanceRenderData * instanceRe
 			{
                 RenderEntrySDFTriangle * entry = (RenderEntrySDFTriangle*)(pb->memory + sortEntry.pushBufferOffset);
                 RendererPushInstance(&instanceRenderData[7], drawCMDs, &entry->instanceData, sortEntry.layer);
+			} break;
+			case RENDER_ENTRY_TYPE_SCROLL_TEXTURE:
+			{
+                RenderEntryScrollTexture * entry = (RenderEntryScrollTexture*)(pb->memory + sortEntry.pushBufferOffset);
+                RendererPushInstance(&instanceRenderData[8], drawCMDs, &entry->instanceData, sortEntry.layer);
 			} break;
             default:
             {

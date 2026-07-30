@@ -12,6 +12,7 @@ typedef enum
     RENDER_ENTRY_TYPE_TEXT,
     RENDER_ENTRY_TYPE_SDF_RECT,
     RENDER_ENTRY_TYPE_SDF_TRIANGLE,
+    RENDER_ENTRY_TYPE_SCROLL_TEXTURE,
     RENDER_ENTRY_TYPE_CLEAR,
 	RENDER_ENTRY_TYPE_SET_PROJ,
 } RenderEntryType;
@@ -27,6 +28,7 @@ typedef struct {
 
 typedef struct {
 	RenderEntryHeader header;
+	mat4 VP; // View * Projection
 	mat4 projection;
 } RenderEntrySetProj;
 
@@ -87,6 +89,11 @@ typedef struct {
     RenderEntryHeader header;
 	SDFRectInstanceData instanceData;
 } RenderEntrySDFTriangle;
+
+typedef struct {
+    RenderEntryHeader header;
+	ScrollTextureInstanceData instanceData;
+} RenderEntryScrollTexture;
 
 typedef struct {
     RenderEntryType type;

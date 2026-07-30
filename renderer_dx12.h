@@ -5,6 +5,7 @@
 #include "arena.h"
 
 #include <cstddef>
+#include <iterator>
 #include <wrl.h>
 using namespace Microsoft::WRL;
 
@@ -50,6 +51,7 @@ typedef struct
 
 typedef struct
 {
+	mat4 VP;
 	mat4 projection;
 } SetProjCMD;
 
@@ -63,7 +65,7 @@ typedef struct
 	DrawCommandType type;
 	union
 	{
-		SetProjCMD proj;
+		SetProjCMD setProj;
 		DrawInstanceCMD instance;
 	};
 } DrawCMD;
@@ -107,7 +109,7 @@ typedef struct
     Array instanceData;
 } InstanceRenderData;
 
-typedef struct {
+typedef struct RendererResourcesDX12 {
     // Shaders
     ID3DBlob * lineVertexShaderBlob;
     ID3DBlob * linePixelShaderBlob;
@@ -139,8 +141,8 @@ typedef struct {
     Arena instanceDataArena;
     Array drawCMDs;
 
-    InstanceRenderData IRD[8];
-
+    InstanceRenderData IRD[9];
+    static constexpr size_t instanceCount = _countof(IRD);
 	vec4 clearColor;
     // Matrices
     mat4 projection;

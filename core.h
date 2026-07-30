@@ -188,6 +188,14 @@ typedef struct {
 } SDFRectInstanceData;
 
 typedef struct {
+	vec2 position;
+	vec2 size;
+	vec2 uvOffset;
+	vec2 tilingAmount;
+	u32 textureIndex;
+} ScrollTextureInstanceData;
+
+typedef struct {
 	vec4 fillColor;
 	f32 strokeWidth;
 } TextStyle;

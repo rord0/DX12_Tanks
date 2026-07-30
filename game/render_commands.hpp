@@ -11,10 +11,16 @@ void RendererPushLine(RendererPushBuffer * pb, vec2 startPos, vec2 endPos, vec4 
 
 void RendererPushText(RendererPushBuffer * pb, const char * text, f32 fontSize, u32 fontID, vec2 startPos, TextStyle style, bool isWorldSpace, u16 layer);
 
-void RendererPushSetProjection(RendererPushBuffer * pb, mat4 projection);
+void RendererPushSetProjection(RendererPushBuffer * pb, mat4 VP, mat4 proj);
+
+void RendererPushSubTexture(RendererPushBuffer * pb, u32 textureID, vec3 position, f32 rotation, vec2 scale, vec4 uvTransform, u16 layer);
 
 void RendererPushSDFRect(RendererPushBuffer * pb, vec2 pos, vec2 scale, const SDFShapeStyle * style, u16 layer);
 
 void RendererPushSDFTriangle(RendererPushBuffer * pb, vec2 pos, f32 rotation, vec2 scale, const SDFShapeStyle * style, u16 layer);
+
+void RendererPushScrollingTexture(RendererPushBuffer * pb, u32 textureID, vec2 pos, vec2 size, vec2 offset, vec2 tilingAmount, u16 layer);
+
+void RendererPushSetClear(RendererPushBuffer * pb, vec4 clearColor);
 
 #endif

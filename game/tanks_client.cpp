@@ -172,9 +172,9 @@ void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 
 	f32 tankRot = tank.rotation + (PI/2.0f);
 
-	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.8f, 1.0f}, uvs[0], 0);
-	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.64f, 1.0f}, uvs[1], 1);
-	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {turretPos.x, turretPos.y, 0.0f}, tank.turretRot + (PI/2.0f), {0.57f, 1.0f}, uvs[2], 2);
+	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.8f, 1.0f}, uvs[0], 1);
+	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.64f, 1.0f}, uvs[1], 2);
+	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {turretPos.x, turretPos.y, 0.0f}, tank.turretRot + (PI/2.0f), {0.57f, 1.0f}, uvs[2], 3);
 
 	DrawHealthbar(cmdBuffer, vec2{tank.position.x, tank.position.y + 0.3f}, ((float)tank.health / (float)TANK_MAX_HEALTH), tank.healthLerp);
 	bool isEnemyTank = tank.playerID != state->playerID;
@@ -495,6 +495,7 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
     state->customizeIconTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"customize_icon.png");
     state->targetIconTextureHandle    = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"target_icon.png");
     state->hamburgerIconTextureHandle    = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"hamburger_icon.png");
+    state->desertBackgroundTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"background_desert.png");
 	state->interFontHandle = gameMemory->platform.loadFont(RESOURCES_PATH"fonts/Inter/Inter_18pt-Bold.png", RESOURCES_PATH"fonts/Inter/Inter_18pt-Bold.json");
     ParseTextureAtlasCSV(gameMemory, state, RESOURCES_PATH"tank_parts.csv");
 
@@ -531,6 +532,7 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 	state->impactEmitter     = InitEmitter(10.0f, 32, &state->permArena);
 
 	state->random = {0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL};
+	state->cameraZoom = 1.25f;
 	state->ui = (UILayout*)ArenaPush(&state->permArena, sizeof(UILayout));
 }
 
@@ -1055,7 +1057,7 @@ void EscapeMenu(GameState * state, GameInput * input, GameMemory * gameMemory, P
 		ServerStop(serverState);
 	}
 	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
-	RendererPushSetProjection(renderCMDs, uiProjection);
+	RendererPushSetProjection(renderCMDs, uiProjection, uiProjection);
 	DrawUI(*state->ui, renderCMDs);
 }
 
@@ -1214,22 +1216,40 @@ void CustomizeMenu(GameState * state, GameInput * input, PlatformAPI * platform)
 	if (ui.isButtonPressed("BACK_BTN")) { state->clientState = CLIENT_STATE_MAIN_MENU; }
 }
 
+void DrawScrollingBackground(GameState * state, GameInput * input, RendererPushBuffer * renderCommands)
+{
+	vec4 clearColor = ColorHexToRBGANormalized(0xC3B67CFF);
+	RendererPushSetClear(renderCommands, clearColor);
+
+	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
+
+	mat4 view = translationMatrix(-state->cameraPos.x, -state->cameraPos.y, -1.0f);
+	mat4 projection = orthographicProjection(aspect*state->cameraZoom,
+											-aspect*state->cameraZoom,
+											1.0f*state->cameraZoom,
+											-1.0f*state->cameraZoom, -0.01f, 100.0f);
+	mat4 VP = transpose(projection * view);
+	RendererPushSetProjection(renderCommands, VP, projection);
+	
+	float halfWidth  = aspect * state->cameraZoom;
+	float halfHeight = 1.0f * state->cameraZoom;
+	vec2 size = {halfWidth * 2, halfHeight * 2};
+	float tileWorldWidth  = 1.5f;
+	float tileWorldHeight = tileWorldWidth * (9.0f / 16.0f); // preserve 16:9
+	vec2 uvOffset = { state->cameraPos.x / tileWorldWidth, -state->cameraPos.y / tileWorldHeight };
+	vec2 tilingAmount = { size.x / tileWorldWidth, size.y / tileWorldHeight };
+	RendererPushScrollingTexture(renderCommands, state->desertBackgroundTextureHandle, {-halfWidth, -halfHeight}, size, uvOffset, tilingAmount, 0);
+}
+
 void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, RendererPushBuffer * renderCommands)
 {
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
-	mat4 view = translationMatrix(-state->cameraPos.x, -state->cameraPos.y, -1.0f);
-	f32 zoom = 1.25f;
-	mat4 projection = orthographicProjection(aspect*zoom, -aspect*zoom, 1.0f*zoom, -1.0f*zoom, -0.01f, 100.0f);
-	projection = projection * view;
-	projection = transpose(projection);
+	mat4 projection = orthographicProjection(aspect*state->cameraZoom,
+											-aspect*state->cameraZoom,
+											1.0f*state->cameraZoom,
+											-1.0f*state->cameraZoom, -0.01f, 100.0f);
 	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, state->cameraPos, input->viewportSize, projection);
 
-
-	vec4 clearColorGreen = {0.5f, 0.714f, 0.486f, 1.0f};
-	vec4 clearColor = ColorHexToRBGANormalized(0xC3B67CFF);
-
-	RendererPushSetClear(renderCommands, clearColor);
-	RendererPushSetProjection(renderCommands, projection);
 
 	ClientSendInput(state, input, platform, mouseWorld);
 
@@ -1290,6 +1310,7 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	}
 
 
+	DrawScrollingBackground(state, input, renderCommands);
 
     char buf[256];
 	snprintf(buf, sizeof(buf), "MouseVP: %d, %d", input->mousePosVP.x, input->mousePosVP.y);
@@ -1299,7 +1320,6 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	TextStyle testTextStyle = {.fillColor = textColor, .strokeWidth = 0.0f};
 	f32 fontSize = 0.1f;
 	RendererPushText(renderCommands, buf, fontSize, state->interFontHandle, textPos, testTextStyle, true, 30);
-
 
 	switch (state->clientState)
 	{
@@ -1328,7 +1348,7 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	}
 
 	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
-	RendererPushSetProjection(uiRenderCMDs, uiProjection);
+	RendererPushSetProjection(uiRenderCMDs, uiProjection, uiProjection);
 
 	DrawUI(*state->ui, uiRenderCMDs);
 }

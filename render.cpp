@@ -1,3 +1,4 @@
+#include "d3d12.h"
 #include "renderer_dx12.h"
 
 inline void AssertIfFailed(HRESULT hr)
@@ -505,34 +506,48 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
     descRange1.OffsetInDescriptorsFromTableStart = 0;
     descRange1.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC;
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplerDesc = {};
-    staticSamplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-    staticSamplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-    staticSamplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-    staticSamplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-    staticSamplerDesc.MaxAnisotropy = 0;
-    staticSamplerDesc.MipLODBias = 0;
-    staticSamplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-    staticSamplerDesc.MinLOD = 0.0f;
-    staticSamplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
-    staticSamplerDesc.ShaderRegister = 0;
-    staticSamplerDesc.RegisterSpace = 0;
-    staticSamplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_STATIC_SAMPLER_DESC staticSamplerDescs[2] = {};
+    staticSamplerDescs[0].Filter	  = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSamplerDescs[0].AddressU	  = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    staticSamplerDescs[0].AddressV	  = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    staticSamplerDescs[0].AddressW    = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    staticSamplerDescs[0].BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+    staticSamplerDescs[0].MipLODBias  = 0;
+    staticSamplerDescs[0].MaxAnisotropy = 0;
+    staticSamplerDescs[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplerDescs[0].MinLOD = 0.0f;
+    staticSamplerDescs[0].MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplerDescs[0].ShaderRegister = 0;
+    staticSamplerDescs[0].RegisterSpace = 0;
+    staticSamplerDescs[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    D3D12_ROOT_PARAMETER1 rootParameters1_1[2] = {};
-    D3D12_ROOT_PARAMETER rootParameters1_0[2] = {};
+    staticSamplerDescs[1].Filter	  = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSamplerDescs[1].AddressU	  = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplerDescs[1].AddressV	  = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplerDescs[1].AddressW    = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplerDescs[1].BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+    staticSamplerDescs[1].MipLODBias  = 0;
+    staticSamplerDescs[1].MaxAnisotropy = 0;
+    staticSamplerDescs[1].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplerDescs[1].MinLOD = 0.0f;
+    staticSamplerDescs[1].MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplerDescs[1].ShaderRegister = 1;
+    staticSamplerDescs[1].RegisterSpace = 0;
+    staticSamplerDescs[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    D3D12_ROOT_PARAMETER1 rootParameters1_1[3] = {};
+    D3D12_ROOT_PARAMETER  rootParameters1_0[3] = {};
 
     if (featureData.HighestVersion >= D3D_ROOT_SIGNATURE_VERSION_1_1)
     {
         versionRootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
-        versionRootSignatureDesc.Desc_1_1.NumParameters =2;
+        versionRootSignatureDesc.Desc_1_1.NumParameters = 2;
         versionRootSignatureDesc.Desc_1_1.pParameters = rootParameters1_1;
-        versionRootSignatureDesc.Desc_1_1.NumStaticSamplers = 1;
-        versionRootSignatureDesc.Desc_1_1.pStaticSamplers = &staticSamplerDesc;
+        versionRootSignatureDesc.Desc_1_1.NumStaticSamplers = 2;
+        versionRootSignatureDesc.Desc_1_1.pStaticSamplers = &staticSamplerDescs[0];
 
         rootParameters1_1[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        rootParameters1_1[0].Constants.Num32BitValues = 16;
+        rootParameters1_1[0].Constants.Num32BitValues = 32;
         rootParameters1_1[0].Constants.RegisterSpace = 0;
         rootParameters1_1[0].Constants.ShaderRegister = 0;
         rootParameters1_1[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
@@ -545,13 +560,13 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
     else
     {
         versionRootSignatureDesc.Desc_1_0.Flags = rootSignatureFlags;
-        versionRootSignatureDesc.Desc_1_0.NumParameters = 1;
+        versionRootSignatureDesc.Desc_1_0.NumParameters = 2;
         versionRootSignatureDesc.Desc_1_0.NumStaticSamplers = 0;
         versionRootSignatureDesc.Desc_1_0.pParameters = rootParameters1_0;
         versionRootSignatureDesc.Desc_1_0.pStaticSamplers = nullptr;
 
         rootParameters1_0[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        rootParameters1_0[0].Constants.Num32BitValues = 16;
+        rootParameters1_0[0].Constants.Num32BitValues = 32;
         rootParameters1_0[0].Constants.RegisterSpace = 0;
         rootParameters1_0[0].Constants.ShaderRegister = 0;
         rootParameters1_0[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;

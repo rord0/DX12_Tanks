@@ -80,6 +80,7 @@ typedef struct {
 	u32 customizeIconTextureHandle;
 	u32 hamburgerIconTextureHandle;
 	u32 targetIconTextureHandle;
+	u32 desertBackgroundTextureHandle;
     i32 interFontHandle;
 	AtlasEntry * tankAtlasEntries;
 	SpriteSheet fireEffectSheet;
@@ -98,6 +99,7 @@ typedef struct {
 	bool showBadIPPopup;
 	bool showConnFailedPopup;
 	vec2 cameraVelocity;
+	f32 cameraZoom;
 	pcg32_random_t random;
 	UILayout * ui;
 	ClientState clientState;

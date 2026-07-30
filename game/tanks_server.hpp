@@ -36,7 +36,7 @@ typedef struct {
 	double last_tick;
 } ServerState;
 
-const vec2 RR_SPAWN_POSITIONS[4] = {{-0.5f, 0.5f}, {0.5f, 0.5f}, {-0.5f, -0.5f}, {0.5f, -0.5f}};
+const vec2 RR_SPAWN_POSITIONS[4] = {{-1.0f, 1.0f}, {1.0f, 1.0f}, {-1.0f, -1.0f}, {1.0f, -1.0f}};
 
 void ServerStart(ServerState * state, u16 port, u16 maxPlayers);
 void ServerStop(ServerState * state);

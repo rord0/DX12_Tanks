@@ -53,9 +53,9 @@ void RendererPushImage(RendererPushBuffer * pb, u32 textureID, InstanceData2D in
     PushRenderSortEntry(pb, sortEntry);
 }
 
-void RendererPushSetProjection(RendererPushBuffer * pb, mat4 projection)
+void RendererPushSetProjection(RendererPushBuffer * pb, mat4 VP, mat4 proj)
 {
-	RenderEntrySetProj entry = {RENDER_ENTRY_TYPE_SET_PROJ, projection};
+	RenderEntrySetProj entry = {RENDER_ENTRY_TYPE_SET_PROJ, VP, proj};
 	PushRenderEntry(pb, entry);
 }
 
@@ -134,5 +134,16 @@ void RendererPushSDFTriangle(RendererPushBuffer * pb, vec2 pos, f32 rotation, ve
     u32 entryOffset = PushRenderEntry(pb, entry);
 
     RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_SDF_TRIANGLE, layer, entryOffset};
+    PushRenderSortEntry(pb, sortEntry);
+}
+
+void RendererPushScrollingTexture(RendererPushBuffer * pb, u32 textureID, vec2 pos, vec2 size, vec2 offset, vec2 tilingAmount, u16 layer)
+{
+	const RenderEntryType entryType = RENDER_ENTRY_TYPE_SCROLL_TEXTURE;
+	RenderEntryScrollTexture entry = {entryType, {pos, size, offset, tilingAmount, textureID}};
+
+    u32 entryOffset = PushRenderEntry(pb, entry);
+
+    RenderSortEntry sortEntry = {entryType, layer, entryOffset};
     PushRenderSortEntry(pb, sortEntry);
 }
