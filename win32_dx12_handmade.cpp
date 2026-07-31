@@ -52,6 +52,7 @@ typedef struct
     KeyInput ESC;
 	KeyInput SPACE;
 	KeyInput ENTER;
+	KeyInput CTRL_V;
     ButtonInput mouseL;
 	char charsPressed[128];
 	u32 charCount;
@@ -87,6 +88,11 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
                     inputState.D.isDown = true;
                     inputState.D.wasDown = (msg.lParam & (1 << 30)) != 0;
                 }
+				if (msg.wParam == 'V' && (GetKeyState(VK_CONTROL) & 0x8000))
+				{
+					inputState.CTRL_V.isDown = true;
+                    inputState.CTRL_V.wasDown = (msg.lParam & (1 << 30)) != 0;
+				}
                 if (msg.wParam == VK_UP)
                 {
                     inputState.UP.isDown = true;
@@ -441,6 +447,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 	gameMemory.platform.measureText 		= &PlatformMeasureText;
 	gameMemory.platform.stopClient		    = &PlatformStopClient;
 	gameMemory.platform.stopServer          = &PlatformStopServer;
+	gameMemory.platform.copyClipboardText   = &PlatformCopyClipboardText;
 
 	GameInput gameInput = {0};
 
@@ -512,10 +519,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 		gameInput.isEnterPressed = inputState.ENTER.isDown;
 		gameInput.isMousePressed = inputState.mouseL.isDown;
 		gameInput.mouseL 		 = inputState.mouseL;
+		gameInput.CTRL_V 		 = inputState.CTRL_V;
 		memcpy(gameInput.charsPressed, inputState.charsPressed, sizeof(gameInput.charsPressed));
 		gameInput.charCount = inputState.charCount;
 		inputState.mouseL.wasPressed = false;
 		inputState.mouseL.wasReleased = false;
+		inputState.CTRL_V.wasDown = true;
 		inputState.charCount = 0;
 		gameInput.viewportSize = vec2i{resolution.x, resolution.y};
 		gameInput.mousePosVP = vec2i{inputState.mousePos.x, inputState.mousePos.y};
@@ -543,7 +552,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
             OutputDebugStringA(buffer);
             timer = 0.0f;
         }
-        SetWindowTextA(windowHandle, buffer);
+        //SetWindowTextA(windowHandle, buffer);
         // ---------------------------------
     }
 

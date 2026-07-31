@@ -188,6 +188,7 @@ typedef struct
 {
 	vec2 mousePos;
 	ButtonInput mouseL;
+	KeyInput CTRL_V;
 	const u8 * charsPressed;
 	u32 charCount;
 } UIInput;
@@ -204,9 +205,14 @@ typedef struct UILayout_t
 	char strings[1024];
 	u32 stringIndex;
 	PlatformMeasureTextFn * measureText;
+	PlatformCopyClipboardTextFn * copyClipboardText;
 	UIInput input;
 
-	void startLayout(vec2 size, LayoutType justify, LayoutType align, PlatformMeasureTextFn * measureTextFn, UIInput input);
+	void startLayout(vec2 size, LayoutType justify, LayoutType align,
+					 PlatformMeasureTextFn * measureTextFn,
+					 PlatformCopyClipboardTextFn * copyClipboardTextFn,
+					 UIInput input);
+	
 	u32 begin(const char * label, UINodeLayout layout);
 	void text(const char * label, i32 fontHandle, f32 fontSize, f32 strokeWidth, const char * text);
 	void text(const char * label, FontStyle style, const char * text);

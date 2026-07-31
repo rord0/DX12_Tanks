@@ -265,16 +265,17 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
 
     // Create Textured Quad Instance Data
     const D3D12_INPUT_ELEMENT_DESC texturedQuadInputElementDescs[] = {
-            { "Position",          0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "UV",                0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            { "InstancePosition",  0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceSize",      0, DXGI_FORMAT_R32G32_FLOAT,    1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceRotZ",      0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceAlpha",     0, DXGI_FORMAT_R32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
-            { "InstanceTextureID", 0, DXGI_FORMAT_R32_UINT,        1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "Position",          0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 0,							   D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "UV",                0, DXGI_FORMAT_R32G32_FLOAT,    	  0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+            { "InstanceModel",	   0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0,							   D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceModel",     1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceModel",     2, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceModel",     3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceAlpha",     0, DXGI_FORMAT_R32_FLOAT,       	  1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+            { "InstanceTextureID", 0, DXGI_FORMAT_R32_UINT,           1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
     InitInstanceRenderData(&res.IRD[0], res.textureVertexBufferView, res.textureIndexBufferView, 6, sizeof(TextureInstanceData), 0);
-    CreateInstancePipelineState(&res.IRD[0].PSO, state.device, res.rootSignature.Get(), &texturedQuadInputElementDescs[0], _countof(texturedQuadInputElementDescs), RESOURCES_PATH"shaders/vertex.hlsl", RESOURCES_PATH"shaders/pixel.hlsl");
+    CreateInstancePipelineState(&res.IRD[0].PSO, state.device, res.rootSignature.Get(), &texturedQuadInputElementDescs[0], _countof(texturedQuadInputElementDescs), RESOURCES_PATH"shaders/textured_quad.hlsl", RESOURCES_PATH"shaders/textured_quad.hlsl");
 
     // Create Rectangle Instance Data
     const D3D12_INPUT_ELEMENT_DESC rectangleInputElementDescs[] = {
@@ -762,13 +763,7 @@ void ProcessSortEntries(RendererPushBuffer * pb, InstanceRenderData * instanceRe
             case RENDER_ENTRY_TYPE_TEXTURED_QUAD:
             {
                 RenderEntryTexturedQuad * entry = (RenderEntryTexturedQuad*)(pb->memory + sortEntry.pushBufferOffset);
-                TextureInstanceData instanceData = {};
-                instanceData.position = entry->instanceData.position;
-                instanceData.rotation = entry->instanceData.rotation;
-                instanceData.scale = entry->instanceData.scale;
-                instanceData.textureIndex = entry->textureID;
-                instanceData.alpha = entry->instanceData.alpha;
-                RendererPushInstance(&instanceRenderData[0], drawCMDs, &instanceData, sortEntry.layer);
+                RendererPushInstance(&instanceRenderData[0], drawCMDs, &entry->instanceData, sortEntry.layer);
             } break;
 
             case RENDER_ENTRY_TYPE_DEBUG_RECTANGLE:

@@ -81,6 +81,7 @@ typedef struct {
 	u32 hamburgerIconTextureHandle;
 	u32 targetIconTextureHandle;
 	u32 desertBackgroundTextureHandle;
+	u32 airdropTextureHandle;
     i32 interFontHandle;
 	AtlasEntry * tankAtlasEntries;
 	SpriteSheet fireEffectSheet;

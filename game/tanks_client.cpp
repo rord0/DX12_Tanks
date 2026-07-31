@@ -1,6 +1,7 @@
 #include "tanks_client.hpp"
 #include "serialize.hpp"
 #include "tanks.hpp"
+#include "tanks_math.hpp"
 #include "util.hpp"
 #include "render_commands.hpp"
 #include "ui.hpp"
@@ -462,8 +463,8 @@ void DrawShellImpactEffects(RendererPushBuffer * renderCmds, GameState * state)
 		f32 alpha = 1.0f - easeInExpo(progress);
 		f32 angle = atan2f(effect->direction.y, effect->direction.x);
 
-		InstanceData2D instanceData = {{effect->position.x, effect->position.y, 0.0f}, {0.6f, 0.6f}, angle, alpha};
-		RendererPushImage(renderCmds, state->shellImpactTextureHandle, instanceData, 0);
+		mat4 model = ModelMatrix2D(effect->position, angle, {0.5f, 0.5f});
+		RendererPushImage(renderCmds, state->shellImpactTextureHandle, alpha, model, 1);
 	}
 }
 
@@ -490,12 +491,13 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 								  gameMemory->permStorageSize - sizeof(GameState) - sizeof(ServerState));
 
     state->tankAtlasHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"tank_parts.png");
-    state->extraTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"images/platformer/Props_AirDrop.png");
     state->shellImpactTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"shell_impact.png");
     state->customizeIconTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"customize_icon.png");
     state->targetIconTextureHandle    = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"target_icon.png");
     state->hamburgerIconTextureHandle    = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"hamburger_icon.png");
     state->desertBackgroundTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"background_desert.png");
+	state->airdropTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"images/props/props_airdrop.png");
+
 	state->interFontHandle = gameMemory->platform.loadFont(RESOURCES_PATH"fonts/Inter/Inter_18pt-Bold.png", RESOURCES_PATH"fonts/Inter/Inter_18pt-Bold.json");
     ParseTextureAtlasCSV(gameMemory, state, RESOURCES_PATH"tank_parts.csv");
 
@@ -696,16 +698,16 @@ void DrawUI(UILayout & ui, RendererPushBuffer * renderCMDs)
 			} break;
 			case UINodeType::UI_NODE_TYPE_IMAGE:
 			{
-				vec3 imagePos = {node->pos.x + node->size.x / 2.0f, node->pos.y + node->size.y / 2.0f, 0.0f};
+				vec2 imagePos = {node->pos.x + node->size.x / 2.0f, node->pos.y + node->size.y / 2.0f};
 				vec2 imageSize = {node->size.x*2, -node->size.y*2};
 				if (node->data.image.uv == vec4::zero)
 				{
-					InstanceData2D imgInstance = {imagePos, imageSize, 0.0f, 1.0f};
-					RendererPushImage(renderCMDs, node->data.image.handle, imgInstance, 30);
+					mat4 imgModel = ModelMatrix2D(imagePos, 0.0f, imageSize);
+					RendererPushImage(renderCMDs, node->data.image.handle, 1.0f, imgModel, 30);
 				}
 				else // Atlas Image
 				{
-					RendererPushSubTexture(renderCMDs, node->data.image.handle, imagePos, 0.0f, imageSize, node->data.image.uv, 31);
+					RendererPushSubTexture(renderCMDs, node->data.image.handle, {imagePos.x, imagePos.y, 0.0f}, 0.0f, imageSize, node->data.image.uv, 31);
 				}
 			} break;
 			case UINodeType::UI_NODE_TYPE_BUTTON:
@@ -845,7 +847,7 @@ void MainMenu(GameState * state, GameMemory * gameMemory, GameInput * input, Pla
 	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL};
 	UILayout & ui = *state->ui;
 	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
-	ui.startLayout(frameStartSize, LayoutType::SPACE_BETWEEN, LayoutType::CENTER, platform->measureText, uiInput);
+	ui.startLayout(frameStartSize, LayoutType::SPACE_BETWEEN, LayoutType::CENTER, platform->measureText, platform->copyClipboardText, uiInput);
 		ui.begin("EMPTY", {.size = {(f32)input->viewportSize.x, 120.0f}}); ui.end();
 		ui.begin("MENU_OPTION_CONTAINER", optionContainerLayout);
 			ui.button("HOST_BUTTON", {390.0f, 100.0f}, &DEFAULT_BUTTON_STYLE, "HOST GAME", &fontStyle);
@@ -933,14 +935,14 @@ void ConnectingScreen(GameState * state, GameInput * input, PlatformAPI * platfo
 	UILayout & ui = *state->ui;
 
 	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
-	ui.startLayout(frameStartSize, LayoutType::CENTER, LayoutType::CENTER, platform->measureText, uiInput);
+	ui.startLayout(frameStartSize, LayoutType::CENTER, LayoutType::CENTER, platform->measureText, platform->copyClipboardText, uiInput);
 		ui.text("CONNECTING_TEXT", state->interFontHandle, 48.0f, 0.2f, texts[currentText]);
 	ui.endLayout();
 }
 
 void DirectJoinMenu(GameState * state, GameInput * input, PlatformAPI * platform)
 {
-	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL, input->charsPressed, input->charCount};
+	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL, input->CTRL_V, input->charsPressed, input->charCount};
 	UILayout & ui = *state->ui;
 	UINodeLayout sectionLayout = {.childGap = 6.0f,
 							      .axis = LayoutDirection::TOP_TO_BOTTOM,
@@ -954,17 +956,20 @@ void DirectJoinMenu(GameState * state, GameInput * input, PlatformAPI * platform
 
 
 	FontStyle btnFontStyle = {state->interFontHandle, 40.0f, 0.0f};
+	FontStyle ipInputFontStyle = {state->interFontHandle, 18.0f, 0.0f};
 	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
-	ui.startLayout(frameStartSize, LayoutType::SPACE_BETWEEN, LayoutType::CENTER, platform->measureText, uiInput);
+	ui.startLayout(frameStartSize, LayoutType::SPACE_BETWEEN, LayoutType::CENTER, platform->measureText, platform->copyClipboardText, uiInput);
 		ui.begin("POPUP_CONTAINER", profileLayout);
 			if (state->showBadIPPopup) { ErrorPopupUI(ui, state->interFontHandle, "invalid IP entered"); }
 			if (state->showConnFailedPopup) { ErrorPopupUI(ui, state->interFontHandle, "failed to connect to server"); }
 		ui.end();
 		ui.begin("IP_SECTION", sectionLayout);
 			ui.text("IP_LABEL", state->interFontHandle, 30.0f, 0.2f, "IPv6 Address:");
-			ui.inputField("IP_INPUT", {360.0f, 70.0f}, state->serverIP, 64, &DEFAULT_BUTTON_STYLE, btnFontStyle,
-						 											UI_INPUT_ALLOW_DIGITS | UI_INPUT_ALLOW_PERIODS | UI_INPUT_ALLOW_COLONS);
-			ui.button("CONNECT_BTN",{360,80.f}, &DEFAULT_BUTTON_STYLE, "CONNECT", &btnFontStyle);
+			ui.inputField("IP_INPUT", {428.0f, 70.0f},
+						  state->serverIP, 40,
+						  &DEFAULT_BUTTON_STYLE,ipInputFontStyle,
+						  UI_INPUT_ALLOW_ALPHANUM | UI_INPUT_ALLOW_COLONS);
+			ui.button("CONNECT_BTN",{428,80.f}, &DEFAULT_BUTTON_STYLE, "CONNECT", &btnFontStyle);
 			ui.button("BACK_BTN",{150,60}, &DEFAULT_BUTTON_STYLE, "BACK", &btnFontStyle);
 		ui.end();
 		ui.begin("EMPTY", {.size = {(f32)input->viewportSize.x, 120.0f}}); ui.end();
@@ -1029,7 +1034,7 @@ void EscapeMenu(GameState * state, GameInput * input, GameMemory * gameMemory, P
 {
 	if (!state->optionsMenuOpen) { return; }
 	UILayout & ui = *state->ui;
-	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL, input->charsPressed, input->charCount};
+	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL, input->CTRL_V,input->charsPressed, input->charCount};
 	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
 	FontStyle fontStyle = {state->interFontHandle, 40.0f, 0.0f};
 
@@ -1038,7 +1043,7 @@ void EscapeMenu(GameState * state, GameInput * input, GameMemory * gameMemory, P
 										  .sizing = SizingType::HUG,
 										  .padding = {50.0f,50.0f,25.0f,25.0f}};
 
-	ui.startLayout(frameStartSize, LayoutType::CENTER, LayoutType::CENTER, platform->measureText, uiInput);
+	ui.startLayout(frameStartSize, LayoutType::CENTER, LayoutType::CENTER, platform->measureText, platform->copyClipboardText, uiInput);
 		ui.begin("MENU_OPTION_CONTAINER", optionContainerLayout);
 			ui.button("QUIT_BTN", {390.0f, 100.0f}, &DEFAULT_BUTTON_STYLE, "QUIT", &fontStyle);
 			ui.button("RESUME_BTN", {390.0f, 100.0f}, &DEFAULT_BUTTON_STYLE, "RESUME", &fontStyle);
@@ -1075,7 +1080,7 @@ void GameHUD(GameState * state, GameInput * input, PlatformAPI * platform)
 										.padding = {}};
 	
 	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
-	ui.startLayout(frameStartSize, LayoutType::START, LayoutType::START, platform->measureText, uiInput);
+	ui.startLayout(frameStartSize, LayoutType::START, LayoutType::START, platform->measureText, platform->copyClipboardText, uiInput);
 		ui.begin("CONTAINER_I_HARDLY_KNOW_HER", {.size = {0,0.0f}, .axis = LayoutDirection::LEFT_TO_RIGHT,
 												 .justify = LayoutType::SPACE_BETWEEN,
 												 .sizing = SizingType::FILL,
@@ -1151,7 +1156,7 @@ void CustomizeMenu(GameState * state, GameInput * input, PlatformAPI * platform)
 	vec2 customizeBtnSize = {60.0f,60.0f};
 	vec2 colorBtnSize = {50.0f, 50.0f};
 	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
-	ui.startLayout(frameStartSize, LayoutType::CENTER, LayoutType::CENTER, platform->measureText, uiInput);
+	ui.startLayout(frameStartSize, LayoutType::CENTER, LayoutType::CENTER, platform->measureText, platform->copyClipboardText, uiInput);
 		ui.begin("SECTION_CONTAINER", sectionContainerLayout);
 			ui.begin("DISPLAY_NAME_SECTION", sectionLayout);
 				ui.begin("INPUT_PROMPT_CONTAINER", containerLeft);
@@ -1253,8 +1258,8 @@ void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, Re
 
 	ClientSendInput(state, input, platform, mouseWorld);
 
-    InstanceData2D gdEasy   = {{1.0f, 1.0f, 0.0f}, {0.5f, 0.5f}, 1.0f, 1.0f};
-    RendererPushImage(renderCommands, 1, gdEasy, 0);
+	mat4 gdEasy = ModelMatrix2D({0.75f, 0.75f}, 0.0f, {0.5f, 0.5f});
+    RendererPushImage(renderCommands, 1, 1.0f, gdEasy, 1);
 
 	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
 	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
@@ -1262,6 +1267,7 @@ void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, Re
 	SimulateParticles(&state->impactEmitter,     input->deltaTime);
 	DrawParticles(renderCommands, state);
 
+	//RendererPushImage(renderCommands, state->airdropTextureHandle, {{TEST_}})
 
 	SDFShapeStyle TRI_STYLE = {ColorHexToRBGANormalized(0x402525CC), ColorHexToRBGANormalized(0x332626FF), 16, 3};
 	TankGFX * localPlayer = &state->tanks[state->playerID];

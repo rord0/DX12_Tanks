@@ -44,9 +44,9 @@ void PushRenderSortEntry(RendererPushBuffer * pb, RenderSortEntry sortEntry)
 
 #define PushRenderEntry(pushBuffer, entry) PushRenderEntryStruct(pushBuffer, &entry, sizeof(entry));
 
-void RendererPushImage(RendererPushBuffer * pb, u32 textureID, InstanceData2D instanceData, u16 layer)
+void RendererPushImage(RendererPushBuffer * pb, u32 textureID, f32 alpha, mat4 model, u16 layer)
 {
-    RenderEntryTexturedQuad entry = {RENDER_ENTRY_TYPE_TEXTURED_QUAD, textureID, instanceData};
+    RenderEntryTexturedQuad entry = {RENDER_ENTRY_TYPE_TEXTURED_QUAD, {model, alpha, textureID}};
     u32 entryOffset = PushRenderEntry(pb, entry);
 
     RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_TEXTURED_QUAD, layer, entryOffset};

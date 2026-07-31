@@ -10,6 +10,21 @@ vec2 vec2Rotate(vec2 v, f32 angle)
 	return {v.x * cosA - v.y * sinA, v.x * sinA + v.y * cosA};
 }
 
+mat4 ModelMatrix2D(vec2 pos, float rotation, vec2 scale)
+{
+    float c = cosf(rotation);
+    float s = sinf(rotation);
+
+    mat4 m = {0};
+
+    m.m[0][0] = c * scale.x;   m.m[0][1] = s * scale.x;   m.m[0][2] = 0.0f; m.m[0][3] = 0.0f;
+    m.m[1][0] = -s * scale.y;  m.m[1][1] = c * scale.y;   m.m[1][2] = 0.0f; m.m[1][3] = 0.0f;
+    m.m[2][0] = 0.0f;          m.m[2][1] = 0.0f;          m.m[2][2] = 1.0f; m.m[2][3] = 0.0f;
+    m.m[3][0] = pos.x;         m.m[3][1] = pos.y;         m.m[3][2] = 0.0f; m.m[3][3] = 1.0f;
+
+    return m;
+}
+
 void RectGetMinMaxPointsOnAxis(const Collider2D & collider, const vec2 axis, vec2 * min, vec2 * max)
 {
 	if (collider.type == COLLIDER_RECTANGLE)

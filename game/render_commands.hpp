@@ -5,7 +5,7 @@
 #include "../render_entry.h"
 #include "ui.hpp"
 
-void RendererPushImage(RendererPushBuffer * pb, u32 textureID, InstanceData2D instanceData, u16 layer);
+void RendererPushImage(RendererPushBuffer * pb, u32 textureID, f32 alpha, mat4 model, u16 layer);
 
 void RendererPushLine(RendererPushBuffer * pb, vec2 startPos, vec2 endPos, vec4 color, float width, u16 layer);
 

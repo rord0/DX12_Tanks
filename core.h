@@ -139,10 +139,8 @@ typedef struct {
 } InstanceData2D;
 
 typedef struct {
-    vec3 position;
-    vec2 scale;
-    float rotation;
-    float alpha;
+	mat4 model;
+    f32 alpha;
     u32 textureIndex;
 } TextureInstanceData;
 
@@ -244,6 +242,9 @@ typedef PLATFORM_LOAD_FILE(PlatformLoadFileFunction);
 #define PLATFORM_FREE_FILE(name) void name(void ** memory)
 typedef PLATFORM_FREE_FILE(PlatformFreeFileFunction);
 
+#define PLATFORM_COPY_CLIPBOARD_TEXT(name) u32 name(char * buffer, u32 bufferSize)
+typedef PLATFORM_COPY_CLIPBOARD_TEXT(PlatformCopyClipboardTextFn); 
+
 #define PLATFORM_START_SERVER(name) bool name(uint16_t port, uint16_t maxConnections)
 typedef PLATFORM_START_SERVER(PlatformStartServerFunction);
 
@@ -278,6 +279,7 @@ typedef struct {
 	PlatformServerGetEventFn * serverGetEvent;
 	PlatformLoadFontAtlasFn * loadFont;
 	PlatformMeasureTextFn * measureText;
+	PlatformCopyClipboardTextFn * copyClipboardText;
 } PlatformAPI;
 
 typedef struct {
@@ -304,6 +306,7 @@ typedef struct
 typedef struct {
 	KeyInput WASD[4];
 	KeyInput ARROWS[4];
+	KeyInput CTRL_V;
 	ButtonInput mouseL;
 	bool isMousePressed;
 	bool isEnterPressed;

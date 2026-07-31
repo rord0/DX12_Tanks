@@ -34,6 +34,7 @@ typedef struct {
 	Arena tempArena;
 	PlatformAPI platform;
 	double last_tick;
+	PrefabInstance instance;
 } ServerState;
 
 const vec2 RR_SPAWN_POSITIONS[4] = {{-1.0f, 1.0f}, {1.0f, 1.0f}, {-1.0f, -1.0f}, {1.0f, -1.0f}};

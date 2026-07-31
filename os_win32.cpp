@@ -63,6 +63,36 @@ PLATFORM_LOAD_FILE(DEBUG_PlatformReadEntireFile)
     return result;
 }
 
+PLATFORM_COPY_CLIPBOARD_TEXT(PlatformCopyClipboardText)
+{
+    if (!OpenClipboard(nullptr))
+        return 0;
+
+	u32 charsCopied = 0;
+    HANDLE hData = GetClipboardData(CF_UNICODETEXT);
+
+    if (hData != nullptr)
+    {
+        wchar_t * wideText = static_cast<wchar_t*>(GlobalLock(hData));
+        if (wideText != nullptr)
+        {
+            int i = 0;
+            while (wideText[i] != L'\0' && i < bufferSize - 1)
+            {
+                buffer[i] = static_cast<char>(wideText[i]);
+                i++;
+            }
+            buffer[i] = '\0';
+            charsCopied = i;
+
+            GlobalUnlock(hData);
+        }
+    }
+
+    CloseClipboard();
+    return charsCopied;
+}
+
 ImageData LoadImageFromFile(const char * filename)
 {
     ImageData data = {};

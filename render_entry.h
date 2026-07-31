@@ -53,8 +53,7 @@ typedef struct {
 
 typedef struct {
     RenderEntryHeader header;
-    u32 textureID;
-    InstanceData2D instanceData;
+	TextureInstanceData instanceData;
 } RenderEntryTexturedQuad;
 
 typedef struct {

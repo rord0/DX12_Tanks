@@ -4,6 +4,7 @@
 #include "../core.h"
 #include "serialize.hpp"
 #include "arena.hpp"
+#include "tanks_math.hpp"
 #include <cstddef>
 #include <immintrin.h>
 
@@ -23,6 +24,30 @@ typedef struct {
     u8 turretType;
     u8 colorID;
 } TankStyle;
+
+typedef struct
+{
+	const char * textureName;
+	vec2 position;
+	vec2 scale;
+	f32 rotation;
+	u32 colliderCount;
+	const Collider2D * colliders;
+} Prefab;
+
+typedef struct
+{
+	u32 prefabID;
+	vec2 position;
+	vec2 scale;
+	f32 rotation;
+} PrefabInstance;
+
+const Collider2D AIRDROP_COLLIDERS[] = {{0.0f,0.0f}, {0.5f, 0.5f}, 45.0f, COLLIDER_RECTANGLE};
+const Prefab PREFAB_AIRDROP = {"images/props/props_airdrop.png", {0,0}, {0.5f, 0.5f}, 45.0f, _countof(AIRDROP_COLLIDERS), AIRDROP_COLLIDERS};
+const Prefab * PREFABS[1] = {&PREFAB_AIRDROP};
+
+const PrefabInstance TEST_PREFAB_INSTANCE = {0, {0.0f, 0.0f}, {1.0f, 1.0f}, 0.0f};
 
 typedef struct PlayerConnectData_t {
 	u16 playerID;

@@ -122,7 +122,12 @@ void UILayout::inputField(const char * label, vec2 size, char * inputBuffer, u32
 	end();
 }
 
-void UILayout::startLayout(vec2 size, LayoutType justify, LayoutType align, PlatformMeasureTextFn * measureTextFn, UIInput newInput)
+void UILayout::startLayout(vec2 size,
+						   LayoutType justify,
+						   LayoutType align,
+						   PlatformMeasureTextFn * measureTextFn,
+						   PlatformCopyClipboardTextFn * copyClipboardTextFn,
+						   UIInput newInput)
 {
 	input = newInput;
 	count = 0;
@@ -130,6 +135,7 @@ void UILayout::startLayout(vec2 size, LayoutType justify, LayoutType align, Plat
 	hot = 0;
 	stringIndex = 0;
 	measureText = measureTextFn;
+	copyClipboardText = copyClipboardTextFn;
 	UINodeLayout rootNodeLayout = {.size = size,
 								   .childGap = 30.0f,
 								   .axis = LayoutDirection::TOP_TO_BOTTOM,
@@ -487,6 +493,36 @@ bool UILayout::isButtonPressed(const char * label)
 	return false;
 }
 
+bool InputFieldAddChar(UIInputField * inputField, char c, u32 & strLen)
+{
+	u8 flags = inputField->flags;
+	if (c >= 32 && c <= 126)
+	{
+		// lowercase ASCII
+		if ((islower(c) && (flags & UI_INPUT_ALLOW_LOWERCASE))   ||
+			(isupper(c) && (flags & UI_INPUT_ALLOW_UPPERCASE))   ||
+			(isdigit(c) && (flags & UI_INPUT_ALLOW_DIGITS))      ||
+			(c == '_'   && (flags & UI_INPUT_ALLOW_UNDERSCORES)) ||
+			(c == '.'   && (flags & UI_INPUT_ALLOW_PERIODS))     ||
+			(c == ':'   && (flags & UI_INPUT_ALLOW_COLONS)))
+		{
+			if (strLen < (inputField->bufSize - 1))
+			{
+				inputField->buf[strLen++] = c; 
+			}
+		}
+	}
+	if (c == '\b')
+	{
+		if (strLen > 0)
+		{
+			inputField->buf[--strLen] = '\0'; 
+		}
+	}
+
+	return (strLen < (inputField->bufSize - 1));
+}
+
 bool UILayout::inputEntered(const char * label)
 {
 	u32 id = fn1va_32(label); // calc the hash.
@@ -508,33 +544,19 @@ bool UILayout::inputEntered(const char * label)
 	}
 	if (active == node->id)
 	{
+		if (input.CTRL_V.isDown && !input.CTRL_V.wasDown)
+		{
+			char clipboard[128] = {0};
+			u32 numChars = copyClipboardText(clipboard, 128);
+			for (int i = 0; i < numChars; i++)
+			{
+				if (!InputFieldAddChar(&node->data.input, clipboard[i], len)) { break; }
+			}
+		}
 		for (int i = 0; i < input.charCount; i++)
 		{
 			char c = input.charsPressed[i];
-			u8 flags = node->data.input.flags;
-			if (c >= 32 && c <= 126)
-			{
-				// lowercase ASCII
-				if ((islower(c) && (flags & UI_INPUT_ALLOW_LOWERCASE))   ||
-					(isupper(c) && (flags & UI_INPUT_ALLOW_UPPERCASE))   ||
-					(isdigit(c) && (flags & UI_INPUT_ALLOW_DIGITS))      ||
-					(c == '_'   && (flags & UI_INPUT_ALLOW_UNDERSCORES)) ||
-					(c == '.'   && (flags & UI_INPUT_ALLOW_PERIODS))     ||
-					(c == ':'   && (flags & UI_INPUT_ALLOW_COLONS)))
-				{
-					if (len < node->data.input.bufSize)
-					{
-						node->data.input.buf[len++] = c; 
-					}
-				}
-			}
-			if (c == '\b')
-			{
-				if (len > 0)
-				{
-					node->data.input.buf[--len] = '\0'; 
-				}
-			}
+			if (!InputFieldAddChar(&node->data.input, c,len)) { break; }
 		}
 	}
 
