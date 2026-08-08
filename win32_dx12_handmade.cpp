@@ -1,14 +1,12 @@
-#include "array.h"
 #include "core.h"
 #include "includes.h"
 
 #include "os_win32.cpp"
-#include "array.cpp"
 #include "arena.cpp"
 #include "ring_buffer.cpp"
 
 #include "renderer_dx12.cpp"
-#include "networking.cpp"
+#include "./engine/networking.cpp"
 #include "./engine/fonts.cpp"
 
 #include "render_entry.h"
@@ -16,6 +14,9 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+
+#define ARRAY_IMPLEMENTATION
+#include "array.h"
 
 #define GAME_CODE_DLL "tanksgame.dll"
 

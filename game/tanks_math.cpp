@@ -25,188 +25,42 @@ mat4 ModelMatrix2D(vec2 pos, float rotation, vec2 scale)
     return m;
 }
 
-void RectGetMinMaxPointsOnAxis(const Collider2D & collider, const vec2 axis, vec2 * min, vec2 * max)
+mat2 GetRotationMat2(const mat4 & m)
 {
-	if (collider.type == COLLIDER_RECTANGLE)
-	{
-		vec2 xAxis = vec2{ cosf(collider.rotation), sinf(collider.rotation)};
-		vec2 yAxis = vec2{-sinf(collider.rotation), cosf(collider.rotation)};
+    float sx = sqrtf(m.m[0][0] * m.m[0][0] + m.m[0][1] * m.m[0][1]);
+    float sy = sqrtf(m.m[1][0] * m.m[1][0] + m.m[1][1] * m.m[1][1]);
 
-		f32 halfExtentX = collider.size.x / 4.0f;
-		f32 halfExtentY = collider.size.y / 4.0f;
-
-		vec2 vertices[4];
-		vertices[0] = collider.position + (xAxis * halfExtentX) + (yAxis * halfExtentY);
-		vertices[1] = collider.position + (xAxis * halfExtentX) - (yAxis * halfExtentY);
-		vertices[2] = collider.position - (xAxis * halfExtentX) + (yAxis * halfExtentY);
-		vertices[3] = collider.position - (xAxis * halfExtentX) - (yAxis * halfExtentY);
-
-		f32 minProj = vec2Dot(vertices[0], axis);
-		f32 maxProj = minProj;
-		*min = vertices[0];
-		*max = vertices[0];
-
-		for (vec2 v : vertices)
-		{
-			f32 p = vec2Dot(v, axis);
-			if (p < minProj)
-			{
-				minProj = p;
-				*min = v;
-			}
-			if (p > maxProj)
-			{
-				maxProj = p;
-				*max = v;
-			}
-		}
-	}
+    mat2 r;
+    r.m[0][0] = m.m[0][0] / sx;  r.m[0][1] = m.m[0][1] / sx;
+    r.m[1][0] = m.m[1][0] / sy;  r.m[1][1] = m.m[1][1] / sy;
+    return r;
 }
 
-b32 IsCollidingOnAxis(vec2 axis, const Collider2D & a, const Collider2D & b, CollisionData & collisionData)
+mat2 mat2::transpose()
 {
-	vec2 minVertA, minVertB, maxVertA, maxVertB;
-	RectGetMinMaxPointsOnAxis(a, axis, &minVertA, &maxVertA);
-	RectGetMinMaxPointsOnAxis(b, axis, &minVertB, &maxVertB);
-
-	float minA = vec2Dot(minVertA, axis);
-	float maxA = vec2Dot(maxVertA, axis);
-	float minB = vec2Dot(minVertB, axis);
-	float maxB = vec2Dot(maxVertB, axis);
-
-	if (maxA < minB || maxB < minA) { return false; }
-
-	float overlapA = maxA - minB;
-	float overlapB = maxB - minA;
-
-	if (overlapA < overlapB)
-	{
-		collisionData.normal = -axis;
-        collisionData.penetration = abs(overlapA);
-	}
-	else
-	{
-		collisionData.normal = axis;
-		collisionData.penetration = abs(overlapB);
-	}
-	collisionData.point = collisionData.normal;
-
-
-	return true;
-
+	mat2 t = *this;
+	t.m[0][1] = m[1][0];
+	t.m[1][0] = m[0][1];
+	return t;
 }
 
-vec2 ClosestPointOnRect(Collider2D rect, vec2 point)
+void GetAxes2D(const mat4 * m, vec2 * outX, vec2 * outY)
 {
-	vec2 yAxis = vec2{-sinf(rect.rotation), cosf(rect.rotation)};
-	vec2 xAxis = vec2{ cosf(rect.rotation), sinf(rect.rotation)};
-
-    float hx = rect.size.x * 0.25f;
-    float hy = rect.size.y * 0.25f;
-
-	vec2 dir = point - rect.position;
-    float px = vec2Dot(dir, xAxis);
-    float py = vec2Dot(dir, yAxis);
-
-	px = std::clamp(px, -hx, hx);
-    py = std::clamp(py, -hy, hy);
-
-	vec2 p = rect.position + xAxis * px + yAxis * py;
-    return p;
+    *outX = vec2Norm({m->m[0][0], m->m[0][1]});  // row 0
+    *outY = vec2Norm({m->m[1][0], m->m[1][1]});  // row 1
 }
 
-b32 IsColliding(const Collider2D & a, const Collider2D & b, CollisionData * outData)
+vec3 mat4GetPosition(mat4 * m)
 {
-	if (a.type == COLLIDER_RECTANGLE && b.type == COLLIDER_RECTANGLE)
-	{
-		vec2 axes[4];
-		axes[0] = vec2{-sinf(a.rotation), cosf(a.rotation)};
-		axes[1] = vec2{ cosf(a.rotation), sinf(a.rotation)};
-		axes[2] = vec2{-sinf(b.rotation), cosf(b.rotation)};
-		axes[3] = vec2{ cosf(b.rotation), sinf(b.rotation)};
-
-		CollisionData bestCD;
-		CollisionData currentCD;
-
-		bestCD.penetration = 10000.0f;
-		for (const vec2 & axis : axes)
-		{
-			if (!IsCollidingOnAxis(axis, a, b, currentCD))
-				return false;
-
-			if (currentCD.penetration <= bestCD.penetration)
-				bestCD = currentCD;
-		}
-
-		RendererPushCircle(DEBUG_RENDER_CMDS, vec3{bestCD.normal.x, bestCD.normal.y, 0.0f}, 0.0f, {0.1f,0.1f}, {1.0f, 0.0f, 0.0f}, 1.0f, 30);
-		if (outData != NULL) *outData = bestCD;
-		return true;
-	}
-	if (a.type == COLLIDER_RECTANGLE && b.type == COLLIDER_CIRCLE)
-	{
-		vec2 closestPoint = ClosestPointOnRect(a, b.position);
-		f32 dist = vec2Dist(closestPoint, b.position);
-
-		if (dist <= 0.5f / 4.0f)
-		{
-			return true;
-		}
-
-		return false;
-	}
-
-	return true;
+	return {m->m[3][0], m->m[3][1], m->m[3][2]};
 }
 
-bool IsLinesColliding(vec2 startA, vec2 endA, vec2 startB, vec2 endB, vec2 * outIntersection)
+vec2 mat4GetPositionVec2(const mat4 * m)
 {
-	float uA = ((endB.x-startB.x)*(startA.y-startB.y) - (endB.y-startB.y)*(startA.x-startB.x)) / ((endB.y-startB.y)*(endA.x-startA.x) - (endB.x-startB.x)*(endA.y-startA.y));
-	float uB = ((endA.x-startA.x)*(startA.y-startB.y) - (endA.y-startA.y)*(startA.x-startB.x)) / ((endB.y-startB.y)*(endA.x-startA.x) - (endB.x-startB.x)*(endA.y-startA.y));
-
-	if (uA >= 0 && uA <= 1 && uB >= 0 && uB <= 1)
-	{
-		float intersectionX = startA.x + (uA * (endA.x-startA.x));
-		float intersectionY = startA.y + (uA * (endA.y-startA.y));
-		if (outIntersection != NULL) *outIntersection = vec2{intersectionX, intersectionY};
-		return true;
-	}
-	return false;
+	return {m->m[3][0], m->m[3][1]};
 }
 
-bool IsLineColliding(const Collider2D & collider, vec2 start, vec2 end, vec2 * outPoint)
+vec2 mat4GetScale2D(const mat4 * m)
 {
-	vec2 xAxis = vec2{ cosf(collider.rotation), sinf(collider.rotation)};
-	vec2 yAxis = vec2{-sinf(collider.rotation), cosf(collider.rotation)};
-
-	f32 halfExtentX = collider.size.x / 4.0f;
-	f32 halfExtentY = collider.size.y / 4.0f;
-
-	vec2 vertices[4];
-	vertices[0] = collider.position + (xAxis * halfExtentX) + (yAxis * halfExtentY);
-	vertices[1] = collider.position - (xAxis * halfExtentX) + (yAxis * halfExtentY);
-	vertices[2] = collider.position - (xAxis * halfExtentX) - (yAxis * halfExtentY);
-	vertices[3] = collider.position + (xAxis * halfExtentX) - (yAxis * halfExtentY);
-
-	bool colliding = false;
-	f32 closestDist = std::numeric_limits<float>::max();;
-	vec2 closestPoint= {0,0};
-	for (int i = 0; i < 4; i++)
-	{
-		vec2 intersection;
-		if (IsLinesColliding(start, end, vertices[i], vertices[(i + 1) % 4], &intersection))
-		{
-			colliding = true;
-			f32 dist= vec2Dist(start, intersection);
-			if (dist <= closestDist)
-			{
-				closestPoint = intersection;
-				closestDist = dist;
-			}
-			RendererPushCircle(DEBUG_RENDER_CMDS, {intersection.x, intersection.y, 0.0f}, 0.0f, {0.1f,0.1f}, {1.0f, 0.0f, 0.0f}, 1.0f, 30);
-		}
-	}
-
-	if (colliding && outPoint != NULL) { *outPoint = closestPoint; }
-
-	return colliding;
+	return {sqrtf(m->m[0][0]*m->m[0][0] + m->m[0][1]*m->m[0][1]), sqrtf(m->m[1][0]*m->m[1][0] + m->m[1][1]*m->m[1][1])};
 }

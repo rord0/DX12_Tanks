@@ -84,9 +84,9 @@ void RendererPushLine(RendererPushBuffer * pb, vec2 startPos, vec2 endPos, vec4 
     PushRenderSortEntry(pb, sortEntry);
 }
 
-void RendererPushCircle(RendererPushBuffer * pb, vec3 position, f32 rotation, vec2 scale, vec3 color, float fill, u16 layer)
+void RendererPushCircle(RendererPushBuffer * pb, vec2 position, f32 rotation, vec2 scale, vec3 color, float fill, u16 layer)
 {
-    RenderEntryDebugCircle entry = {RENDER_ENTRY_TYPE_DEBUG_CIRCLE, position, rotation, scale, color, fill};
+    RenderEntryDebugCircle entry = {RENDER_ENTRY_TYPE_DEBUG_CIRCLE, {position.x, position.y, 0.0f}, rotation, scale, color, fill};
     u32 entryOffset = PushRenderEntry(pb, entry);
 
     RenderSortEntry sortEntry = {RENDER_ENTRY_TYPE_DEBUG_CIRCLE, layer, entryOffset};
@@ -141,6 +141,17 @@ void RendererPushScrollingTexture(RendererPushBuffer * pb, u32 textureID, vec2 p
 {
 	const RenderEntryType entryType = RENDER_ENTRY_TYPE_SCROLL_TEXTURE;
 	RenderEntryScrollTexture entry = {entryType, {pos, size, offset, tilingAmount, textureID}};
+
+    u32 entryOffset = PushRenderEntry(pb, entry);
+
+    RenderSortEntry sortEntry = {entryType, layer, entryOffset};
+    PushRenderSortEntry(pb, sortEntry);
+}
+
+void RendererPushWorldBorder(RendererPushBuffer * pb, vec2 pos, vec2 size, f32 alpha, f32 offset, u16 layer)
+{
+	const RenderEntryType entryType = RENDER_ENTRY_TYPE_WORLD_BORDER;
+	RenderEntryWorldBorder entry = {entryType, {pos, size, alpha, offset}};
 
     u32 entryOffset = PushRenderEntry(pb, entry);
 

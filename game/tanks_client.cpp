@@ -2,8 +2,11 @@
 #include "serialize.hpp"
 #include "tanks.hpp"
 #include "tanks_math.hpp"
+#include "tanks_server.hpp"
+#include "transforms.hpp"
 #include "util.hpp"
 #include "render_commands.hpp"
+#include "prefabs.hpp"
 #include "ui.hpp"
 #include "ui.cpp"
 #include "ui_styles.cpp"
@@ -366,20 +369,6 @@ void TankPlayFireEffects(u16 playerID, vec2 hitPosition, GameState * state)
 	EmitParticles(&state->impactEmitter, hitPosition, RandomDirection(&state->random));
 }
 
-void DEBUG_SyncTanks(Tank * tanks, TankGFX * tankGFX)
-{
-	for (int i = 0; i < MAX_PLAYERS; i++)
-	{
-		tankGFX[i].playerID  = tanks[i].playerID;
-		tankGFX[i].position  = tanks[i].position;
-		tankGFX[i].rotation  = tanks[i].rotation;
-		tankGFX[i].turretRot = tanks[i].turretRot;
-		tankGFX[i].health	 = tanks[i].health;
-		tankGFX[i].active	 = tanks[i].active;
-		tankGFX[i].style	 = tanks[i].style;
-	}
-}
-
 void UpdateTankGFX(TankGFX * tank, double deltaTime)
 {
 	if (!(tank->active)) { return; }
@@ -485,18 +474,29 @@ ParticleEmitter InitEmitter(f32 startLifetime, u32 maxParticles, Arena * arena)
 	return out;
 }
 
+void ClientLoadTextures(HashMap * handles, PlatformAPI * platform)
+{
+	u32 textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_airdrop.png");
+	HashMapInsert(handles, TEXTURE_AIRDROP_PATH, &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_barrel.png");
+	HashMapInsert(handles, TEXTURE_BARREL_PATH, &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_building_01.png");
+	HashMapInsert(handles, TEXTURE_BUILDING_LARGE_PATH, &textureHandle);
+}
+
 void ClientStart(GameState * state, GameMemory * gameMemory)
 {
-	state->permArena = ArenaInit((u8*)gameMemory->permStorage + sizeof(GameState) + sizeof(ServerState),
-								  gameMemory->permStorageSize - sizeof(GameState) - sizeof(ServerState));
-
     state->tankAtlasHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"tank_parts.png");
     state->shellImpactTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"shell_impact.png");
     state->customizeIconTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"customize_icon.png");
     state->targetIconTextureHandle    = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"target_icon.png");
     state->hamburgerIconTextureHandle    = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"hamburger_icon.png");
     state->desertBackgroundTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"background_desert.png");
-	state->airdropTextureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"images/props/props_airdrop.png");
+
+	state->textureHandles = HashMapInit(sizeof(u32), 33, ArenaPush(&state->permArena, HashMapSizeRequired(sizeof(u32), 33)));
+	ClientLoadTextures(&state->textureHandles, &gameMemory->platform);
 
 	state->interFontHandle = gameMemory->platform.loadFont(RESOURCES_PATH"fonts/Inter/Inter_18pt-Bold.png", RESOURCES_PATH"fonts/Inter/Inter_18pt-Bold.json");
     ParseTextureAtlasCSV(gameMemory, state, RESOURCES_PATH"tank_parts.csv");
@@ -536,6 +536,16 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 	state->random = {0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL};
 	state->cameraZoom = 1.25f;
 	state->ui = (UILayout*)ArenaPush(&state->permArena, sizeof(UILayout));
+	state->props = (TransformHierarchy*)ArenaPush(&state->permArena, sizeof(TransformHierarchy));
+	state->instances = ArrayInit(sizeof(PrefabInstance), 256, ArenaPush(&state->permArena, sizeof(PrefabInstance) * 256));
+
+	Array prefabData = ParsePrefabInstancesCSV("prefab_instances.csv", &state->frameArena);
+	for (int i = 0; i < prefabData.count; i++)
+	{
+		PrefabInstanceData data = *((PrefabInstanceData*)prefabData.elements + i);
+		PrefabInstance instance = CreatePrefabInstance(data, NULL, state->props);
+		ArrayPush(&state->instances, &instance);
+	}
 }
 
 void ClientStop(GameState * state, PlatformAPI * platform)
@@ -1246,6 +1256,45 @@ void DrawScrollingBackground(GameState * state, GameInput * input, RendererPushB
 	RendererPushScrollingTexture(renderCommands, state->desertBackgroundTextureHandle, {-halfWidth, -halfHeight}, size, uvOffset, tilingAmount, 0);
 }
 
+void DrawPrefab(const PrefabInstance * instance, GameState * state, RendererPushBuffer * renderCMDs)
+{
+	const Prefab * prefab = PREFABS[instance->prefabID];
+
+	u32 textureHandle = 0;
+	HashMapGet(&state->textureHandles, prefab->textureName, &textureHandle);
+
+	mat4 prefabModel = ModelMatrix2D(prefab->position, prefab->rotation, prefab->scale);
+	mat4 instanceModel = state->props->transforms[instance->transformIndex].world;
+	RendererPushImage(renderCMDs, textureHandle, 1.0f, prefabModel * instanceModel, prefab->layer);
+}
+
+void DrawWorldBorder(RendererPushBuffer * renderCMDs, GameState * state)
+{
+	f32 offset = -0.16f;
+	vec4 lineColor = {1.0f, 0.0f, 0.0f, 0.5f};
+	vec2 corners[4] = {{ WORLD_EXTENTS.x - offset, WORLD_EXTENTS.z - offset}, // right, up
+					   { WORLD_EXTENTS.y + offset, WORLD_EXTENTS.z - offset}, // left, up
+			           { WORLD_EXTENTS.y + offset, WORLD_EXTENTS.w + offset }, // left, down
+					   { WORLD_EXTENTS.x - offset, WORLD_EXTENTS.w + offset }}; // right, down
+
+	for (int i = 0; i < 4; i++)
+	{
+		vec2 start = corners[i];
+		vec2 end   = corners[(i + 1) % 4];
+		RendererPushLine(renderCMDs, start, end, lineColor, 0.01f, 5);
+	}
+
+	f32 borderWidth = (fabs(corners[1].y) +  fabs(corners[0].x));
+	f32 borderHeight = (fabs(corners[1].y) +  fabs(corners[2].y));
+	f32 borderExtent = 3.0f;
+
+	f32 uvOffset = state->time / 16.0f;
+	RendererPushWorldBorder(renderCMDs, corners[1] + vec2{-borderExtent, 0.0f}, 		 {borderWidth + borderExtent * 2.0f, borderExtent}, 1.0f, uvOffset, 5);
+	RendererPushWorldBorder(renderCMDs, corners[2] + vec2{-borderExtent, 0.0f}, 		 {3.0f, borderHeight}, 1.0f, uvOffset,5);
+	RendererPushWorldBorder(renderCMDs, corners[2] + vec2{-borderExtent, -borderExtent}, {borderWidth + borderExtent * 2.0f, borderExtent}, 1.0f, uvOffset,5);
+	RendererPushWorldBorder(renderCMDs, corners[3], {borderExtent, borderHeight}, 1.0f, uvOffset, 5);
+}
+
 void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, RendererPushBuffer * renderCommands)
 {
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
@@ -1266,6 +1315,7 @@ void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, Re
 	SimulateParticles(&state->shellTrailEmitter, input->deltaTime);
 	SimulateParticles(&state->impactEmitter,     input->deltaTime);
 	DrawParticles(renderCommands, state);
+	DrawWorldBorder(renderCommands, state);
 
 	//RendererPushImage(renderCommands, state->airdropTextureHandle, {{TEST_}})
 
@@ -1273,13 +1323,22 @@ void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, Re
 	TankGFX * localPlayer = &state->tanks[state->playerID];
 	state->cameraPos = vec2SmoothDamp(state->cameraPos, localPlayer->position, &state->cameraVelocity, 1.0f, 100.0f, input->deltaTime);
 
+	f32 angle = fmodf(state->time, 2.0f * PI);
+
+	state->props->UpdateTransforms();
+	for (int i = 0; i < state->instances.count; i++)
+	{
+		PrefabInstance * instance = (PrefabInstance*)state->instances.elements + i;
+		DrawPrefab(instance, state, renderCommands);
+	}
+
 	for (int i = 0; i < MAX_PLAYERS; i++)
 	{
 		UpdateTankGFX(&state->tanks[i], input->deltaTime);
 		DrawTank(state->tanks[i], renderCommands, state);
 	}
-}
 
+}
 void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands, RendererPushBuffer * uiRenderCMDs)
 {
     state->time += input->deltaTime;

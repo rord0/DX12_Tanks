@@ -3,6 +3,7 @@
 
 #include "core.h"
 #include "arena.h"
+#include "array.h"
 
 #include <cstddef>
 #include <iterator>
@@ -141,7 +142,7 @@ typedef struct RendererResourcesDX12 {
     Arena instanceDataArena;
     Array drawCMDs;
 
-    InstanceRenderData IRD[9];
+    InstanceRenderData IRD[10];
     static constexpr size_t instanceCount = _countof(IRD);
 	vec4 clearColor;
     // Matrices

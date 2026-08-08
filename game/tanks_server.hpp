@@ -3,11 +3,14 @@
 
 #include "../core.h"
 #include "tanks.hpp"
+#include "tanks_client.hpp"
+#include "collision.hpp"
 #include "tanks_math.hpp"
 #include <limits.h>
 
 #define TICK_RATE 60
 #define TICK_DURATION (1.0 / TICK_RATE)
+#define TURRET_RANGE 2.0f
 
 typedef struct {
 	bool active;
@@ -15,13 +18,11 @@ typedef struct {
 	u16 playerID;
 	u16 health;
 	u16 kills;
-	bool killsChanged;
-	vec2 position;
 	f32 turretRot;
-	f32 rotation;
 	f32 lastFireTime;
 	TankStyle style;
-	Collider2D collider;
+	u32 transformIndex;
+	u32 colliderID;
 	u8 input;
 	char displayName[32];
 } Tank;
@@ -32,12 +33,16 @@ typedef struct {
 	Tank tanks[8];
 	u32 playerCount;
 	Arena tempArena;
+	Arena permArena;
 	PlatformAPI platform;
 	double last_tick;
-	PrefabInstance instance;
+	TransformHierarchy * transforms;
+	Array instances;
+	CollisionSystem2D collision;
 } ServerState;
 
 const vec2 RR_SPAWN_POSITIONS[4] = {{-1.0f, 1.0f}, {1.0f, 1.0f}, {-1.0f, -1.0f}, {1.0f, -1.0f}};
+const vec4 WORLD_EXTENTS = {2.0f, -2.0f, 2.0f, -2.0f}; // RIGHT, LEFT, UP, DOWN
 
 void ServerStart(ServerState * state, u16 port, u16 maxPlayers);
 void ServerStop(ServerState * state);

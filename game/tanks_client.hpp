@@ -2,11 +2,13 @@
 #define TANKS_CLIENT_H
 
 #include "../core.h"
+#include "../array.h"
 #include "tanks_math.hpp"
 #include "tanks_server.hpp"
 #include "tanks.hpp"
 #include "ui.hpp"
 #include "util.hpp"
+#include "hashmap.hpp"
 
 #include <cassert>
 #include <charconv>
@@ -81,7 +83,7 @@ typedef struct {
 	u32 hamburgerIconTextureHandle;
 	u32 targetIconTextureHandle;
 	u32 desertBackgroundTextureHandle;
-	u32 airdropTextureHandle;
+	HashMap textureHandles;
     i32 interFontHandle;
 	AtlasEntry * tankAtlasEntries;
 	SpriteSheet fireEffectSheet;
@@ -103,6 +105,8 @@ typedef struct {
 	f32 cameraZoom;
 	pcg32_random_t random;
 	UILayout * ui;
+	TransformHierarchy * props;
+	Array instances;
 	ClientState clientState;
 	char serverIP[64];
 	char displayName[32];

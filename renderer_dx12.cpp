@@ -381,6 +381,23 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
 								_countof(scrollTextureInputElementDescs),
 								RESOURCES_PATH"shaders/scrolling_texture.hlsl",
 								RESOURCES_PATH"shaders/scrolling_texture.hlsl");
+
+    const D3D12_INPUT_ELEMENT_DESC worldBorderInputElementDescs[] = {
+        { "Position",      0, DXGI_FORMAT_R32G32_FLOAT,	1, 0, 							 D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "Size",  	       0, DXGI_FORMAT_R32G32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "Alpha",     	   0, DXGI_FORMAT_R32_FLOAT,	1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "Offset",    	   0, DXGI_FORMAT_R32_FLOAT,	1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+    };
+
+    InitInstanceRenderData(&res.IRD[9], res.textureVertexBufferView, res.textureIndexBufferView, 0, sizeof(WorldBorderInstanceData), 9);
+    CreateInstancePipelineState(&res.IRD[9].PSO,
+								state.device,
+								res.rootSignature.Get(),
+								&worldBorderInputElementDescs[0],
+								_countof(worldBorderInputElementDescs),
+								RESOURCES_PATH"shaders/world_border.hlsl",
+								RESOURCES_PATH"shaders/world_border.hlsl");
+
     return res;
 }
 
@@ -439,6 +456,7 @@ void DrawInstance(const DrawInstanceCMD * cmd, RendererState & state, RendererRe
 {
 	switch (cmd->instanceID)
 	{
+		case 9:
 		case 8:
 		case 7:
 		case 6:
@@ -611,6 +629,7 @@ size_t RenderEntrySizeof(void * entry)
 		case RENDER_ENTRY_TYPE_SDF_RECT:		return sizeof(RenderEntrySDFRect);
 		case RENDER_ENTRY_TYPE_SDF_TRIANGLE:	return sizeof(RenderEntrySDFTriangle);
 		case RENDER_ENTRY_TYPE_SCROLL_TEXTURE:	return sizeof(RenderEntryScrollTexture);
+		case RENDER_ENTRY_TYPE_WORLD_BORDER:	return sizeof(RenderEntryWorldBorder);
 		case RENDER_ENTRY_TYPE_TEXT:
 		{
 			RenderEntryText * textEntry = (RenderEntryText*)entry;
@@ -826,6 +845,11 @@ void ProcessSortEntries(RendererPushBuffer * pb, InstanceRenderData * instanceRe
 			{
                 RenderEntryScrollTexture * entry = (RenderEntryScrollTexture*)(pb->memory + sortEntry.pushBufferOffset);
                 RendererPushInstance(&instanceRenderData[8], drawCMDs, &entry->instanceData, sortEntry.layer);
+			} break;
+			case RENDER_ENTRY_TYPE_WORLD_BORDER:
+			{
+                RenderEntryWorldBorder * entry = (RenderEntryWorldBorder*)(pb->memory + sortEntry.pushBufferOffset);
+                RendererPushInstance(&instanceRenderData[9], drawCMDs, &entry->instanceData, sortEntry.layer);
 			} break;
             default:
             {

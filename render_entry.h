@@ -13,6 +13,7 @@ typedef enum
     RENDER_ENTRY_TYPE_SDF_RECT,
     RENDER_ENTRY_TYPE_SDF_TRIANGLE,
     RENDER_ENTRY_TYPE_SCROLL_TEXTURE,
+    RENDER_ENTRY_TYPE_WORLD_BORDER,
     RENDER_ENTRY_TYPE_CLEAR,
 	RENDER_ENTRY_TYPE_SET_PROJ,
 } RenderEntryType;
@@ -93,6 +94,11 @@ typedef struct {
     RenderEntryHeader header;
 	ScrollTextureInstanceData instanceData;
 } RenderEntryScrollTexture;
+
+typedef struct {
+    RenderEntryHeader header;
+	WorldBorderInstanceData instanceData;
+} RenderEntryWorldBorder;
 
 typedef struct {
     RenderEntryType type;

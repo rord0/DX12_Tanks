@@ -79,6 +79,12 @@ mat4 operator*(mat4 a, mat4 b)
     return result;
 }
 
+typedef struct mat2
+{
+    float m[2][2];
+	mat2 transpose();
+} mat2;
+
 bool operator==(vec4 A, vec4 B) { return (A.x == B.x) && (A.y == B.y) && (A.z == B.z) && (A.w == B.w); }
 
 struct vec2 {
@@ -108,6 +114,14 @@ vec2 & operator*=(vec2 & V, f32 c)
 {
     V = c * V;
     return V;
+}
+
+vec2 operator*(const vec2 & v, const mat2 & m)
+{
+    vec2 result;
+    result.x = v.x * m.m[0][0] + v.y * m.m[1][0];
+    result.y = v.x * m.m[0][1] + v.y * m.m[1][1];
+    return result;
 }
 
 vec2 & operator+=(vec2 & A, vec2 B)
@@ -194,6 +208,13 @@ typedef struct {
 } ScrollTextureInstanceData;
 
 typedef struct {
+	vec2 position;
+	vec2 size;
+	f32 alpha;
+	f32 offset;
+} WorldBorderInstanceData;
+
+typedef struct {
 	vec4 fillColor;
 	f32 strokeWidth;
 } TextStyle;
@@ -223,7 +244,6 @@ typedef struct {
 } NetworkEvent;
 
 #include "render_entry.h"
-#include "array.h"
 
 ////////////////////
 // Function Typedefs
