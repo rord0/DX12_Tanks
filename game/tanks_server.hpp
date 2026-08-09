@@ -11,6 +11,7 @@
 #define TICK_RATE 60
 #define TICK_DURATION (1.0 / TICK_RATE)
 #define TURRET_RANGE 2.0f
+#define ROUND_TIME 120.0f
 
 typedef struct {
 	bool active;
@@ -36,6 +37,8 @@ typedef struct {
 	Arena permArena;
 	PlatformAPI platform;
 	double last_tick;
+	double roundTimer;
+	bool roundOver;
 	TransformHierarchy * transforms;
 	Array instances;
 	CollisionSystem2D collision;

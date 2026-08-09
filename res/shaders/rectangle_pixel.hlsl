@@ -16,6 +16,6 @@ float rectangle(float2 uv, float w)
 
 float4 PSmain(PixelShaderInput IN) : SV_TARGET
 {
-    float4 pixelColor = {IN.color.xyz, rectangle(IN.UV, IN.fill/2)};
+    float4 pixelColor = {IN.color.xyz, IN.fill};
     return pixelColor;
 }

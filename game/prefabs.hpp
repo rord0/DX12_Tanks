@@ -35,12 +35,12 @@ typedef struct
 	u32 colliderID;
 } PrefabInstance;
 
-#define PROPS_RENDER_SORT_LAYER 2
+#define PROPS_RENDER_SORT_LAYER 4
 
 const ColliderData2D AIRDROP_COLLIDERS[] = {COLLIDER_RECTANGLE, {0.0f, 0.0f}, 0.0f, {0.2f, 0.2f}, true};
 const ColliderData2D BARREL_COLLIDERS[]  = {COLLIDER_CIRCLE,    {0.0f,0.0f}, 0.0f,  {0.2f, 0.2f}, true};
 
-const ColliderData2D BUILDING_LARGE_COLLIDERS[2] = {{COLLIDER_RECTANGLE, {0.025f, 0.0f}, 0.0f, {0.45f, 0.475f}, true},
+const ColliderData2D BUILDING_LARGE_COLLIDERS[2] = {{COLLIDER_RECTANGLE, {0.025f, 0.0f}, 0.0f, {0.44f, 0.475f}, true},
 												    {COLLIDER_RECTANGLE, {-0.22f, 0.044f}, 0.0f, {0.09f, 0.275f}, true}};
 
 const Prefab PREFAB_AIRDROP = {TEXTURE_AIRDROP_PATH, {0.0f, 0.0f}, {0.5f, 0.5f}, 0.0f,

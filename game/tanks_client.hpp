@@ -59,6 +59,7 @@ typedef struct
 	TankStyle style;
 	char displayName[32];
 	u32 kills;
+	vec2 lastTrackSpawnPos;
 } TankGFX;
 
 typedef enum ClientState
@@ -92,6 +93,7 @@ typedef struct {
 	ParticleEmitter explosionEmitter;
 	ParticleEmitter shellTrailEmitter;
 	ParticleEmitter impactEmitter;
+	ParticleEmitter tankTrackEmitter;
 	TankGFX tanks[8]; 
 	u16 playerID;
 	TankStyle playerStyle;
@@ -103,6 +105,8 @@ typedef struct {
 	bool showConnFailedPopup;
 	vec2 cameraVelocity;
 	f32 cameraZoom;
+	f32 roundTimer;
+	bool roundOver;
 	pcg32_random_t random;
 	UILayout * ui;
 	TransformHierarchy * props;
@@ -110,6 +114,7 @@ typedef struct {
 	ClientState clientState;
 	char serverIP[64];
 	char displayName[32];
+	char winningPlayerName[32];
 } GameState;
 
 void ClientStart(GameState * state, GameMemory * gameMemory);

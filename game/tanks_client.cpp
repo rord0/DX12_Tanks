@@ -128,10 +128,10 @@ void DrawHealthbar(RendererPushBuffer * cmdBuffer, vec2 center, f32 remaining, f
     DebugGeoInstanceData hbFlash = {vec3{hbLeftside + ((healthBarWidth*flashAmt)/4.0f),center.y, 0.0f}, {healthBarWidth*flashAmt, healthBarHeight}, vec3{1.0f,1.0f,1.0f}, 0, 1.0f};
     DebugGeoInstanceData hbLost = {vec3{hbRightside - ((healthBarWidth*lost)/4.0f), center.y, 0.0f}, {healthBarWidth*lost, healthBarHeight}, hbLostColor, 0, 1.0f};
 
-	RendererPushRectangle(cmdBuffer, hbBackground, 3);
-	RendererPushRectangle(cmdBuffer, hbLost, 4);
-	RendererPushRectangle(cmdBuffer, hbFlash, 4);
-	RendererPushRectangle(cmdBuffer, hbRemaining, 5);
+	RendererPushRectangle(cmdBuffer, hbBackground, 5);
+	RendererPushRectangle(cmdBuffer, hbLost, 6);
+	RendererPushRectangle(cmdBuffer, hbFlash, 6);
+	RendererPushRectangle(cmdBuffer, hbRemaining, 7);
 }
 
 void CalculateTankUVs(TankStyle style, AtlasEntry * atlasEntries, vec4 * uvs)
@@ -176,9 +176,9 @@ void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 
 	f32 tankRot = tank.rotation + (PI/2.0f);
 
-	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.8f, 1.0f}, uvs[0], 1);
-	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.64f, 1.0f}, uvs[1], 2);
-	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {turretPos.x, turretPos.y, 0.0f}, tank.turretRot + (PI/2.0f), {0.57f, 1.0f}, uvs[2], 3);
+	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.8f, 1.0f}, uvs[0], 3);
+	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.64f, 1.0f}, uvs[1], 4);
+	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {turretPos.x, turretPos.y, 0.0f}, tank.turretRot + (PI/2.0f), {0.57f, 1.0f}, uvs[2], 5);
 
 	DrawHealthbar(cmdBuffer, vec2{tank.position.x, tank.position.y + 0.3f}, ((float)tank.health / (float)TANK_MAX_HEALTH), tank.healthLerp);
 	bool isEnemyTank = tank.playerID != state->playerID;
@@ -187,8 +187,9 @@ void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 	RendererPushText(cmdBuffer, tank.displayName, 0.05f, state->interFontHandle, vec2{tank.position.x - 0.2f, tank.position.y + 0.34f}, textStyle, true, 30);
 
 	// DEBUG VISUALS
-    //RendererPushCircle(cmdBuffer, vec3{turretPos.x, turretPos.y, 0}, 0, {0.05f,0.05f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
-    //RendererPushCircle(cmdBuffer, vec3{turretCenter.x, turretCenter.y, 0}, 0, {0.05f,0.05f}, {1.0f, 1.0f, 0.0f}, 1.0f, 30);
+    // RendererPushCircle(cmdBuffer, tank.position + tankDir*0.2, 0, {0.05f,0.05f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
+    // RendererPushCircle(cmdBuffer, vec3{turretPos.x, turretPos.y, 0}, 0, {0.05f,0.05f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
+    // RendererPushCircle(cmdBuffer, vec3{turretCenter.x, turretCenter.y, 0}, 0, {0.05f,0.05f}, {1.0f, 1.0f, 0.0f}, 1.0f, 30);
 }
 
 void DrawSpriteFrame(RendererPushBuffer * cmdBuffer, vec2 position, vec2 scale, f32 rotation, SpriteSheet * sheet, u32 spriteIndex)
@@ -206,7 +207,7 @@ void DrawSpriteFrame(RendererPushBuffer * cmdBuffer, vec2 position, vec2 scale, 
 
 	vec4 uv = {(f32)animFrameWidth / (f32)sheet->sheetWidth, (f32)animFrameHeight / (f32)sheet->sheetHeight, (f32)sheetPosX / (f32)sheet->sheetWidth, (f32)sheetPosY / (f32)sheet->sheetHeight};
 
-	RendererPushSubTexture(cmdBuffer, sheet->textureHandle, {position.x, position.y, 0.0f}, rotation, scale, uv, 3);
+	RendererPushSubTexture(cmdBuffer, sheet->textureHandle, {position.x, position.y, 0.0f}, rotation, scale, uv, 5);
 }
 
 vec4 HSVtoRGBA(float h, float s, float v)
@@ -232,7 +233,7 @@ vec4 GetHSVSpectrumColor(float time, float speed = 1.0f)
     return HSVtoRGBA(hue, 1.0f, 1.0f);
 }
 
-vec2 MousePosToWorld(vec2i mousePos, vec2 cameraPos, vec2i viewportSize, mat4 proj)
+vec2 MousePosToWorld(vec2i mousePos, vec2 cameraPos, vec2i viewportSize, f32 cameraZoom)
 {
 	float aspect = (float)viewportSize.x / (float)viewportSize.y;
 	vec2 mouseNDC;
@@ -240,7 +241,7 @@ vec2 MousePosToWorld(vec2i mousePos, vec2 cameraPos, vec2i viewportSize, mat4 pr
 	mouseNDC.y = 1.0f - ((2.0f * mousePos.y) / (float)viewportSize.y);
 
 	vec4 mouseClip = {mouseNDC.x, mouseNDC.y, 0.0f, 1.0f};
-	vec4 worldPos = inverseOrthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f) * mouseClip;
+	vec4 worldPos = inverseOrthographicProjection(aspect, -aspect, 1.0f * cameraZoom, -1.0f * cameraZoom, -0.01f, 100.0f) * mouseClip;
 
 	return {worldPos.x + cameraPos.x, worldPos.y + cameraPos.y};
 }
@@ -369,7 +370,7 @@ void TankPlayFireEffects(u16 playerID, vec2 hitPosition, GameState * state)
 	EmitParticles(&state->impactEmitter, hitPosition, RandomDirection(&state->random));
 }
 
-void UpdateTankGFX(TankGFX * tank, double deltaTime)
+void UpdateTankGFX(TankGFX * tank, ParticleEmitter * trackEmitter, double deltaTime)
 {
 	if (!(tank->active)) { return; }
 
@@ -388,6 +389,21 @@ void UpdateTankGFX(TankGFX * tank, double deltaTime)
 	else if (tank->healthLerp < healthNormalized)
 	{
 		tank->healthLerp = healthNormalized;
+	}
+
+	vec2 forward = vec2{ cosf(tank->rotation), sinf(tank->rotation) };
+	vec2 right   = vec2{ -sinf(tank->rotation), cosf(tank->rotation) }; // perpendicular to forward
+
+	vec2 tankBack = tank->position + forward * 0.2f;
+
+	vec2 tankBackLeft  = tankBack + right * 0.1f;
+	vec2 tankBackRight = tankBack - right * 0.1f;
+
+	if (vec2Dist(tankBack, tank->lastTrackSpawnPos) > 0.05f)
+	{
+		tank->lastTrackSpawnPos = tankBack;
+		EmitParticles(trackEmitter, tankBackLeft, vec2{cosf(tank->rotation),  sinf(tank->rotation)});
+		EmitParticles(trackEmitter, tankBackRight, vec2{cosf(tank->rotation),  sinf(tank->rotation)});
 	}
 }
 
@@ -443,7 +459,7 @@ void DrawShellTrailEffects(RendererPushBuffer * renderCmds, GameState * state)
 
 void DrawShellImpactEffects(RendererPushBuffer * renderCmds, GameState * state)
 {
-	for (int i = 0; i < state->shellTrailEmitter.maxParticles; i++)
+	for (int i = 0; i < state->impactEmitter.maxParticles; i++)
 	{
 		const Particle * effect = &state->impactEmitter.particles[i];
 		if (!effect->active) { continue; }
@@ -453,7 +469,26 @@ void DrawShellImpactEffects(RendererPushBuffer * renderCmds, GameState * state)
 		f32 angle = atan2f(effect->direction.y, effect->direction.x);
 
 		mat4 model = ModelMatrix2D(effect->position, angle, {0.5f, 0.5f});
-		RendererPushImage(renderCmds, state->shellImpactTextureHandle, alpha, model, 1);
+		RendererPushImage(renderCmds, state->shellImpactTextureHandle, alpha, model, 2);
+	}
+}
+
+void DrawTankTracks(RendererPushBuffer * renderCMDs, GameState * state)
+{
+	for (int i = 0; i < state->tankTrackEmitter.maxParticles; i++)
+	{
+		const Particle * effect = &state->tankTrackEmitter.particles[i];
+		if (!effect->active) { continue; }
+
+
+		const f32 progress = effect->timeAlive / state->tankTrackEmitter.startLifetime;
+		f32 alpha = 1.0f - (progress);
+		vec3 color = ColorHexToRBGNormalized(0x897B54);
+		vec2 scale = {0.04, 0.15};
+
+		f32 angle = atan2f(effect->direction.y, effect->direction.x);
+		DebugGeoInstanceData data = {{effect->position.x, effect->position.y, 0.0f}, scale, color, angle, alpha};
+		RendererPushRectangle(renderCMDs, data, 1);
 	}
 }
 
@@ -463,13 +498,14 @@ void DrawParticles(RendererPushBuffer * renderCmds, GameState * state)
 	DrawExplosionEffects(renderCmds, state);
 	DrawShellTrailEffects(renderCmds, state);
 	DrawShellImpactEffects(renderCmds, state);
+	DrawTankTracks(renderCmds, state);
 }
 
 ParticleEmitter InitEmitter(f32 startLifetime, u32 maxParticles, Arena * arena)
 {
 	ParticleEmitter out;
 	out.startLifetime = startLifetime;
-	out.maxParticles = 16;
+	out.maxParticles = maxParticles;
 	out.particles = (Particle*)ArenaPush(arena, sizeof(Particle) * maxParticles);
 	return out;
 }
@@ -503,6 +539,7 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 
 	state->connected = false;
 	state->helloSent = false;
+	state->roundOver = false;
 
 	// SPRITESHEETS INITIALIZATION
 	state->fireEffectSheet.textureHandle = gameMemory->platform.platformLoadTexture(RESOURCES_PATH"tank_fire_spritesheet.png");
@@ -532,12 +569,15 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 	state->explosionEmitter  = InitEmitter(explosionAnimDuration, 16, &state->permArena);
 	state->shellTrailEmitter = InitEmitter(explosionAnimDuration * 1.5f, 16, &state->permArena);
 	state->impactEmitter     = InitEmitter(10.0f, 32, &state->permArena);
+	state->tankTrackEmitter  = InitEmitter(4.0f, 512, &state->permArena);
 
 	state->random = {0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL};
 	state->cameraZoom = 1.25f;
 	state->ui = (UILayout*)ArenaPush(&state->permArena, sizeof(UILayout));
 	state->props = (TransformHierarchy*)ArenaPush(&state->permArena, sizeof(TransformHierarchy));
 	state->instances = ArrayInit(sizeof(PrefabInstance), 256, ArenaPush(&state->permArena, sizeof(PrefabInstance) * 256));
+
+	copy_c_str(state->winningPlayerName, "Player", 32);
 
 	Array prefabData = ParsePrefabInstancesCSV("prefab_instances.csv", &state->frameArena);
 	for (int i = 0; i < prefabData.count; i++)
@@ -592,6 +632,7 @@ void ClientProcessDisconnectPacket(GameState * state, DisconnectPacket * packet)
 
 void ClientProcessUpdatePacket(GameState * state, UpdatePacket * packet)
 {
+	state->roundTimer = packet->roundTimer;
 	for (int i = 0; i < packet->count; i++)
 	{
 		PlayerUpdateData * updateData = packet->playerData + i;
@@ -599,15 +640,30 @@ void ClientProcessUpdatePacket(GameState * state, UpdatePacket * packet)
 		TankGFX * player = &state->tanks[updateData->playerID];
 		player->health = updateData->health;
 		player->position = updateData->pos;
-		player->turretRot = updateData->turretRot;
 		player->rotation = updateData->rotation;
 		player->kills = updateData->kills;
+		if (player->playerID != state->playerID) { player->turretRot = updateData->turretRot; }
 	}
 }
 
 void ClientProcessPlayerFiredPacket(GameState * state, PlayerFiredPacket * packet)
 {
 	TankPlayFireEffects(packet->playerID, packet->hitPosition, state);
+}
+
+void ClientProcessRoundOverPacket(GameState * state, RoundOverPacket * packet)
+{
+	state->roundOver = packet->roundOver;
+
+	if (state->roundOver)
+	{
+		TankGFX * tank = &state->tanks[packet->winningPlayerID];
+		if (tank->active)
+		{
+			copy_c_str(state->winningPlayerName, tank->displayName, 32);
+			state->winningPlayerName[31] = '\0';
+		}
+	}
 }
 
 void ClientHandlePacket(GameState * state, NetworkPacket * packet)
@@ -657,6 +713,14 @@ void ClientHandlePacket(GameState * state, NetworkPacket * packet)
 				ClientProcessDisconnectPacket(state, &disconnectPkt);
 			}
 		}break;
+		case PACKET_TYPE_ROUND_OVER:
+		{
+			RoundOverPacket rndOverPacket;
+			if (rndOverPacket.serialize(stream))
+			{
+				ClientProcessRoundOverPacket(state, &rndOverPacket);
+			}
+		}
 		default: break;
 	}
 }
@@ -797,7 +861,7 @@ ShapeColor BUTTON_HOVERED_COLOR = {.fillColor   = ColorHexToRBGANormalized(0x1E2
 							       .strokeColor = ColorHexToRBGANormalized(0x262D33FF)};
 
 ShapeColor BUTTON_PRESSED_COLOR = {.fillColor    = ColorHexToRBGANormalized(0x262D33CC),
-								   .strokeColor  = ColorHexToRBGANormalized(0xFF00C8FF)};
+								   .strokeColor  = ColorHexToRBGANormalized(0x4D5358FF)};
 
 ButtonStyle DEFAULT_BUTTON_STYLE = {BUTTON_STYLE, BUTTON_HOVERED_COLOR, BUTTON_PRESSED_COLOR, 6, 3};
 
@@ -930,6 +994,7 @@ void ConnectingScreen(GameState * state, GameInput * input, PlatformAPI * platfo
 			if (state->welcomeReceived)
 			{
 				state->clientState = CLIENT_STATE_CONNECTED;
+				state->roundOver = false;
 			}
 		}
 		else // Send hello message
@@ -1076,6 +1141,13 @@ void EscapeMenu(GameState * state, GameInput * input, GameMemory * gameMemory, P
 	DrawUI(*state->ui, renderCMDs);
 }
 
+void FormatTimer(i32 totalSeconds , char *buffer, size_t bufferSize)
+{
+    i32 minutes = totalSeconds / 60;
+    i32 seconds = totalSeconds % 60;
+    snprintf(buffer, bufferSize, "%d:%02d", minutes, seconds);
+}
+
 void GameHUD(GameState * state, GameInput * input, PlatformAPI * platform)
 {
 	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL};
@@ -1088,12 +1160,21 @@ void GameHUD(GameState * state, GameInput * input, PlatformAPI * platform)
 										.justify = LayoutType::START,
 									    .align = LayoutType::START,
 										.padding = {}};
+
+	FontStyle timerFontStyle = {state->interFontHandle, 40.0f, 0.25f, {1.0f, 1.0f, 1.0f}};
+	FontStyle nextRoundFontStyle = {state->interFontHandle, 28.0f, 0.3f, {1.0f, 1.0f, 1.0f}};
+	FontStyle winnerFontStyle = {state->interFontHandle, 48.0f, 0.25f, ColorHexToRBGNormalized(0xFFF1B2)};
 	
 	vec2 frameStartSize = {(f32)input->viewportSize.x, (f32)input->viewportSize.y};
+
+	char timerText[5];
+	FormatTimer((i32)state->roundTimer, timerText, sizeof(timerText));
+
 	ui.startLayout(frameStartSize, LayoutType::START, LayoutType::START, platform->measureText, platform->copyClipboardText, uiInput);
-		ui.begin("CONTAINER_I_HARDLY_KNOW_HER", {.size = {0,0.0f}, .axis = LayoutDirection::LEFT_TO_RIGHT,
-												 .justify = LayoutType::SPACE_BETWEEN,
+		ui.begin("CONTAINER_I_HARDLY_KNOW_HER", {.size = {0.0f, 0.0f}, .axis = LayoutDirection::LEFT_TO_RIGHT,
+												 .justify = LayoutType::START,
 												 .sizing = SizingType::FILL,
+												 .sizingY = SizingType::FILL,
 												 .padding = {.left = 16, .right = 16, .top = 16.0f}});
 			ui.begin("PLAYER_CARDS_CONTAINER", cardContainerLayout);
 				for (int i = 0; i < MAX_PLAYERS; i++)
@@ -1104,6 +1185,23 @@ void GameHUD(GameState * state, GameInput * input, PlatformAPI * platform)
 						PlayerCard(ui, state, player);
 					}
 				}
+			ui.end();
+			
+			ui.begin("TIMER_WINNER_CONTAINER", {.axis = LayoutDirection::TOP_TO_BOTTOM,
+												.justify = LayoutType::SPACE_BETWEEN,
+												.align = LayoutType::CENTER,
+												.sizing = SizingType::FILL, .sizingY = SizingType::FILL});
+				ui.begin("TIMERCONTAIENR", {.axis = LayoutDirection::TOP_TO_BOTTOM, .align = LayoutType::CENTER});
+					if (state->roundOver) { ui.text("NEXT_ROUND_TEXT", nextRoundFontStyle, "NEXT ROUND IN:"); }
+					ui.text("TIMER_TEXT", timerFontStyle, timerText);
+				ui.end();
+				if (state->roundOver)
+				{
+					char winningPlayerText[64];
+					snprintf(winningPlayerText, sizeof(winningPlayerText), "%s Won the Round!", state->winningPlayerName);
+					ui.text("WINNER_TEXT", winnerFontStyle, winningPlayerText);
+				}
+				ui.begin("EMPTY", {.size = {20,80}, .sizing = SizingType::FIXED}); ui.end();
 			ui.end();
 
 			ui.begin_button("OPTIONS_BUTTON", {75.0f, 75.0f}, &DEFAULT_BUTTON_STYLE);
@@ -1298,11 +1396,11 @@ void DrawWorldBorder(RendererPushBuffer * renderCMDs, GameState * state)
 void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, RendererPushBuffer * renderCommands)
 {
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
-	mat4 projection = orthographicProjection(aspect*state->cameraZoom,
-											-aspect*state->cameraZoom,
-											1.0f*state->cameraZoom,
-											-1.0f*state->cameraZoom, -0.01f, 100.0f);
-	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, state->cameraPos, input->viewportSize, projection);
+	TankGFX * localPlayer = &state->tanks[state->playerID];
+	mat4 projection = orthographicProjection(aspect * state->cameraZoom, -aspect * state->cameraZoom,
+											 1.0f * state->cameraZoom,   -1.0f * state->cameraZoom, -0.01f, 100.0f);
+	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, state->cameraPos, input->viewportSize, state->cameraZoom);
+	state->cameraPos = vec2SmoothDamp(state->cameraPos, localPlayer->position, &state->cameraVelocity, 1.0f, 100.0f, input->deltaTime);
 
 
 	ClientSendInput(state, input, platform, mouseWorld);
@@ -1314,14 +1412,13 @@ void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, Re
 	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
 	SimulateParticles(&state->shellTrailEmitter, input->deltaTime);
 	SimulateParticles(&state->impactEmitter,     input->deltaTime);
+	SimulateParticles(&state->tankTrackEmitter,  input->deltaTime);
 	DrawParticles(renderCommands, state);
 	DrawWorldBorder(renderCommands, state);
 
 	//RendererPushImage(renderCommands, state->airdropTextureHandle, {{TEST_}})
 
 	SDFShapeStyle TRI_STYLE = {ColorHexToRBGANormalized(0x402525CC), ColorHexToRBGANormalized(0x332626FF), 16, 3};
-	TankGFX * localPlayer = &state->tanks[state->playerID];
-	state->cameraPos = vec2SmoothDamp(state->cameraPos, localPlayer->position, &state->cameraVelocity, 1.0f, 100.0f, input->deltaTime);
 
 	f32 angle = fmodf(state->time, 2.0f * PI);
 
@@ -1334,7 +1431,7 @@ void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, Re
 
 	for (int i = 0; i < MAX_PLAYERS; i++)
 	{
-		UpdateTankGFX(&state->tanks[i], input->deltaTime);
+		UpdateTankGFX(&state->tanks[i], &state->tankTrackEmitter, input->deltaTime);
 		DrawTank(state->tanks[i], renderCommands, state);
 	}
 
@@ -1343,9 +1440,6 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 {
     state->time += input->deltaTime;
 	ArenaClear(&state->frameArena);
-
-	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
-	mat4 projection = orthographicProjection(aspect, -aspect, 1.0f, -1.0f, -0.01f, 100.0f);
 
     double time = state->time;
     vec4 color = GetHSVSpectrumColor(time);
@@ -1378,7 +1472,8 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	DrawScrollingBackground(state, input, renderCommands);
 
     char buf[256];
-	snprintf(buf, sizeof(buf), "MouseVP: %d, %d", input->mousePosVP.x, input->mousePosVP.y);
+	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, state->cameraPos, input->viewportSize, state->cameraZoom);
+	snprintf(buf, sizeof(buf), "MouseVP: %d, %d   World: %f, %f", input->mousePosVP.x, input->mousePosVP.y, mouseWorld.x, mouseWorld.y);
    	const char * text = "This is some text!";
 	vec2 textPos = {0.5,0};
 	vec4 textColor = {1.0f, 0.0f, 0.0f, 1.0f};

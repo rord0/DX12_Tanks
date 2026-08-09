@@ -57,7 +57,8 @@ typedef enum {
 	PACKET_TYPE_DISCONNECT,
 	PACKET_TYPE_INPUT,
 	PACKET_TYPE_UPDATE,
-	PACKET_TYPE_FIRED
+	PACKET_TYPE_FIRED,
+	PACKET_TYPE_ROUND_OVER
 } PacketType;
 
 template<typename Stream>
@@ -171,6 +172,20 @@ typedef struct ServerDisconnectPacket {
 	}
 } DisconnectPacket;
 
+typedef struct RoundOverPacket {
+	u16 winningPlayerID;
+	u8 roundOver;
+	template<typename Stream>
+	bool serialize(Stream & stream)
+	{
+		u8 type = PACKET_TYPE_ROUND_OVER;
+		SerializeU8(stream, type);
+		SerializeU16(stream, winningPlayerID);
+		SerializeU8(stream, roundOver);
+		return true;
+	}
+} RoundOverPacket;
+
 typedef struct PlayerFiredPacket {
 	u16 playerID;
 	vec2 hitPosition;
@@ -187,6 +202,7 @@ typedef struct PlayerFiredPacket {
 
 typedef struct ServerUpdatePacket {
 	u16 count;
+	f32 roundTimer;
 	PlayerUpdateData * playerData;
 	template<typename Stream>
 	bool serialize(Stream & stream, Arena * arena = nullptr)
@@ -194,6 +210,7 @@ typedef struct ServerUpdatePacket {
 		u8 type = PACKET_TYPE_UPDATE;
 		SerializeU8(stream, type);
 		SerializeU16(stream, count);
+		SerializeF32(stream, roundTimer);
 
 		if (Stream::IsReading)
 		{

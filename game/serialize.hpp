@@ -11,7 +11,6 @@
 #define SerializeV2(stream, value)   if(!serializeV2(stream, value))  { return false; }
 #define SerializeCStr(stream, value, bufferSize) if(!stream.serializeCStr(value, bufferSize)) { return false; }
 
-
 template<typename Stream>
 bool serializeF32(Stream & stream, f32 & value)
 {

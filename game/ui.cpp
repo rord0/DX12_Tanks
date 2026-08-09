@@ -341,10 +341,12 @@ void CalculateFillSizes(UILayout & ui, u32 rootIndex)
 		if (node->layoutDirection == LayoutDirection::LEFT_TO_RIGHT)
 		{
 			FillChildElementsOnAxis(ui, true, index);
+			FillChildElementsCrossAxis(ui, false, index);
 		}
 		else
 		{
 			FillChildElementsCrossAxis(ui, true, index);
+			FillChildElementsOnAxis(ui, false, index);
 		}
 		u32 end = index + ui.sizes[index];
 		u32 childIndex = index + 1;

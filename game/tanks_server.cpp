@@ -82,12 +82,34 @@ void ServerSendPlayerFiredMessage(ServerState * state, u16 playerID, vec2 hitPos
 	}
 }
 
+void ServerSendRoundOverMessage(ServerState * state, bool roundOver, u16 winningPlayerID)
+{
+	ScratchArena temp(&state->tempArena);
+
+	RoundOverPacket packet = {0};
+	packet.roundOver = roundOver;
+	packet.winningPlayerID = winningPlayerID;
+
+	WriteStream stream = {(u8*)ArenaPush(temp.arena, 1024), 1024};
+	if (!packet.serialize(stream)) { return; }
+
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		if (state->tanks[i].active)
+		{
+			state->platform.platformServerSend(stream.buffer, stream.pos, 1, state->tanks[i].connectionID);
+		}
+	}
+
+}
+
 void ServerSendUpdateMessage(ServerState * state)
 {
 	ScratchArena temp(&state->tempArena);
 
 	UpdatePacket packet;
 	packet.count = state->playerCount;
+	packet.roundTimer = (f32)state->roundTimer;
 	packet.playerData = (PlayerUpdateData*)ArenaPush(temp.arena, sizeof(PlayerUpdateData) * state->playerCount);
 
 	for (int i = 0; i < MAX_PLAYERS; i++)
@@ -194,6 +216,8 @@ void ServerStart(ServerState * state, u16 port, u16 maxPlayers)
 	state->transforms = (TransformHierarchy*)ArenaPush(&state->permArena, sizeof(TransformHierarchy));
 	state->instances = ArrayInit(sizeof(PrefabInstance), 256, ArenaPush(&state->permArena, sizeof(PrefabInstance) * 256));
 	state->collision = InitCollisionSystem2D(&state->permArena, 256, 16);
+	state->roundTimer = ROUND_TIME;
+	state->roundOver = false;
 
 
 	Array prefabData = ParsePrefabInstancesCSV("prefab_instances.csv", &state->tempArena);
@@ -238,8 +262,6 @@ void ServerProcessHelloPacket(ServerState * state, HelloPacket * packet, u32 con
 	player->connectionID = connID;
 	player->style = packet->style;
 	player->health = TANK_MAX_HEALTH;
-	//player->collider.type = COLLIDER_RECTANGLE;
-	//player->collider.size = {0.75f, 0.65f};
 	memcpy(player->displayName, packet->displayName, 32);
 	player->displayName[31] = '\0';
 
@@ -269,6 +291,8 @@ void ServerHandleDisconnect(ServerState * state, u32 connID)
 	if (!player) { return; }
 
 	player->active = false;
+	state->playerCount--;
+	state->collision.RemoveCollider(player->colliderID);
 	ServerBroadcastDisconnectMessage(state, player->playerID);
 }
 
@@ -360,6 +384,8 @@ void UpdateTank(Tank * tank, ServerState * state)
 	if ((tank->input >> 2) & 1) { inputAxis.y -= 1; } // DOWN
 	if ((tank->input >> 3) & 1) { inputAxis.x += 1; } // RIGHT
 	
+	if (state->roundOver) { return; }
+
 	transform->SetRotation(transform->rotation - (inputAxis.x * TANK_ROTATION_SPEED * TICK_DURATION));
 	vec2 tankForward = vec2Rotate({-1.0f, 0.0f}, transform->rotation);
 	transform->SetPosition(transform->position + (tankForward * TANK_MOVEMENT_SPEED * inputAxis.y * TICK_DURATION));
@@ -372,6 +398,36 @@ void UpdateTank(Tank * tank, ServerState * state)
 	if (shootPressed && state->time > tank->lastFireTime + TANK_FIRE_RATE)
 	{
 		TankShoot(tank, state);
+	}
+}
+
+u16 FindWinningPlayer(ServerState * state)
+{
+	u16 maxScore = 0;
+	u16 playerID = 0;
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		Tank * tank = &state->tanks[i];
+		if (!tank->active) continue;
+		if (tank->kills > maxScore)
+		{
+			maxScore = tank->kills;
+			playerID = tank->playerID;
+		}
+	}
+
+	return playerID;
+}
+
+void ResetPlayers(ServerState * state)
+{
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		Tank * tank = &state->tanks[i];
+		if (!tank->active) continue;
+		tank->kills = 0;
+		tank->health = TANK_MAX_HEALTH;
+		state->transforms->GetTransform(tank->transformIndex)->SetPosition(FindSpawnPosition(state));
 	}
 }
 
@@ -389,6 +445,27 @@ void ServerTick(ServerState * state, GameInput * input)
 			case NET_EVENT_PACKET:
 				ServerHandlePacket(state, netEvent->packet);
 				break;
+		}
+	}
+
+	if (state->playerCount > 0)
+	{
+		state->roundTimer -= TICK_DURATION;
+		if (state->roundTimer <= 0)
+		{
+			if (!state->roundOver)
+			{
+				state->roundOver = true;
+				state->roundTimer = 15.0f;
+				ServerSendRoundOverMessage(state, true, FindWinningPlayer(state));
+			}
+			else
+			{
+				ResetPlayers(state);
+				state->roundTimer = ROUND_TIME; 
+				state->roundOver = false;
+				ServerSendRoundOverMessage(state, false, 0);
+			}
 		}
 	}
 
