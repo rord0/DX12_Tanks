@@ -110,6 +110,17 @@ typedef struct
     Array instanceData;
 } InstanceRenderData;
 
+typedef struct SrvArena {
+    ComPtr<ID3D12DescriptorHeap> heap;
+	u32 descriptorSize;
+	u32 index;
+	u32 maxDescriptors;
+
+	void Alloc(ID3D12Device * device, u32 maxDescriptors);
+    void Push(D3D12_CPU_DESCRIPTOR_HANDLE * outCpu, D3D12_GPU_DESCRIPTOR_HANDLE * outGpu);
+	void Free(D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE gpu);
+} SrvArena;
+
 typedef struct RendererResourcesDX12 {
     // Shaders
     ID3DBlob * lineVertexShaderBlob;
@@ -132,11 +143,9 @@ typedef struct RendererResourcesDX12 {
     D3D12_VERTEX_BUFFER_VIEW lineVertexBufferView;
     D3D12_INDEX_BUFFER_VIEW lineIndexBufferView;
 
-    // TODO(get rid of this abomination): create a renderer arena and make this a SLL.
-    ComPtr<ID3D12DescriptorHeap> textureSRVHeap;
-    u32 textureCount;
-    u32 maxTexures;
+	SrvArena srvArena;
     ComPtr<ID3D12Resource> textureResources[32];
+	u32 textureCount;
 
 	Arena permanentArena;
     Arena instanceDataArena;

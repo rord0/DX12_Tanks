@@ -1,6 +1,9 @@
 #include "core.h"
 #include "includes.h"
 
+#define IMGUI_DEFINE_MATH_OPERATORS
+#include "imgui.h"
+
 #include "os_win32.cpp"
 #include "arena.cpp"
 #include "ring_buffer.cpp"
@@ -14,6 +17,16 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+
+#include "imgui.cpp"
+#include "imgui_impl_dx12.h"
+#include "imgui_impl_win32.h"
+#include "imgui_demo.cpp"
+#include "imgui_draw.cpp"
+#include "imgui_tables.cpp"
+#include "imgui_widgets.cpp"
+#include "imgui_impl_win32.cpp"
+#include "imgui_impl_dx12.cpp"
 
 #define ARRAY_IMPLEMENTATION
 #include "array.h"
@@ -68,7 +81,6 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
         switch (msg.message)
         {
             case WM_KEYDOWN:
-                TranslateMessage(&msg);
                 if (msg.wParam == 'W')
                 {
                     inputState.W.isDown = true;
@@ -211,10 +223,11 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
 			} break;
             default:
 			{
-                TranslateMessage(&msg);
-                DispatchMessage(&msg);
 			} break;
         }
+
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
     }
 }
 
@@ -283,6 +296,8 @@ void Win32UnloadGameCode(Win32GameCode * gameCode)
 
 LRESULT mainWindowCallback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    ImGui_ImplWin32_WndProcHandler(window, msg, wParam, lParam);
+
     LRESULT result = 0;
     switch (msg)
     {
@@ -362,6 +377,18 @@ RendererPushBuffer PushBufferCreate(size_t bufferSize, u32 maxSortEntries)
     pb.maxSortEntries = maxSortEntries;
     pb.sortEntries = (RenderSortEntry*)PlatformAlloc(maxSortEntries * sizeof(RenderSortEntry));
 	return pb;
+}
+
+bool InitializeDearIMGUI(HWND windowHandle)
+{
+	// Setup Dear ImGui context
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+	ImGui_ImplWin32_Init(windowHandle);
+	return true;
 }
 
 
@@ -457,6 +484,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 	RendererPushBuffer pushBuffer   = PushBufferCreate(MB(1), 8096);
 	RendererPushBuffer uiPushBuffer = PushBufferCreate(MB(1), 8096);
 
+	InitializeDearIMGUI(windowHandle);
 	InitializeFonts();
     InitializeRenderer(windowHandle, false, CLIENT_WIDTH, CLIENT_HEIGHT);
 	InitializeNetworking();
@@ -536,6 +564,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 		{
 			RUNNING = false;
 		}
+
+		// DearImGUI 
+		ImGui_ImplDX12_NewFrame();
+		ImGui_ImplWin32_NewFrame();
+		ImGui::NewFrame();
+		ImGui::ShowDemoWindow(); // Show demo window! :)
 
         ///////////////
         // Rendering

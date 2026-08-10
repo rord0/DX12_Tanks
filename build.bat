@@ -19,7 +19,7 @@ if "%BUILD_TYPE%"=="debug" (
     set PORTAL_LIB=portal.lib
 )
 
-set ENGINE_INCLUDES=/I ..\include\directx /I ..\include\stb /I ..\include\portal /I ..\engine\third-party\cJSON\
+set ENGINE_INCLUDES=/I ..\include\directx /I ..\include\stb /I ..\include\portal /I ..\engine\third-party\cJSON /I ..\engine\third-party\imgui-1.92.9b
 set ENGINE_LIBS=user32.lib dxgi.lib d3d12.lib xinput.lib d3dcompiler.lib ws2_32.lib %PORTAL_LIB% shell32.lib
 
 pushd build

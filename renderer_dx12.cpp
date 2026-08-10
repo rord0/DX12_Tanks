@@ -6,6 +6,7 @@
 #include "includes.h"
 
 #include "renderer_dx12.h"
+#include "imgui_impl_dx12.h"
 #include "render_entry.h"
 #include "./engine/fonts.hpp"
 
@@ -134,6 +135,54 @@ void InitInstanceRenderData(InstanceRenderData * data,
     data->instanceData = {0};
 }
 
+void SrvArena::Alloc(ID3D12Device * device, u32 maxDescriptors)
+{
+	this->descriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	this->maxDescriptors = maxDescriptors;
+
+    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+    srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    srvHeapDesc.NodeMask = 0;
+    srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    srvHeapDesc.NumDescriptors = maxDescriptors;
+    AssertIfFailed(device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&heap)));
+
+    D3D12_CPU_DESCRIPTOR_HANDLE textDescHandle = heap->GetCPUDescriptorHandleForHeapStart();
+
+    for (int i = 0; i < maxDescriptors; i++)
+    {
+        D3D12_SHADER_RESOURCE_VIEW_DESC nullDesc = {};
+
+        nullDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        nullDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        nullDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        nullDesc.Texture2D.MipLevels = 1;
+        device->CreateShaderResourceView(nullptr, &nullDesc, textDescHandle);
+        textDescHandle.ptr += descriptorSize;
+    }
+}
+
+void SrvArena::Push(D3D12_CPU_DESCRIPTOR_HANDLE * outCpu, D3D12_GPU_DESCRIPTOR_HANDLE * outGpu)
+{
+	if (index >= maxDescriptors) { return; }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = heap->GetCPUDescriptorHandleForHeapStart();
+	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = heap->GetGPUDescriptorHandleForHeapStart();
+
+	cpuHandle.ptr += index * descriptorSize;
+	gpuHandle.ptr += index * descriptorSize;
+
+	*outCpu = cpuHandle;
+	if (outGpu != NULL) { *outGpu = gpuHandle; }
+
+	index++;
+}
+
+void SrvArena::Free(D3D12_CPU_DESCRIPTOR_HANDLE CPU, D3D12_GPU_DESCRIPTOR_HANDLE GPU)
+{
+	// TODO: free descriptors...
+}
+
 RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
 {
     RendererResourcesDX12 res = {};
@@ -197,30 +246,8 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
 
     //////////////////////////////////
     // Create and upload texture data
-    res.textureCount = 0;
-    res.maxTexures = 32;
-
-    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-    srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    srvHeapDesc.NodeMask = 0;
-    srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    srvHeapDesc.NumDescriptors = res.maxTexures;
-    AssertIfFailed(state.device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&res.textureSRVHeap)));
-
-    D3D12_CPU_DESCRIPTOR_HANDLE textDescHandle = res.textureSRVHeap->GetCPUDescriptorHandleForHeapStart();
-    UINT srvHandleIncrementSize = state.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-    for (int i = 0; i < res.maxTexures; i++)
-    {
-        D3D12_SHADER_RESOURCE_VIEW_DESC nullDesc = {};
-
-        nullDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        nullDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        nullDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        nullDesc.Texture2D.MipLevels = 1;
-        state.device->CreateShaderResourceView(nullptr, &nullDesc, textDescHandle);
-        textDescHandle.ptr += srvHandleIncrementSize;
-    }
+	res.srvArena.Alloc(state.device.Get(), 32);
+	res.textureCount = 0;
 
     ImageData invalidTexture = LoadImageFromFile(RESOURCES_PATH"world_eater.jpg");
     ImageData gdEasyData = LoadImageFromFile(RESOURCES_PATH"gd_easy.png");
@@ -505,13 +532,13 @@ void DX12_Render(RendererState & state, RendererResourcesDX12 & res)
 
     // NOTE(rordon): shouldn't change much....
     state.cmdList->SetGraphicsRootSignature(res.rootSignature.Get());
-    ID3D12DescriptorHeap * heaps[] = { res.textureSRVHeap.Get() };
+    ID3D12DescriptorHeap * heaps[] = { res.srvArena.heap.Get() };
     state.cmdList->SetDescriptorHeaps(1, heaps);
     state.cmdList->RSSetViewports(1, &state.viewport);
     state.cmdList->RSSetScissorRects(1, &state.scissorRect);
     state.cmdList->IASetVertexBuffers(0, 1, &res.textureVertexBufferView);
     state.cmdList->IASetIndexBuffer(&res.textureIndexBufferView);
-    state.cmdList->SetGraphicsRootDescriptorTable(1, res.textureSRVHeap->GetGPUDescriptorHandleForHeapStart());
+    state.cmdList->SetGraphicsRootDescriptorTable(1, res.srvArena.heap->GetGPUDescriptorHandleForHeapStart());
     state.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // Get the frame upload arena, allocate enough for the instance data, create view for instance data, bind it
@@ -902,9 +929,8 @@ int DX12_RendererCreateTexture(const ImageData * image, RendererState & state, R
     srvDesc.Texture2D.PlaneSlice = 0;
     srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
 
-    D3D12_CPU_DESCRIPTOR_HANDLE textDescHandle = res.textureSRVHeap->GetCPUDescriptorHandleForHeapStart();
-    UINT srvHandleIncrementSize = state.srvDescSize;
-    textDescHandle.ptr += srvHandleIncrementSize * textureIndex;
+    D3D12_CPU_DESCRIPTOR_HANDLE textDescHandle;
+	res.srvArena.Push(&textDescHandle, NULL);
 
     state.device->CreateShaderResourceView(res.textureResources[textureIndex].Get(), &srvDesc, textDescHandle);
 
@@ -912,10 +938,29 @@ int DX12_RendererCreateTexture(const ImageData * image, RendererState & state, R
     return textureIndex;
 }
 
+void InitDearImGUI()
+{
+	ImGui_ImplDX12_InitInfo init_info = {};
+	init_info.Device = RENDERER_STATE.device.Get();
+	init_info.CommandQueue = RENDERER_STATE.cmdQueue.Get();
+	init_info.NumFramesInFlight = NUM_FRAMES;
+	init_info.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+	// Allocating SRV descriptors (for textures) is up to the application, so we provide callbacks.
+	// The example_win32_directx12/main.cpp application include a simple free-list based allocator.
+	init_info.SrvDescriptorHeap = RENDERER_PIPELINE.srvArena.heap.Get();
+	init_info.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo*, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_handle)
+	{ return RENDERER_PIPELINE.srvArena.Push(out_cpu_handle, out_gpu_handle); };
+	init_info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo*, D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle)
+	{ return RENDERER_PIPELINE.srvArena.Free(cpu_handle, gpu_handle); };
+    ImGui_ImplDX12_Init(&init_info);
+}
+
 void InitializeRenderer(HWND windowHandle, bool enableVSync, u32 width, u32 height)
 {
     RENDERER_STATE    = DX12_InitializeRenderer(windowHandle, USE_WARP, enableVSync, width, height);
     RENDERER_PIPELINE = InitInstancePipelineResources(RENDERER_STATE);
+	InitDearImGUI();
 }
 
 void RendererResizeFramebuffers(u32 width, u32 height)
@@ -950,4 +995,6 @@ void EndFrame()
 void Render()
 {
     DX12_Render(RENDERER_STATE, RENDERER_PIPELINE);
+	ImGui::Render();
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), RENDERER_STATE.cmdList.Get());
 }

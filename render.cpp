@@ -504,7 +504,7 @@ ComPtr<ID3D12RootSignature> CreateRootSignature(ComPtr<ID3D12Device2> device)
     descRange1.BaseShaderRegister = 0;
     descRange1.RegisterSpace = 0;
     descRange1.OffsetInDescriptorsFromTableStart = 0;
-    descRange1.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC;
+    descRange1.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
 
     D3D12_STATIC_SAMPLER_DESC staticSamplerDescs[2] = {};
     staticSamplerDescs[0].Filter	  = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
