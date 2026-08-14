@@ -45,6 +45,7 @@ void ServerSendWelcomeMessage(ServerState * state, u32 playerIndex)
 	WelcomePacket packet = {0};
 	packet.playerID = player->playerID;
 	packet.playerCount = 0;
+	packet.hillZoneIndex = state->hillZoneIndex;
 	for (int i = 0; i < MAX_PLAYERS; i++)
 	{
 		if (state->tanks[i].active)
@@ -100,7 +101,26 @@ void ServerSendRoundOverMessage(ServerState * state, bool roundOver, u16 winning
 			state->platform.platformServerSend(stream.buffer, stream.pos, 1, state->tanks[i].connectionID);
 		}
 	}
+}
 
+void ServerSendHillUpdateMessage(ServerState * state)
+{
+	ScratchArena temp(&state->tempArena);
+
+	HillUpdatePacket packet = {0};
+	packet.currentZoneIndex = state->hillZoneIndex;
+	packet.isMoving = state->hillTimeRemaining <= 5.0f;
+
+	WriteStream stream = {(u8*)ArenaPush(temp.arena, 1024), 1024};
+	if (!packet.serialize(stream)) { return; }
+
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		if (state->tanks[i].active)
+		{
+			state->platform.platformServerSend(stream.buffer, stream.pos, 1, state->tanks[i].connectionID);
+		}
+	}
 }
 
 void ServerSendUpdateMessage(ServerState * state)
@@ -218,9 +238,11 @@ void ServerStart(ServerState * state, u16 port, u16 maxPlayers)
 	state->collision = InitCollisionSystem2D(&state->permArena, 256, 16);
 	state->roundTimer = ROUND_TIME;
 	state->roundOver = false;
+	state->hillZoneIndex = 1;
+	state->hillTimeRemaining = 30.0f;
+	state->hillMovingSent = false;
 
-
-	Array prefabData = ParsePrefabInstancesCSV("prefab_instances.csv", &state->tempArena);
+	Array prefabData = ParsePrefabInstancesCSV(RESOURCES_PATH"meow.csv", &state->platform, &state->tempArena);
 	for (int i = 0; i < prefabData.count; i++)
 	{
 		PrefabInstanceData data = *((PrefabInstanceData*)prefabData.elements + i);
@@ -342,7 +364,6 @@ void TankShoot(Tank * tank, ServerState * state)
 	vec2 tankDir   = vec2{cosf(transform->rotation),  sinf(transform->rotation)};
 	vec2 turretCenter = transform->position + (tankDir * -0.03f);
 	vec2 turretPos = turretCenter - (turretDir * 0.075f); // Offset backwards
-											//
 	vec2 lineStart = turretCenter;
 	vec2 lineEnd =  turretCenter + (-turretDir * TURRET_RANGE);
 
@@ -355,10 +376,10 @@ void TankShoot(Tank * tank, ServerState * state)
 			Tank * otherTank = &state->tanks[i];
 			if (otherTank->colliderID == hitColliderID)
 			{
-				TankDamage(otherTank, 10);
+				TankDamage(otherTank, 20);
 				if (otherTank->health == 0)
 				{
-					tank->kills++;
+					tank->kills += 50;
 				}
 			}
 		}
@@ -431,6 +452,43 @@ void ResetPlayers(ServerState * state)
 	}
 }
 
+void UpdateHill(ServerState * state)
+{
+	if (state->hillTimeRemaining <= 5.0f && !state->hillMovingSent)
+	{
+		state->hillMovingSent = true;
+		ServerSendHillUpdateMessage(state);
+	}
+
+	state->hillTimeRemaining -= TICK_DURATION;
+	if (state->hillTimeRemaining <= 0.0f)
+	{
+		state->hillTimeRemaining = 30.0f;
+		state->hillZoneIndex = 0;
+		state->hillMovingSent = false;
+		ServerSendHillUpdateMessage(state);
+	}
+
+	if (state->time >= state->nextHillTick)
+	{
+		state->nextHillTick = state->time + HILL_TICK_RATE;
+		for (int i = 0; i < MAX_PLAYERS; i++)
+		{
+			Tank * tank = &state->tanks[i];
+			if (!tank->active) continue;
+
+			vec2 tankPos = state->transforms->GetTransform(tank->transformIndex)->position;
+			f32 distFromHill = vec2Dist(tankPos, HILL_ZONES[state->hillZoneIndex].pos);
+			if (distFromHill < HILL_ZONES[state->hillZoneIndex].radius / 2)
+			{
+				tank->health += 4;
+				if (tank->health > TANK_MAX_HEALTH) { tank->health = TANK_MAX_HEALTH; }
+				tank->kills += 5;
+			}
+		}
+	}
+}
+
 void ServerTick(ServerState * state, GameInput * input)
 {
 	NetworkEvent * netEvent;
@@ -476,11 +534,14 @@ void ServerTick(ServerState * state, GameInput * input)
 		UpdateTank(tank, state);
 	}
 
+	UpdateHill(state);
+
 	state->transforms->UpdateTransforms();
 	state->collision.ResolveCollisions(state->transforms);
 
 	ServerSendUpdateMessage(state);
 }
+
 
 void DEBUG_DrawCollider(RendererPushBuffer * renderCMDs, Collider2D * collider, TransformHierarchy * transforms)
 {
@@ -491,15 +552,11 @@ void DEBUG_DrawCollider(RendererPushBuffer * renderCMDs, Collider2D * collider, 
 		vec2 verts[4];
 		GetRectWorldVertices(t, verts);
 
-		for (int i = 0; i < 4; i++)
-		{
-			RendererPushLine(renderCMDs, verts[i], verts[(i + 1) % 4], {color.x, color.y, color.z, 1.0f}, 0.004f, 6);
-			RendererPushCircle(renderCMDs, verts[i], 0.0, {0.05f, 0.05f}, color, 1.0f, 5);
-		}
+		DrawRectFromVerts(renderCMDs, verts, color, 0.004f);
 	}
 	else if (collider->type == COLLIDER_CIRCLE)
 	{
-		RendererPushCircle(renderCMDs, t->position, t->rotation, t->scale, {0,1,0}, 0.1f, 5);
+		RendererPushCircle(renderCMDs, mat4GetPositionVec2(&t->world), t->rotation, t->scale, {0,1,0}, 0.1f, 5);
 	}
 }
 

@@ -1,9 +1,6 @@
 #include "core.h"
 #include "includes.h"
 
-#define IMGUI_DEFINE_MATH_OPERATORS
-#include "imgui.h"
-
 #include "os_win32.cpp"
 #include "arena.cpp"
 #include "ring_buffer.cpp"
@@ -231,16 +228,11 @@ void win32ProcessPendingMessages(HWND windowHandle, InputState & inputState)
     }
 }
 
+GAME_START_FUNCTION(GameStartFunctionStub)			{ /* Do nothing... */ }
 
-GAME_UPDATE_FUNCTION(GameUpdateFunctionStub)
-{
-    // Do nothing...
-}
+GAME_UPDATE_FUNCTION(GameUpdateFunctionStub)		{ /* Do nothing... */ }
 
-GAME_START_FUNCTION(GameStartFunctionStub)
-{
-    // Do nothing...
-}
+INIT_DEAR_IMGUI_FUNCTION(InitDearImGUIFunctionStub) { /* Do nothing... */ }
 
 
 FILETIME Win32GetLastFileWriteTime(const char * filename)
@@ -269,6 +261,7 @@ Win32GameCode Win32LoadGameCode(const char * filename)
     {
         result.Update = (GameUpdateFunction*)GetProcAddress(result.DLL, "update");
         result.Start = (GameStartFunction*)GetProcAddress(result.DLL, "start");
+		result.InitDearImGUI = (InitDearImGUIFunction*)GetProcAddress(result.DLL, "init_dear_imgui");
         result.isValid = result.Update;
         result.lastWriteTime = Win32GetLastFileWriteTime(filename);
     }
@@ -277,6 +270,7 @@ Win32GameCode Win32LoadGameCode(const char * filename)
     {
         result.Update = GameUpdateFunctionStub;
         result.Start = GameStartFunctionStub;
+		result.InitDearImGUI = InitDearImGUIFunctionStub;
     }
 
     return result;
@@ -296,7 +290,8 @@ void Win32UnloadGameCode(Win32GameCode * gameCode)
 
 LRESULT mainWindowCallback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-    ImGui_ImplWin32_WndProcHandler(window, msg, wParam, lParam);
+    if (ImGui_ImplWin32_WndProcHandler(window, msg, wParam, lParam))
+		return true;
 
     LRESULT result = 0;
     switch (msg)
@@ -391,6 +386,15 @@ bool InitializeDearIMGUI(HWND windowHandle)
 	return true;
 }
 
+void InitDearImGuiDLL(Win32GameCode * DLL)
+{
+    ImGuiMemAllocFunc allocFunc;
+    ImGuiMemFreeFunc freeFunc;
+    void * allocUserData;
+    ImGui::GetAllocatorFunctions(&allocFunc, &freeFunc, &allocUserData);
+	DLL->InitDearImGUI(ImGui::GetCurrentContext(),allocFunc, freeFunc, allocUserData);
+}
+
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
@@ -476,6 +480,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 	gameMemory.platform.stopClient		    = &PlatformStopClient;
 	gameMemory.platform.stopServer          = &PlatformStopServer;
 	gameMemory.platform.copyClipboardText   = &PlatformCopyClipboardText;
+	gameMemory.platform.writeFile			= &PlatformWriteFile;
 
 	GameInput gameInput = {0};
 
@@ -485,6 +490,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 	RendererPushBuffer uiPushBuffer = PushBufferCreate(MB(1), 8096);
 
 	InitializeDearIMGUI(windowHandle);
+	InitDearImGuiDLL(&gameCode);
+
 	InitializeFonts();
     InitializeRenderer(windowHandle, false, CLIENT_WIDTH, CLIENT_HEIGHT);
 	InitializeNetworking();
@@ -518,6 +525,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
         {
             Win32UnloadGameCode(&gameCode);
             gameCode = Win32LoadGameCode(GAME_CODE_DLL);
+			InitDearImGuiDLL(&gameCode);
         }
 
         // Update
@@ -558,18 +566,17 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 		gameInput.viewportSize = vec2i{resolution.x, resolution.y};
 		gameInput.mousePosVP = vec2i{inputState.mousePos.x, inputState.mousePos.y};
 
+		// DearImGUI 
+		ImGui_ImplDX12_NewFrame();
+		ImGui_ImplWin32_NewFrame();
+		ImGui::NewFrame();
+
         gameCode.Update(&gameMemory, &gameInput, &pushBuffer, &uiPushBuffer);
 
 		if (inputState.ESC.isDown)
 		{
 			RUNNING = false;
 		}
-
-		// DearImGUI 
-		ImGui_ImplDX12_NewFrame();
-		ImGui_ImplWin32_NewFrame();
-		ImGui::NewFrame();
-		ImGui::ShowDemoWindow(); // Show demo window! :)
 
         ///////////////
         // Rendering

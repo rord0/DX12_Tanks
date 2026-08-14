@@ -12,6 +12,7 @@
 #define TICK_DURATION (1.0 / TICK_RATE)
 #define TURRET_RANGE 2.0f
 #define ROUND_TIME 120.0f
+#define HILL_TICK_RATE 0.8f
 
 typedef struct {
 	bool active;
@@ -42,10 +43,21 @@ typedef struct {
 	TransformHierarchy * transforms;
 	Array instances;
 	CollisionSystem2D collision;
+	u32 hillZoneIndex;
+	f32 hillTimeRemaining;
+	bool hillMovingSent;
+	double nextHillTick;
 } ServerState;
 
+typedef struct HillData
+{
+	vec2 pos;
+	f32 radius;
+} HillData;
+
 const vec2 RR_SPAWN_POSITIONS[4] = {{-1.0f, 1.0f}, {1.0f, 1.0f}, {-1.0f, -1.0f}, {1.0f, -1.0f}};
-const vec4 WORLD_EXTENTS = {2.0f, -2.0f, 2.0f, -2.0f}; // RIGHT, LEFT, UP, DOWN
+const vec4 WORLD_EXTENTS = {6.0f, -2.0f, 2.0f, -2.0f}; // RIGHT, LEFT, UP, DOWN
+const HillData HILL_ZONES[] = {{{-0.9, 1.2}, 2.85f}, {{5.0f, 1.2}, 3.0f}};
 
 void ServerStart(ServerState * state, u16 port, u16 maxPlayers);
 void ServerStop(ServerState * state);

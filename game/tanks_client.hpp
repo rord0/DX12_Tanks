@@ -11,7 +11,6 @@
 #include "hashmap.hpp"
 
 #include <cassert>
-#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -71,6 +70,19 @@ typedef enum ClientState
 	CLIENT_STATE_CONNECTED
 } ClientState;
 
+typedef enum EditorState {
+	EDITOR_STATE_IDLE,
+	EDITOR_STATE_DRAGGING,
+	EDITOR_STATE_SELECTING
+} EditorState;
+
+typedef struct DEBUG_EditorState
+{
+	EditorState state;
+	vec2 selectionStart;
+	vec2 mouseWorldLast;
+} DEBUG_EditorState;
+
 typedef struct {
     double time;
     double timeSinceLastUpdate;
@@ -104,14 +116,19 @@ typedef struct {
 	bool showBadIPPopup;
 	bool showConnFailedPopup;
 	vec2 cameraVelocity;
+	u32 currentHillIndex;
 	f32 cameraZoom;
 	f32 roundTimer;
+	bool hillMoving;
 	bool roundOver;
 	pcg32_random_t random;
 	UILayout * ui;
 	TransformHierarchy * props;
 	Array instances;
+	Array selectedInstances;
+	CollisionSystem2D colliders;
 	ClientState clientState;
+	DEBUG_EditorState editorState;
 	char serverIP[64];
 	char displayName[32];
 	char winningPlayerName[32];

@@ -381,9 +381,11 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
         { "Size",  	             0, DXGI_FORMAT_R32G32_FLOAT,       1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "FillColor",           0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "StrokeColor",         0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "CornerRadius",        0, DXGI_FORMAT_R32_FLOAT,			1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         { "Rotation",        	 0, DXGI_FORMAT_R32_FLOAT,			1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "StrokeWidth",       	 0, DXGI_FORMAT_R32_FLOAT,			1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
-    InitInstanceRenderData(&res.IRD[7], res.textureVertexBufferView, res.textureIndexBufferView, 0, sizeof(SDFRectInstanceData), 7);
+    InitInstanceRenderData(&res.IRD[7], res.textureVertexBufferView, res.textureIndexBufferView, 0, sizeof(SDFTriangleInstanceData), 7);
     CreateInstancePipelineState(&res.IRD[7].PSO,
 								state.device,
 								res.rootSignature.Get(),
@@ -424,6 +426,24 @@ RendererResourcesDX12 InitInstancePipelineResources(RendererState & state)
 								_countof(worldBorderInputElementDescs),
 								RESOURCES_PATH"shaders/world_border.hlsl",
 								RESOURCES_PATH"shaders/world_border.hlsl");
+
+    const D3D12_INPUT_ELEMENT_DESC circleExInputElementDescs[] = {
+        { "Position",      0, DXGI_FORMAT_R32G32_FLOAT,			1, 0, 							 D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "Size",  	       0, DXGI_FORMAT_R32G32_FLOAT,			1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "StrokeColor",   0, DXGI_FORMAT_R32G32B32A32_FLOAT,	1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "OuterColor",    0, DXGI_FORMAT_R32G32B32A32_FLOAT,	1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "InnerColor",    0, DXGI_FORMAT_R32G32B32A32_FLOAT,	1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+        { "StrokeWidth",   0, DXGI_FORMAT_R32_FLOAT,			1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
+    };
+
+    InitInstanceRenderData(&res.IRD[10], res.textureVertexBufferView, res.textureIndexBufferView, 0, sizeof(CircleInstanceData), 10);
+    CreateInstancePipelineState(&res.IRD[10].PSO,
+								state.device,
+								res.rootSignature.Get(),
+								&circleExInputElementDescs[0],
+								_countof(circleExInputElementDescs),
+								RESOURCES_PATH"shaders/circle.hlsl",
+								RESOURCES_PATH"shaders/circle.hlsl");
 
     return res;
 }
@@ -483,6 +503,7 @@ void DrawInstance(const DrawInstanceCMD * cmd, RendererState & state, RendererRe
 {
 	switch (cmd->instanceID)
 	{
+		case 10:
 		case 9:
 		case 8:
 		case 7:
@@ -657,6 +678,7 @@ size_t RenderEntrySizeof(void * entry)
 		case RENDER_ENTRY_TYPE_SDF_TRIANGLE:	return sizeof(RenderEntrySDFTriangle);
 		case RENDER_ENTRY_TYPE_SCROLL_TEXTURE:	return sizeof(RenderEntryScrollTexture);
 		case RENDER_ENTRY_TYPE_WORLD_BORDER:	return sizeof(RenderEntryWorldBorder);
+		case RENDER_ENTRY_TYPE_CIRCLE:			return sizeof(RenderEntryCircle);
 		case RENDER_ENTRY_TYPE_TEXT:
 		{
 			RenderEntryText * textEntry = (RenderEntryText*)entry;
@@ -877,6 +899,11 @@ void ProcessSortEntries(RendererPushBuffer * pb, InstanceRenderData * instanceRe
 			{
                 RenderEntryWorldBorder * entry = (RenderEntryWorldBorder*)(pb->memory + sortEntry.pushBufferOffset);
                 RendererPushInstance(&instanceRenderData[9], drawCMDs, &entry->instanceData, sortEntry.layer);
+			} break;
+			case RENDER_ENTRY_TYPE_CIRCLE:
+			{
+				RenderEntryCircle * entry = (RenderEntryCircle*)(pb->memory + sortEntry.pushBufferOffset);
+				RendererPushInstance(&instanceRenderData[10], drawCMDs, &entry->instanceData, sortEntry.layer);
 			} break;
             default:
             {

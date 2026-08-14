@@ -44,6 +44,8 @@ typedef struct CollisionSystem2D
 	bool RemoveCollider(u32 colliderID);
 	void ResolveCollisions(TransformHierarchy * transforms);
 	bool RaycastHit(vec2 start, vec2 end, vec2 * outPoint, u32 ignoreID, u32 * outColliderID);
+	bool PointHit(vec2 point, u32 * outColliderID);
+	bool AABBHits(vec2 pos, vec2 extents, Array * ids);
 } CollisionSystem2D;
 
 CollisionSystem2D InitCollisionSystem2D(Arena * arena, u32 maxStaticColliders, u32 maxDynamicColliders);

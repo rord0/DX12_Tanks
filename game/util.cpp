@@ -1,5 +1,6 @@
 #include "util.hpp"
 #include <algorithm>
+#include <charconv>
 
 size_t copy_c_str(char * dst, const char * src, size_t buffer_size)
 {
@@ -40,6 +41,48 @@ u32 fn1va_32(const char * s)
     return hash;
 }
 
+u32 CountNewLines(const char * data, size_t size)
+{
+    u32 numLines = 0;
+
+    for (size_t i = 0; i < size; i++)
+    {
+        if ((data)[i] == '\n') { numLines++; };
+    }
+    if ((data)[size] != '\n') { numLines++; };
+	return numLines;
+}
+
+bool CSVParseU32Field(const char *& ptr, const char *& end, u32 & out)
+{
+	while (ptr < end && (*ptr == ',' || *ptr == '\r' || *ptr == '\n')) { ptr++; }
+
+    const char * start = ptr;
+    while (ptr < end && *ptr != ',' && *ptr != '\n' && *ptr != '\r') { ptr++; }
+
+    int value = 0;
+    auto result = std::from_chars(start, ptr, value);
+    if (result.ec != std::errc()) { return false; }
+
+    out = value;
+    return true;
+}
+
+bool CSVParseF32Field(const char *& ptr, const char *& end, f32 & out)
+{
+	while (ptr < end && (*ptr == ',' || *ptr == '\r' || *ptr == '\n')) { ptr++; }
+
+    const char * start = ptr;
+    while (ptr < end && *ptr != ',' && *ptr != '\n' && *ptr != '\r') { ptr++; }
+
+    float value = 0;
+    auto result = std::from_chars(start, ptr, value);
+    if (result.ec != std::errc()) { return false; }
+
+    out = value;
+    return true;
+}
+
 vec4 ColorHexToRBGANormalized(u32 color)
 {
 	float r = ((color >> 24) & 0xFF) / 255.0f;
@@ -57,6 +100,17 @@ vec3 ColorHexToRBGNormalized(u32 color)
     float b = ((color)       & 0xFF) / 255.0f;
 
     return vec3{r, g, b};
+}
+
+vec4 lerp(const vec4 & a, const vec4 & b, float t)
+{
+    t = std::clamp(t, 0.0f, 1.0f);
+    return {
+        a.x + (b.x - a.x) * t,
+        a.y + (b.y - a.y) * t,
+        a.z + (b.z - a.z) * t,
+        a.w + (b.w - a.w) * t
+    };
 }
 
 vec2 vec2SmoothDamp(vec2 currentPos, vec2 targetPos, vec2 * currentVelocity, float smoothTime, float maxSpeed, float deltaTime)

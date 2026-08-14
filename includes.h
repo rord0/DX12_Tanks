@@ -22,6 +22,7 @@ typedef struct
     HMODULE DLL;
     GameUpdateFunction * Update;
     GameStartFunction * Start;
+	InitDearImGUIFunction * InitDearImGUI;
     bool isValid;
     FILETIME lastWriteTime;
 } Win32GameCode;

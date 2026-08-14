@@ -151,7 +151,7 @@ typedef struct RendererResourcesDX12 {
     Arena instanceDataArena;
     Array drawCMDs;
 
-    InstanceRenderData IRD[10];
+    InstanceRenderData IRD[11];
     static constexpr size_t instanceCount = _countof(IRD);
 	vec4 clearColor;
     // Matrices

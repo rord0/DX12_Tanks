@@ -11,6 +11,10 @@ void RendererPushRectangle(RendererPushBuffer * pb, DebugGeoInstanceData instanc
 
 void RendererPushCircle(RendererPushBuffer * pb, vec2 position, f32 rotation, vec2 scale, vec3 color, float fill, u16 layer);
 
+void RendererPushCircleEx(RendererPushBuffer * pb, vec2 position, vec2 scale,
+						  float strokeWidth, vec4 strokeColor,
+						  vec4 outerColor, vec4 innerColor, u16 layer);
+
 void RendererPushLine(RendererPushBuffer * pb, vec2 startPos, vec2 endPos, vec4 color, float width, u16 layer);
 
 void RendererPushText(RendererPushBuffer * pb, const char * text, f32 fontSize, u32 fontID, vec2 startPos, TextStyle style, bool isWorldSpace, u16 layer);

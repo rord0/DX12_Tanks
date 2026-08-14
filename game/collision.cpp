@@ -373,6 +373,35 @@ bool LineColliding(const Collider2D * collider, const Transform2D * transform, v
 	return false;
 }
 
+bool PointRectColliding(const Collider2D * collider, const Transform2D * transform, vec2 point)
+{
+	vec2 diff = point - mat4GetPositionVec2(&transform->world);
+
+	vec2 pointRectSpace = diff * GetRotationMat2(transform->world);
+	vec2 rectSize = mat4GetScale2D(&transform->world);
+	return fabsf(pointRectSpace.x) <= (rectSize.x * 0.5f) && fabsf(pointRectSpace.y) <= (rectSize.y * 0.5);
+}
+
+bool PointCircleColliding(const Collider2D * collider, const Transform2D * transform, vec2 point)
+{
+	f32 dist =vec2Dist(point, mat4GetPositionVec2(&transform->world));
+	f32 r = (mat4GetScale2D(&transform->world).x) / 4.0f;
+	return dist < r;
+}
+
+bool PointColliding(const Collider2D * collider, const Transform2D * transform, vec2 point)
+{
+	if (collider->type == COLLIDER_RECTANGLE)
+	{
+		return PointRectColliding(collider, transform, point);
+	}
+	else if (collider->type == COLLIDER_CIRCLE)
+	{
+		return PointCircleColliding(collider, transform, point);
+	}
+	return false;
+}
+
 bool CollisionSystem2D::RaycastHit(vec2 start, vec2 end, vec2 * outPoint, u32 ignoreID, u32 * outColliderID)
 {
 	Collider2D * collider;
@@ -412,6 +441,37 @@ bool CollisionSystem2D::RaycastHit(vec2 start, vec2 end, vec2 * outPoint, u32 ig
 	}
 
 	return hit;
+}
+
+bool CollisionSystem2D::AABBHits(vec2 pos, vec2 extents, Array * ids)
+{
+	return false;
+}
+
+bool CollisionSystem2D::PointHit(vec2 point, u32 * outColliderID)
+{
+	u32 colliderID;
+	auto testArray = [&](Array& colliders)
+	{
+		for (int i = 0; i < colliders.count; i++)
+		{
+			Collider2D * collider = (Collider2D*)colliders.elements + i;
+			if (PointColliding(collider, transforms->GetTransform(collider->transformIndex), point))
+			{
+				colliderID = collider->id;
+				return true;
+			}
+		}
+		return false;
+	};
+
+	if (testArray(dynamicColliders) || testArray(staticColliders))
+	{
+		*outColliderID = colliderID;
+		return true;
+	}
+
+	return false;
 }
 
 /*

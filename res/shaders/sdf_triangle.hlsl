@@ -10,7 +10,9 @@ struct VSInput
     float2 size         : Size;
     float4 fillColor    : FillColor;
     float4 strokeColor  : StrokeColor;
-    float  cornerRadius : Rotation;
+    float  cornerRadius : CornerRadius;
+    float  rotation		: Rotation;
+    float  strokeWidth  : StrokeWidth;
     uint   vertexID     : SV_VertexID;
 };
 
@@ -21,7 +23,9 @@ struct VSOutput
     float4 strokeColor  : STROKE_COLOR;
     float2 localUV      : LOCAL_UV;       // pixel position relative to rect center
     float2 halfSize     : HALF_SIZE;      // half-extents of the rect
-    float  cornerRadius : ROTATION;
+    float  cornerRadius : CORNER_RADIUS;
+    float  rotation		: ROTATION;
+    float  strokeWidth  : STROKE_WIDTH;
 };
 
 VSOutput VSmain(VSInput input)
@@ -35,11 +39,13 @@ VSOutput VSmain(VSInput input)
     output.pos          = mul(ModelViewProjectionCB.MVP, float4(x, y, 0.0, 1.0));
     output.fillColor    = input.fillColor;
 	output.strokeColor  = input.strokeColor;
+	output.strokeWidth  = input.strokeWidth;
 
     // Center of the triangle in local space
     float2 center   = input.pos + input.size * 0.5;
     output.localUV  = float2(x, y) - center;   // ranges from -halfSize to +halfSize
     output.halfSize = input.size * 0.5;
+    output.rotation = input.rotation;
     output.cornerRadius = input.cornerRadius;
 
     return output;
@@ -65,12 +71,12 @@ float4 PSmain(VSOutput input) : SV_Target
     // recenter: shift uv so the triangle's bbox center sits at quad center
     float2 uv = input.localUV;
 
-	float cornerRadius = 6;
+	float cornerRadius = input.cornerRadius;
 
-    float d = sdEquilateralTriangle(uv, r - cornerRadius, input.cornerRadius) - cornerRadius;
+    float d = sdEquilateralTriangle(uv, r - cornerRadius, input.rotation) - cornerRadius;
     float aa = fwidth(d) * 0.5;
 
-	float strokeWidth = 6;
+	float strokeWidth = input.strokeWidth;
     float fillAlpha = 1.0 - smoothstep(-aa, aa, d);
     float strokeAlpha = smoothstep(-strokeWidth - aa, -strokeWidth + aa, d) * (1.0 - smoothstep(-aa, aa, d));
 

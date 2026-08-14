@@ -2,6 +2,7 @@
 #include "../render_entry.h"
 
 #include "tanks.hpp"
+#include "imgui.h"
 #include "tanks_client.hpp"
 #include "tanks_server.hpp"
 #include "util.hpp"
@@ -11,6 +12,14 @@
 RendererPushBuffer * DEBUG_RENDER_CMDS;
 
 // Unity Build
+
+// DearImGui
+#include "imgui.cpp"
+#include "imgui_demo.cpp"
+#include "imgui_draw.cpp"
+#include "imgui_tables.cpp"
+#include "imgui_widgets.cpp"
+
 #include "render_commands.cpp"
 #include "tanks_math.cpp"
 #include "util.cpp"
@@ -83,4 +92,10 @@ EXPORT GAME_UPDATE_FUNCTION(update)
 	ServerUpdate(serverState, input);
 	// DEBUG_SyncTanks(serverState->tanks, state->tanks);
 	ClientUpdate(state, gameMemory, input, renderCommands, uiRenderCMDs);
+}
+
+EXPORT INIT_DEAR_IMGUI_FUNCTION(init_dear_imgui)
+{
+    ImGui::SetAllocatorFunctions(allocFunc, freeFunc, allocUserData);
+    ImGui::SetCurrentContext(ctx);
 }

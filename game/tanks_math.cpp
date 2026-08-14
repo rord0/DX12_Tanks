@@ -1,8 +1,11 @@
 #include "tanks_math.hpp"
 
+f32 rad2Deg(f32 r) { return r * (180.0f / PI); }
+f32 deg2Rad(f32 d) { return d * (PI / 180.0f); }
 f32 vec2Dot(vec2 a, vec2 b)  { return a.x * b.x + a.y * b.y; }
 f32 vec2Dist(vec2 a, vec2 b) { return sqrtf((a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y)); }
 vec2 vec2Norm(vec2 v) { f32 mag = sqrtf(v.x * v.x + v.y * v.y); return {v.x / mag, v.y / mag }; }
+vec2 vec2Direction(vec2 a, vec2 b) { return vec2Norm(a - b); }
 vec2 vec2Rotate(vec2 v, f32 angle)
 {
 	float cosA = cosf(angle);

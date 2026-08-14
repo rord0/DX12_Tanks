@@ -29,6 +29,10 @@ typedef struct {
 const char * TEXTURE_BARREL_PATH = "images/props_barrel.png";
 const char * TEXTURE_AIRDROP_PATH = "images/props_airdrop.png";
 const char * TEXTURE_BUILDING_LARGE_PATH = "images/props/props_building_01.png";
+const char * TEXTURE_BUILDING_SMALL_PATH = "images/props/props_building_03.png";
+const char * TEXTURE_CONTAINER_PATH = "images/props/props_container.png";
+const char * TEXTURE_TIRES_PATH = "images/props/props_tire_stack.png";
+const char * TEXTURE_TOWER_PATH = "images/props/props_tower.png";
 
 typedef struct PlayerConnectData_t {
 	u16 playerID;
@@ -58,7 +62,8 @@ typedef enum {
 	PACKET_TYPE_INPUT,
 	PACKET_TYPE_UPDATE,
 	PACKET_TYPE_FIRED,
-	PACKET_TYPE_ROUND_OVER
+	PACKET_TYPE_ROUND_OVER,
+	PACKET_TYPE_HILL_UPDATE
 } PacketType;
 
 template<typename Stream>
@@ -132,6 +137,7 @@ typedef struct ClientInputPacket {
 typedef struct ServerWelcomePacket {
 	u16 playerID;
 	u8 playerCount;
+	u16 hillZoneIndex;
 	PlayerConnectData playerData[MAX_PLAYERS];
 	template<typename Stream>
 	bool serialize(Stream & stream)
@@ -140,6 +146,7 @@ typedef struct ServerWelcomePacket {
 		SerializeU8(stream, type);
 		SerializeU16(stream, playerID);
 		SerializeU8(stream, playerCount);
+		SerializeU16(stream, hillZoneIndex);
 		for (int i = 0; i < playerCount; i++)
 		{
 			SerializePlayerData(stream, playerData[i]);
@@ -228,5 +235,21 @@ typedef struct ServerUpdatePacket {
 		return true;
 	}
 } UpdatePacket;
+
+typedef struct HillUpdatePacket {
+	u16 currentZoneIndex;
+	u8 isMoving;
+
+	template<typename Stream>
+	bool serialize(Stream & stream)
+	{
+		u8 type = PACKET_TYPE_HILL_UPDATE;
+		SerializeU8(stream, type);
+		SerializeU16(stream, currentZoneIndex);
+		SerializeU8(stream, isMoving);
+		return true;
+	}
+
+} HillUpdatePacket;
 
 #endif // TANKS_H

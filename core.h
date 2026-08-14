@@ -202,6 +202,17 @@ typedef struct {
 typedef struct {
 	vec2 position;
 	vec2 size;
+	vec4 fillColor;
+	vec4 strokeColor;
+	float cornerRadius;
+	float rotation;
+	float strokeWidth;
+	f32 pad0;
+} SDFTriangleInstanceData;
+
+typedef struct {
+	vec2 position;
+	vec2 size;
 	vec2 uvOffset;
 	vec2 tilingAmount;
 	u32 textureIndex;
@@ -213,6 +224,15 @@ typedef struct {
 	f32 alpha;
 	f32 offset;
 } WorldBorderInstanceData;
+
+typedef struct {
+	vec2 position;
+	vec2 size;
+	vec4 strokeColor;
+	vec4 outerColor;
+	vec4 innerColor;
+	f32 strokeWidth;
+} CircleInstanceData;
 
 typedef struct {
 	vec4 fillColor;
@@ -262,6 +282,9 @@ typedef PLATFORM_LOAD_FILE(PlatformLoadFileFunction);
 #define PLATFORM_FREE_FILE(name) void name(void ** memory)
 typedef PLATFORM_FREE_FILE(PlatformFreeFileFunction);
 
+#define PLATFORM_WRITE_FILE(name) bool name(const char * filepath, const void * buffer, size_t bufferSize)
+typedef PLATFORM_WRITE_FILE(PlatformWriteFileFn);
+
 #define PLATFORM_COPY_CLIPBOARD_TEXT(name) u32 name(char * buffer, u32 bufferSize)
 typedef PLATFORM_COPY_CLIPBOARD_TEXT(PlatformCopyClipboardTextFn); 
 
@@ -300,6 +323,7 @@ typedef struct {
 	PlatformLoadFontAtlasFn * loadFont;
 	PlatformMeasureTextFn * measureText;
 	PlatformCopyClipboardTextFn * copyClipboardText;
+	PlatformWriteFileFn * writeFile;
 } PlatformAPI;
 
 typedef struct {
@@ -346,5 +370,11 @@ typedef GAME_START_FUNCTION(GameStartFunction);
 
 #define GAME_UPDATE_FUNCTION(name) void name(GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands, RendererPushBuffer * uiRenderCMDs)
 typedef GAME_UPDATE_FUNCTION(GameUpdateFunction);
+
+// Dear ImGUI 
+#define IMGUI_DEFINE_MATH_OPERATORS
+#include "imgui.h"
+#define INIT_DEAR_IMGUI_FUNCTION(name) void name(ImGuiContext * ctx, ImGuiMemAllocFunc allocFunc, ImGuiMemFreeFunc freeFunc, void * allocUserData)
+typedef INIT_DEAR_IMGUI_FUNCTION(InitDearImGUIFunction);
 
 #endif // CORE_H

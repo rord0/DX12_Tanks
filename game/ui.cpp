@@ -61,7 +61,7 @@ void UILayout::text(const char * label, i32 fontHandle, f32 fontSize, vec3 fillC
 void UILayout::image(const char * label, f32 width, f32 height, i32 imageHandle, vec2 pos = vec2::zero, vec4 uv = vec4::zero)
 {
 	UINodeData data = {.type = UINodeType::UI_NODE_TYPE_IMAGE, .image = {imageHandle, uv}};
-	PositionType positioning = pos == vec2::zero ? PositionType::RELATIVE : PositionType::ABSOLUTE;
+	PositionType positioning = pos == vec2::zero ? PositionType::POS_RELATIVE : PositionType::POS_ABSOLUTE;
 	begin(label, {.pos = pos, .size = {width, height}, .sizing = SizingType::FIXED, .positioning = positioning,.data = data});
 	end();
 }
@@ -401,7 +401,7 @@ void CalculateChildPositions(UILayout & ui, u32 index)
 	while (childIndex < end)
 	{
 		UINode * childNode = &ui.nodes[childIndex];
-		if (childNode->positioning == PositionType::RELATIVE)
+		if (childNode->positioning == PositionType::POS_RELATIVE)
 		{
 			if (node->align == LayoutType::CENTER)
 			{

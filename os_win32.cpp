@@ -63,6 +63,21 @@ PLATFORM_LOAD_FILE(DEBUG_PlatformReadEntireFile)
     return result;
 }
 
+PLATFORM_WRITE_FILE(PlatformWriteFile)
+{
+    HANDLE fileHandle = CreateFileA(filepath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if (fileHandle == INVALID_HANDLE_VALUE) { return false; }
+
+	DWORD bytesWritten = 0;
+
+	BOOL ok = WriteFile(fileHandle, buffer, (DWORD)bufferSize, &bytesWritten, nullptr);
+
+	CloseHandle(fileHandle);
+
+	return ok && bytesWritten == bufferSize;
+}
+
 PLATFORM_COPY_CLIPBOARD_TEXT(PlatformCopyClipboardText)
 {
     if (!OpenClipboard(nullptr))

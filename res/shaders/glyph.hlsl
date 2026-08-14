@@ -62,7 +62,7 @@ float4 PSmain(VSOutput input) : SV_Target
     float outlineAlpha = clamp((dist - 0.5 + input.strokeWidth) * sharpness + 0.5, 0.0, 1.0);
 
     float4 color = lerp(strokeColor, input.color, alpha);
-    color.a = outlineAlpha;
+    color.a = outlineAlpha * input.color.a;
 
     return color;
 }

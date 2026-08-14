@@ -1,4 +1,6 @@
 #include "tanks_client.hpp"
+#include "collision.hpp"
+#include "imgui.h"
 #include "serialize.hpp"
 #include "tanks.hpp"
 #include "tanks_math.hpp"
@@ -79,6 +81,19 @@ vec4 CalculateUVTransform(AtlasEntry entry, u32 atlasHeight, u32 atlasWidth)
 f32 easeOutExpo(f32 x)  { return (x == 1.0f) ? 1.0f : 1.0f - powf(2.0f, -10.0f * x); }
 f32 easeInQuad(f32 x)   { return (x * x); }
 f32 easeInExpo(float x) { return x == 0.0f ? 0.0f : powf(2.0f, 10.0f * x - 10.0f); }
+f32 easeInOutCirc(float x)
+{
+	if (x < 0.5f)
+	{
+		f32 t = 2.0f * x;
+		return (1.0f - sqrtf(1.0f - t * t)) / 2.0f;
+	}
+	else
+	{
+		f32 t = -2.0f * x + 2.0f;
+		return (sqrtf(1.0f - t * t) + 1.0f) / 2.0f;
+	}
+}
 
 float Vec2AngleToRad(vec2 A, vec2 B)
 {
@@ -241,25 +256,9 @@ vec2 MousePosToWorld(vec2i mousePos, vec2 cameraPos, vec2i viewportSize, f32 cam
 	mouseNDC.y = 1.0f - ((2.0f * mousePos.y) / (float)viewportSize.y);
 
 	vec4 mouseClip = {mouseNDC.x, mouseNDC.y, 0.0f, 1.0f};
-	vec4 worldPos = inverseOrthographicProjection(aspect, -aspect, 1.0f * cameraZoom, -1.0f * cameraZoom, -0.01f, 100.0f) * mouseClip;
+	vec4 worldPos = inverseOrthographicProjection(aspect * cameraZoom, -aspect * cameraZoom, 1.0f * cameraZoom, -1.0f * cameraZoom, -0.01f, 100.0f) * mouseClip;
 
 	return {worldPos.x + cameraPos.x, worldPos.y + cameraPos.y};
-}
-
-bool CSVParseU32Field(const char *& ptr, const char *& end, u32 & out)
-{
-    const char * start = ptr;
-    while (ptr < end && *ptr != ',' && *ptr != '\n') { ptr++; }
-
-    int value = 0;
-    auto result = std::from_chars(start, ptr, value);
-    if (result.ec != std::errc()) { return false; }
-
-    // Skip comma
-    if (*ptr == ',') { ptr++; }
-
-    out = value;
-    return true;
 }
 
 void ParseTextureAtlasCSV(GameMemory * memory, GameState * state, const char * filepath)
@@ -269,13 +268,7 @@ void ParseTextureAtlasCSV(GameMemory * memory, GameState * state, const char * f
     if (fileResult.size == 0) { return; }
 
     // Count the number of lines 
-    u32 numLines = 0;
-
-    for (int i = 0; i < fileResult.size; i++)
-    {
-        if (((char*)fileResult.data)[i] == '\n') { numLines++; };
-    }
-    if (((char*)fileResult.data)[fileResult.size] != '\n') { numLines++; };
+    u32 numLines = CountNewLines((const char *)fileResult.data, fileResult.size);
 
 	state->tankAtlasEntries = (AtlasEntry*)ArenaPush(&state->permArena, sizeof(AtlasEntry) * (numLines - 1));
 
@@ -520,6 +513,18 @@ void ClientLoadTextures(HashMap * handles, PlatformAPI * platform)
 
 	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_building_01.png");
 	HashMapInsert(handles, TEXTURE_BUILDING_LARGE_PATH, &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_container.png");
+	HashMapInsert(handles, TEXTURE_CONTAINER_PATH, &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_tire_stack.png");
+	HashMapInsert(handles, TEXTURE_TIRES_PATH, &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_tower.png");
+	HashMapInsert(handles, TEXTURE_TOWER_PATH, &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_building_03.png");
+	HashMapInsert(handles, TEXTURE_BUILDING_SMALL_PATH, &textureHandle);
 }
 
 void ClientStart(GameState * state, GameMemory * gameMemory)
@@ -572,18 +577,24 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 	state->tankTrackEmitter  = InitEmitter(4.0f, 512, &state->permArena);
 
 	state->random = {0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL};
-	state->cameraZoom = 1.25f;
+	state->cameraZoom = 1.5f;
 	state->ui = (UILayout*)ArenaPush(&state->permArena, sizeof(UILayout));
 	state->props = (TransformHierarchy*)ArenaPush(&state->permArena, sizeof(TransformHierarchy));
 	state->instances = ArrayInit(sizeof(PrefabInstance), 256, ArenaPush(&state->permArena, sizeof(PrefabInstance) * 256));
+	state->selectedInstances = ArrayInit(sizeof(u32), 256, ArenaPush(&state->permArena, sizeof(u32) * 256));
+	state->colliders = InitCollisionSystem2D(&state->permArena, 256, 16);
+	state->colliders.transforms = state->props;
+
+	state->currentHillIndex = 0;
+	state->hillMoving = false;
 
 	copy_c_str(state->winningPlayerName, "Player", 32);
 
-	Array prefabData = ParsePrefabInstancesCSV("prefab_instances.csv", &state->frameArena);
+	Array prefabData = ParsePrefabInstancesCSV(RESOURCES_PATH"meow.csv", &gameMemory->platform, &state->frameArena);
 	for (int i = 0; i < prefabData.count; i++)
 	{
 		PrefabInstanceData data = *((PrefabInstanceData*)prefabData.elements + i);
-		PrefabInstance instance = CreatePrefabInstance(data, NULL, state->props);
+		PrefabInstance instance = CreatePrefabInstance(data, &state->colliders, state->props);
 		ArrayPush(&state->instances, &instance);
 	}
 }
@@ -612,6 +623,7 @@ void ClientProcessWelcomePacket(GameState * state, WelcomePacket * packet, u32 c
 		tank->style = connectData->style;
 		copy_c_str(tank->displayName, connectData->displayName, sizeof(tank->displayName));
 	}
+	state->currentHillIndex = packet->hillZoneIndex;
 	state->welcomeReceived = true;
 }
 
@@ -664,6 +676,12 @@ void ClientProcessRoundOverPacket(GameState * state, RoundOverPacket * packet)
 			state->winningPlayerName[31] = '\0';
 		}
 	}
+}
+
+void ClientProcessHillUpdatePacket(GameState * state, HillUpdatePacket * packet)
+{
+	state->currentHillIndex = packet->currentZoneIndex;
+	state->hillMoving = packet->isMoving;
 }
 
 void ClientHandlePacket(GameState * state, NetworkPacket * packet)
@@ -719,6 +737,14 @@ void ClientHandlePacket(GameState * state, NetworkPacket * packet)
 			if (rndOverPacket.serialize(stream))
 			{
 				ClientProcessRoundOverPacket(state, &rndOverPacket);
+			}
+		}
+		case PACKET_TYPE_HILL_UPDATE:
+		{
+			HillUpdatePacket hillUpdatePkt;
+			if (hillUpdatePkt.serialize(stream))
+			{
+				ClientProcessHillUpdatePacket(state, &hillUpdatePkt);
 			}
 		}
 		default: break;
@@ -865,8 +891,8 @@ ShapeColor BUTTON_PRESSED_COLOR = {.fillColor    = ColorHexToRBGANormalized(0x26
 
 ButtonStyle DEFAULT_BUTTON_STYLE = {BUTTON_STYLE, BUTTON_HOVERED_COLOR, BUTTON_PRESSED_COLOR, 6, 3};
 
-ButtonStyle CUSTOMIZE_BUTTON_STYLE_R = {CUSTOMIZE_BTN_COLOR, CUSTOMIZE_BTN_HOVERED, BUTTON_PRESSED_COLOR, 6, 3, true, 0.523599};
-ButtonStyle CUSTOMIZE_BUTTON_STYLE_L = {CUSTOMIZE_BTN_COLOR, CUSTOMIZE_BTN_HOVERED, BUTTON_PRESSED_COLOR, 6, 3, true,-0.523599};
+ButtonStyle CUSTOMIZE_BUTTON_STYLE_R = {CUSTOMIZE_BTN_COLOR, CUSTOMIZE_BTN_HOVERED, BUTTON_PRESSED_COLOR, 6, 6, true,  0.523599};
+ButtonStyle CUSTOMIZE_BUTTON_STYLE_L = {CUSTOMIZE_BTN_COLOR, CUSTOMIZE_BTN_HOVERED, BUTTON_PRESSED_COLOR, 6, 6, true, -0.523599};
 
 SDFShapeStyle DEFAULT_CONTAINER_STYLE = {BUTTON_STYLE.fillColor, BUTTON_STYLE.strokeColor, 6, 3};
 
@@ -1148,7 +1174,31 @@ void FormatTimer(i32 totalSeconds , char *buffer, size_t bufferSize)
     snprintf(buffer, bufferSize, "%d:%02d", minutes, seconds);
 }
 
-void GameHUD(GameState * state, GameInput * input, PlatformAPI * platform)
+void GetPlayerIDsByScore(GameState * state, u16 * playerIDs, u16 * playerCount)
+{
+    *playerCount = 0;
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		TankGFX * player = &state->tanks[i];
+		if (player->active) { playerIDs[(*playerCount)++] = i; }
+	}
+
+	u16 count = *playerCount;
+    for (int i = 1; i < count; i++)
+    {
+        u16 key = playerIDs[i];
+        u32 keyKills = state->tanks[key].kills;
+        int j = i - 1;
+        while (j >= 0 && state->tanks[playerIDs[j]].kills < keyKills)
+        {
+            playerIDs[j + 1] = playerIDs[j];
+            j--;
+        }
+        playerIDs[j + 1] = key;
+    }
+}
+
+void GameHUD(GameState * state, RendererPushBuffer * pb, GameInput * input, PlatformAPI * platform)
 {
 	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL};
 	uiInput.charsPressed = input->charsPressed;
@@ -1177,13 +1227,13 @@ void GameHUD(GameState * state, GameInput * input, PlatformAPI * platform)
 												 .sizingY = SizingType::FILL,
 												 .padding = {.left = 16, .right = 16, .top = 16.0f}});
 			ui.begin("PLAYER_CARDS_CONTAINER", cardContainerLayout);
-				for (int i = 0; i < MAX_PLAYERS; i++)
+				u16 playerCount;
+				u16 playerIDs[16] = {0};
+				GetPlayerIDsByScore(state, &playerIDs[0], &playerCount);
+				for (int i = 0; i < playerCount; i++)
 				{
-					TankGFX * player = &state->tanks[i];
-					if (player->active)
-					{
-						PlayerCard(ui, state, player);
-					}
+					TankGFX * player = &state->tanks[playerIDs[i]];
+					PlayerCard(ui, state, player);
 				}
 			ui.end();
 			
@@ -1393,6 +1443,287 @@ void DrawWorldBorder(RendererPushBuffer * renderCMDs, GameState * state)
 	RendererPushWorldBorder(renderCMDs, corners[3], {borderExtent, borderHeight}, 1.0f, uvOffset, 5);
 }
 
+void DrawRectFromVerts(RendererPushBuffer * renderCMDs, vec2 verts[4], vec3 color, f32 edgeWidth)
+{
+	for (int i = 0; i < 4; i++)
+	{
+		RendererPushLine(renderCMDs, verts[i], verts[(i + 1) % 4], {color.x, color.y, color.z, 1.0f}, edgeWidth, 6);
+		RendererPushCircle(renderCMDs, verts[i], 0.0, {0.05f, 0.05f}, color, 1.0f, 5);
+	}
+}
+
+i32 FindInstanceWithColliderID(Array * instances, u32 colliderID)
+{
+	for (int i = 0; i < instances->count; i++)
+	{
+		PrefabInstance * instance = (PrefabInstance*)instances->elements + i;
+		if (instance->colliderID == colliderID)
+		{
+			return i;
+		}
+	}
+	return -1;
+}
+
+void DEBUG_PrefabSelection(GameState * clientState, RendererPushBuffer * renderCMDs,GameInput * input, vec2 mouseWorld)
+{
+	DEBUG_EditorState * editorState = &clientState->editorState;
+	if (editorState->state == EDITOR_STATE_SELECTING && editorState->selectionStart != mouseWorld)
+	{
+		f32 selectionDist = vec2Dist(editorState->selectionStart, mouseWorld);
+		if (selectionDist > 0.02f)
+		{
+			vec2 verts[4];
+			verts[0] = editorState->selectionStart;
+			verts[2] = mouseWorld;
+			verts[1] = {verts[2].x, verts[0].y};
+			verts[3] = {verts[0].x, verts[2].y};
+			DrawRectFromVerts(renderCMDs, verts, {1.0f, 1.0f, 1.0f}, 0.004f);
+		}
+	}
+
+	ImGuiIO& io = ImGui::GetIO();
+
+	if (input->mouseL.wasPressed && !io.WantCaptureMouse)
+	{
+		if (editorState->state == EDITOR_STATE_IDLE)
+		{
+			u32 colliderID;
+			if (clientState->colliders.PointHit(mouseWorld, &colliderID))
+			{
+				i32 prefabIndex = FindInstanceWithColliderID(&clientState->instances, colliderID);
+				if (prefabIndex >= 0)
+				{
+					for (int i = 0; i < clientState->selectedInstances.count; i++)
+					{
+						if (prefabIndex == *((u32*)clientState->selectedInstances.elements + i))
+						{
+							editorState->state = EDITOR_STATE_DRAGGING;
+						}
+					}
+				}
+			}
+			if (editorState->state != EDITOR_STATE_DRAGGING)
+			{
+				editorState->state = EDITOR_STATE_SELECTING;
+				editorState->selectionStart = mouseWorld;
+			}
+		}
+	}
+	if (input->mouseL.wasReleased)
+	{
+		if (editorState->state == EDITOR_STATE_SELECTING)
+		{
+			f32 selectionDist = vec2Dist(editorState->selectionStart, mouseWorld);
+
+			if (selectionDist > 0.02f)
+			{
+				Array selectedIDs = ArrayInit(sizeof(u32), 128, ArenaPush(&clientState->frameArena, sizeof(u32) * 128));
+				vec2 selectionCenter = {(editorState->selectionStart.x - mouseWorld.x) / 2.0f, (editorState->selectionStart.y - mouseWorld.y) / 2.0f};
+				vec2 selectionExtents = {fabsf(editorState->selectionStart.x - mouseWorld.x), fabsf(editorState->selectionStart.y - mouseWorld.y)};
+				clientState->colliders.AABBHits(selectionCenter, selectionExtents, &selectedIDs);
+				for (int i = 0; i < selectedIDs.count; i++)
+				{
+					u32 colliderID = *((u32*)selectedIDs.elements + i);
+					i32 instance = FindInstanceWithColliderID(&clientState->instances, colliderID);
+
+					if (instance >= 0)
+					{
+						//ArrayPush(&clientState->selectedInstances, &instance);
+					}
+				}
+			}
+			else
+			{
+				u32 colliderID;
+				if (clientState->colliders.PointHit(mouseWorld, &colliderID))
+				{
+					i32 instance = FindInstanceWithColliderID(&clientState->instances, colliderID);
+					if (instance >= 0)
+					{
+						ArrayPush(&clientState->selectedInstances, &instance);
+					}
+				}
+				else
+				{
+					clientState->selectedInstances.count = 0;
+				}
+			}
+		}
+		editorState->state = EDITOR_STATE_IDLE;
+	}
+
+	if (editorState->state == EDITOR_STATE_DRAGGING && editorState->mouseWorldLast != mouseWorld)
+	{
+		vec2 mouseWorldDelta = mouseWorld - editorState->mouseWorldLast;
+		for (int i = 0; i < clientState->selectedInstances.count; i++)
+		{
+			u32 * index = (u32*)clientState->selectedInstances.elements + i;
+			PrefabInstance * instance = (PrefabInstance*)clientState->instances.elements + *index;
+			Transform2D * transform = clientState->props->GetTransform(instance->transformIndex);
+			transform->SetPosition(transform->position + mouseWorldDelta);
+		}
+	}
+
+	for (int i = 0; i < clientState->selectedInstances.count; i++)
+	{
+		u32 * index = (u32*)clientState->selectedInstances.elements + i;
+		PrefabInstance * instance = (PrefabInstance*)clientState->instances.elements + *index;
+		Transform2D * transform = clientState->props->GetTransform(instance->transformIndex);
+		RendererPushCircle(renderCMDs, mat4GetPositionVec2(&transform->world), 0, {0.1,0.1}, {0, 1, 0}, 1.0f, 10);
+	}
+	editorState->mouseWorldLast = mouseWorld;
+}
+
+void DEBUG_PrefabEditor(GameState* state, PlatformAPI * platform)
+{
+    if (ImGui::Begin("Prefab Editor"))
+    {
+		if (ImGui::CollapsingHeader("Prefabs"))
+		{
+			for (u32 i = 0; i < _countof(PREFABS); i++)
+			{
+				ImGui::PushID(i);
+
+				ImGui::Text("%s", PREFABS[i]->name);
+				float buttonWidth = ImGui::CalcTextSize("Add").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+				ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - buttonWidth);
+
+				if (ImGui::Button("Add"))
+				{
+					PrefabInstanceData data = {i, vec2::zero, {1.0f, 1.0f}, 0.0f};
+					PrefabInstance instance = CreatePrefabInstance(data, &state->colliders, state->props);
+					ArrayPush(&state->instances, &instance);
+				}
+
+				ImGui::PopID();
+			}
+		}
+
+        ImGui::Separator();
+
+		auto drawInstance = [state](int i, PrefabInstance* instance)
+		{
+			Transform2D* transform = state->props->GetTransform(instance->transformIndex);
+			const char* name = PREFABS[instance->prefabID]->name;
+
+			ImGui::PushID(i);
+			char label[256];
+			snprintf(label, sizeof(label), "[%d] %s", i, name);
+			if (ImGui::TreeNode(label))
+			{
+				float scale = transform->scale.x;
+				float rotationDegrees = rad2Deg(transform->rotation);
+				ImGui::Text("%d", instance->colliderID);
+				if (ImGui::DragFloat("Position X", &transform->position.x, 0.01f)) { transform->isDirty = true; }
+				if (ImGui::DragFloat("Position Y", &transform->position.y, 0.01f)) { transform->isDirty = true; }
+				if (ImGui::DragFloat("Scale", &scale, 0.01f)) { transform->scale = {scale, scale}; transform->isDirty = true; }
+				if (ImGui::SliderFloat("Rotation", &rotationDegrees, 0.0f, 360.0f, "%.0f deg"))
+				{
+					transform->rotation = deg2Rad(rotationDegrees);
+					transform->isDirty = true;
+				}
+				ImGui::TreePop();
+			}
+
+			ImGui::PopID();
+		};	
+
+		if (ImGui::CollapsingHeader("Instances"))
+		{
+
+			ImGui::PushID("InstancesList");
+			for (int i = 0; i < state->instances.count; i++)
+			{
+				PrefabInstance * instance = (PrefabInstance*)state->instances.elements + i;
+
+				drawInstance(i, instance);
+			}
+			ImGui::PopID();
+		}
+
+        ImGui::Separator();
+		if (ImGui::CollapsingHeader("Selected Instances"))
+		{
+			for (int i = 0; i < state->selectedInstances.count; i++)
+			{
+				u32 instanceIndex = *((u32*)state->selectedInstances.elements + i);
+				PrefabInstance * instance = (PrefabInstance*)state->instances.elements + instanceIndex;
+
+				drawInstance(instanceIndex, instance);
+			}
+		}
+
+		ImGui::Separator();
+		float buttonWidth = ImGui::CalcTextSize("Save").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+		ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - buttonWidth);
+		if (ImGui::Button("Save"))
+		{
+			SerializePrefabInstancesCSV(RESOURCES_PATH"meow.csv", &state->instances, state->props, platform, &state->frameArena);
+		}
+    }
+    ImGui::End();
+}
+
+void DrawHill(GameState * state, RendererPushBuffer * renderCMDs)
+{
+	vec4 hillFillColor = ColorHexToRBGANormalized(0xFFD83AFF);
+	hillFillColor.a = 0.75f;
+
+	vec4 hillFlashColor = ColorHexToRBGANormalized(0xEEE1ADFF);
+	hillFlashColor.a = 0.75f;
+
+	if (state->hillMoving)
+	{
+		// wrap growing time into a repeating 0..1 range
+		const float pulseSpeed = 7.5f; // radians/sec, tune to taste
+
+		// fold 0..1 into a 0->1->0 ping-pong
+		float t = (sinf(state->time * pulseSpeed) + 1.0f) * 0.5f;
+
+		// ease the ping-pong for a smoother back-and-forth motion
+
+		hillFillColor = lerp(hillFlashColor, hillFillColor,t);
+	}
+	
+	const HillData * currentHill = &HILL_ZONES[state->currentHillIndex];
+
+	const vec2 hillSize = {currentHill->radius, currentHill->radius};
+	RendererPushCircleEx(renderCMDs, currentHill->pos, hillSize, 0.015f, {1.0, 1.0, 1.0, 0.33f}, hillFillColor, vec4::zero, 2);
+}
+
+float DistanceFade(float distance, float fadeStart = 5.0f, float fadeEnd = 2.0f)
+{
+	float t = (distance - fadeEnd) / (fadeStart - fadeEnd);
+	t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+	t = t * t * (3.0f - 2.0f * t); // smoothstep
+	return t;
+}
+
+void DrawHillIndictator(GameState * state, RendererPushBuffer * renderCMDs)
+{
+	SDFShapeStyle ARROW_STYLE = {ColorHexToRBGANormalized(0xFFFFFFCC), ColorHexToRBGANormalized(0x262D33FF), 0.01, 0.0075};
+	vec2 hillPos = HILL_ZONES[state->currentHillIndex].pos;
+	f32 hillRadius = HILL_ZONES[state->currentHillIndex].radius;
+	vec2 hillDirection = vec2Direction(state->cameraPos, hillPos);
+	vec2 arrowSize = {0.06, 0.06};
+	f32 radius = state->cameraZoom * 1.5f * 0.5f;
+	f32 textRadius = state->cameraZoom * 1.5f * 0.46f;
+	vec2 arrowPos = (state->cameraPos - arrowSize/2.0f) - (hillDirection * radius);
+	f32 hillDistance = vec2Dist(arrowPos, hillPos);
+	vec2 textPos = (state->cameraPos - vec2{0.05f, 0.015f}) - (hillDirection * textRadius);
+	f32 arrowAngle = atan2f(hillDirection.y, hillDirection.x) + deg2Rad(90);
+
+	f32 arrowAlpha = DistanceFade(hillDistance, hillRadius/2.0f, 1.0f);
+	ARROW_STYLE.strokeColor.a = arrowAlpha;
+	ARROW_STYLE.fillColor.a = arrowAlpha;
+	vec4 textColor = {1.0f, 1.0f, 1.0f, arrowAlpha};
+	TextStyle testTextStyle = {.fillColor = textColor, .strokeWidth = 0.3f};
+	RendererPushText(renderCMDs, "HILL", 0.05, state->interFontHandle, textPos, testTextStyle, true, 30);
+	//RendererPushCircleEx(renderCMDs, state->cameraPos, {state->cameraZoom * 1.5f, state->cameraZoom * 1.5f}, 0.02f, {1.0f, 0.0f, 0.0f, 1.0f}, vec4::zero, vec4::zero, 3);
+	RendererPushSDFTriangle(renderCMDs, arrowPos, arrowAngle, arrowSize, &ARROW_STYLE, 6);
+}
+
 void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, RendererPushBuffer * renderCommands)
 {
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
@@ -1416,12 +1747,14 @@ void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, Re
 	DrawParticles(renderCommands, state);
 	DrawWorldBorder(renderCommands, state);
 
+	DrawHillIndictator(state, renderCommands);
+	DrawHill(state, renderCommands);
+
 	//RendererPushImage(renderCommands, state->airdropTextureHandle, {{TEST_}})
 
-	SDFShapeStyle TRI_STYLE = {ColorHexToRBGANormalized(0x402525CC), ColorHexToRBGANormalized(0x332626FF), 16, 3};
-
+	DEBUG_PrefabSelection(state, renderCommands,input, mouseWorld);
+	DEBUG_PrefabEditor(state, platform);
 	f32 angle = fmodf(state->time, 2.0f * PI);
-
 	state->props->UpdateTransforms();
 	for (int i = 0; i < state->instances.count; i++)
 	{
@@ -1481,6 +1814,9 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 	f32 fontSize = 0.1f;
 	RendererPushText(renderCommands, buf, fontSize, state->interFontHandle, textPos, testTextStyle, true, 30);
 
+	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
+	RendererPushSetProjection(uiRenderCMDs, uiProjection, uiProjection);
+
 	switch (state->clientState)
 	{
 		case CLIENT_STATE_MAIN_MENU:
@@ -1503,12 +1839,10 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 		{
 			UpdateGame(state, input, &gameMemory->platform, renderCommands);
 			EscapeMenu(state, input, gameMemory, &gameMemory->platform, uiRenderCMDs);
-			GameHUD(state, input, &gameMemory->platform);
+			GameHUD(state,  uiRenderCMDs, input,&gameMemory->platform);
 		} break;
 	}
 
-	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
-	RendererPushSetProjection(uiRenderCMDs, uiProjection, uiProjection);
 
 	DrawUI(*state->ui, uiRenderCMDs);
 }

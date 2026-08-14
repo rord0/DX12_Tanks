@@ -20,11 +20,12 @@ if "%BUILD_TYPE%"=="debug" (
 )
 
 set ENGINE_INCLUDES=/I ..\include\directx /I ..\include\stb /I ..\include\portal /I ..\engine\third-party\cJSON /I ..\engine\third-party\imgui-1.92.9b
+set GAME_INCLUDES=/I ..\engine\third-party\imgui-1.92.9b
 set ENGINE_LIBS=user32.lib dxgi.lib d3d12.lib xinput.lib d3dcompiler.lib ws2_32.lib %PORTAL_LIB% shell32.lib
 
 pushd build
 cl %CFLAGS% %ENGINE_INCLUDES% ../win32_dx12_handmade.cpp  %ENGINE_LIBS% /Fe:tanks.exe /link /LIBPATH:..\lib
-cl %CFLAGS% %DLL_FLAGS% ..\game\tanks.cpp /link /out:tanksgame.dll
+cl %CFLAGS% %GAME_INCLUDES% %DLL_FLAGS% ..\game\tanks.cpp /link /out:tanksgame.dll
 popd
 
 echo Build Complete: (%BUILD_TYPE% mode)

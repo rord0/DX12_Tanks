@@ -61,8 +61,8 @@ enum class SizingType
 
 enum class PositionType
 {
-	RELATIVE,
-	ABSOLUTE,
+	POS_RELATIVE,
+	POS_ABSOLUTE,
 	FIXED
 };
 

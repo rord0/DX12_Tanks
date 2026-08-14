@@ -3,6 +3,7 @@
 
 #include "../core.h"
 
+
 size_t copy_c_str(char * dst, const char * src, size_t buffer_size);
 
 typedef struct { u64 state;  u64 inc; } pcg32_random_t;
@@ -15,5 +16,12 @@ vec3 ColorHexToRBGNormalized(u32 color);
 vec4 ColorHexToRBGANormalized(u32 color);
 
 vec2 vec2SmoothDamp(vec2 currentPos, vec2 targetPos, vec2 * currentVelocity, float smoothTime, float maxSpeed, float deltaTime);
+
+u32 CountNewLines(const char * data, size_t size);
+
+bool CSVParseU32Field(const char *& ptr, const char *& end, u32 & out);
+bool CSVParseF32Field(const char *& ptr, const char *& end, f32 & out);
+
+vec4 lerp(const vec4 & a, const vec4 & b, float t);
 
 #endif // UTIL_HPP

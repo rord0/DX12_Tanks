@@ -129,7 +129,8 @@ void RendererPushSDFTriangle(RendererPushBuffer * pb, vec2 pos, f32 rotation, ve
 {
 	if (style == NULL) { return; }
 	
-	RenderEntrySDFTriangle entry = {RENDER_ENTRY_TYPE_SDF_TRIANGLE, {pos, scale, style->fillColor, style->strokeColor, rotation}};
+	RenderEntrySDFTriangle entry = {RENDER_ENTRY_TYPE_SDF_TRIANGLE,
+								   {pos, scale, style->fillColor, style->strokeColor, style->cornerRadius, rotation, style->strokeWidth}};
 
     u32 entryOffset = PushRenderEntry(pb, entry);
 
@@ -152,6 +153,19 @@ void RendererPushWorldBorder(RendererPushBuffer * pb, vec2 pos, vec2 size, f32 a
 {
 	const RenderEntryType entryType = RENDER_ENTRY_TYPE_WORLD_BORDER;
 	RenderEntryWorldBorder entry = {entryType, {pos, size, alpha, offset}};
+
+    u32 entryOffset = PushRenderEntry(pb, entry);
+
+    RenderSortEntry sortEntry = {entryType, layer, entryOffset};
+    PushRenderSortEntry(pb, sortEntry);
+}
+
+void RendererPushCircleEx(RendererPushBuffer * pb, vec2 position, vec2 scale,
+						  float strokeWidth, vec4 strokeColor,
+						  vec4 outerColor, vec4 innerColor, u16 layer)
+{
+	const RenderEntryType entryType = RENDER_ENTRY_TYPE_CIRCLE;
+	RenderEntryCircle entry = {entryType, {position, scale, strokeColor, outerColor, innerColor, strokeWidth}};
 
     u32 entryOffset = PushRenderEntry(pb, entry);
 
