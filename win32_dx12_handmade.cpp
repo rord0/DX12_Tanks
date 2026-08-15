@@ -410,7 +410,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 	}
 
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    WNDCLASS windowClass = {};
+    WNDCLASSEX windowClass = {};
 
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -423,14 +423,17 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     int windowX = std::max<int>(0,  (screenWidth - windowWidth)  / 2);
     int windowY = std::max<int>(0, (screenHeight - windowHeight) / 2);
 
+	windowClass.cbSize = sizeof(WNDCLASSEX);
     windowClass.style = CS_VREDRAW | CS_HREDRAW;
     windowClass.lpfnWndProc = &mainWindowCallback;
     windowClass.hInstance = hInstance;
     windowClass.lpszClassName = L"Cool Window Class";
     windowClass.hbrBackground = nullptr;
     windowClass.hCursor = LoadCursor(0, IDC_CROSS);
+	windowClass.hIcon   = LoadIcon(hInstance, MAKEINTRESOURCE(101));
+	windowClass.hIconSm = LoadIcon(hInstance, MAKEINTRESOURCE(101));
 
-    if (!RegisterClass(&windowClass)) { return -1; }
+    if (!RegisterClassEx(&windowClass)) { return -1; }
 
     HWND windowHandle = CreateWindowEx(0, windowClass.lpszClassName,
                     L"TANKS!",

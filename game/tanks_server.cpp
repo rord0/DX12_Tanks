@@ -238,9 +238,12 @@ void ServerStart(ServerState * state, u16 port, u16 maxPlayers)
 	state->collision = InitCollisionSystem2D(&state->permArena, 256, 16);
 	state->roundTimer = ROUND_TIME;
 	state->roundOver = false;
-	state->hillZoneIndex = 1;
-	state->hillTimeRemaining = 30.0f;
+	state->hillZoneIndex = 3;
+	state->hillTimeRemaining = HILL_MOVE_TIME;
 	state->hillMovingSent = false;
+	state->time = 0.0f;
+	state->last_tick = state->time;
+	state->currentTick = 0;
 
 	Array prefabData = ParsePrefabInstancesCSV(RESOURCES_PATH"meow.csv", &state->platform, &state->tempArena);
 	for (int i = 0; i < prefabData.count; i++)
@@ -463,8 +466,8 @@ void UpdateHill(ServerState * state)
 	state->hillTimeRemaining -= TICK_DURATION;
 	if (state->hillTimeRemaining <= 0.0f)
 	{
-		state->hillTimeRemaining = 30.0f;
-		state->hillZoneIndex = 0;
+		state->hillTimeRemaining = HILL_MOVE_TIME;
+		state->hillZoneIndex = (state->hillZoneIndex + 1) % _countof(HILL_ZONES);
 		state->hillMovingSent = false;
 		ServerSendHillUpdateMessage(state);
 	}
@@ -542,24 +545,6 @@ void ServerTick(ServerState * state, GameInput * input)
 	ServerSendUpdateMessage(state);
 }
 
-
-void DEBUG_DrawCollider(RendererPushBuffer * renderCMDs, Collider2D * collider, TransformHierarchy * transforms)
-{
-	Transform2D * t = transforms->GetTransform(collider->transformIndex);
-	vec3 color = collider->colliding ? vec3{1,0,0} : vec3{0,1,0};
-	if (collider->type == COLLIDER_RECTANGLE)
-	{
-		vec2 verts[4];
-		GetRectWorldVertices(t, verts);
-
-		DrawRectFromVerts(renderCMDs, verts, color, 0.004f);
-	}
-	else if (collider->type == COLLIDER_CIRCLE)
-	{
-		RendererPushCircle(renderCMDs, mat4GetPositionVec2(&t->world), t->rotation, t->scale, {0,1,0}, 0.1f, 5);
-	}
-}
-
 void DEBUG_DrawColliders(RendererPushBuffer * renderCMDs, CollisionSystem2D * collision, TransformHierarchy * transforms)
 {
 	for (int i = 0; i < collision->dynamicColliders.count; i++)
@@ -572,6 +557,25 @@ void DEBUG_DrawColliders(RendererPushBuffer * renderCMDs, CollisionSystem2D * co
 		Collider2D * collider = &((Collider2D*)collision->staticColliders.elements)[i];
 		DEBUG_DrawCollider(renderCMDs, collider, transforms);
 	}
+}
+
+void DEBUG_ServerStats(ServerState * state)
+{
+    ImGui::Begin("Server Stats");
+
+    ImGui::Text("Current Tick: %llu", state->currentTick);
+    ImGui::Text("Tick Rate: %d", TICK_RATE);
+    ImGui::Text("Time: %.3f s", state->time);
+
+    ImGui::Separator();
+
+    ImGui::Text("Collision Checks (this tick): %u", state->collision.collisionChecks);
+
+    ImGui::Separator();
+
+    ImGui::Text("Instances: %u", state->instances.count);
+
+    ImGui::End();
 }
 
 void ServerUpdate(ServerState * state, GameInput * input)
@@ -589,6 +593,7 @@ void ServerUpdate(ServerState * state, GameInput * input)
 			RendererPushCircle(DEBUG_RENDER_CMDS, RR_SPAWN_POSITIONS[i], 0.0, {0.1f, 0.1f}, {1,0.2,0}, 1.0f, 1);
 		}
 	}
+	DEBUG_ServerStats(state);
 
 	double elapsed = state->time - state->last_tick;
 	while (elapsed >= TICK_DURATION)
@@ -596,5 +601,6 @@ void ServerUpdate(ServerState * state, GameInput * input)
 		ServerTick(state, input);
 		state->last_tick += TICK_DURATION;
 		elapsed -= TICK_DURATION;
+		state->currentTick++;
 	}
 }

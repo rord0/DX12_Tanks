@@ -43,8 +43,7 @@ float4 PSmain(VSOutput input) : SV_TARGET
 {
     float4 texel = texture1[input.textureID].Sample(textureSampler, input.UV);
 
-    float4 pixelColor = texel;
-	pixelColor.a *= input.alpha;
+    float4 pixelColor = texel * input.alpha;
 
     return pixelColor;
 }

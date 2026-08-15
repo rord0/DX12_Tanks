@@ -27,12 +27,15 @@ typedef struct {
 } TankStyle;
 
 const char * TEXTURE_BARREL_PATH = "images/props_barrel.png";
+const char * TEXTURE_CACTUS_03_PATH = "images/props_cactus_03.png";
 const char * TEXTURE_AIRDROP_PATH = "images/props_airdrop.png";
 const char * TEXTURE_BUILDING_LARGE_PATH = "images/props/props_building_01.png";
+const char * TEXTURE_BUILDING_MEDIUM_PATH = "images/props/props_building_02.png";
 const char * TEXTURE_BUILDING_SMALL_PATH = "images/props/props_building_03.png";
 const char * TEXTURE_CONTAINER_PATH = "images/props/props_container.png";
 const char * TEXTURE_TIRES_PATH = "images/props/props_tire_stack.png";
 const char * TEXTURE_TOWER_PATH = "images/props/props_tower.png";
+const char * TEXTURE_WALL_01_PATH = "images/props/props_wall_01.png";
 
 typedef struct PlayerConnectData_t {
 	u16 playerID;

@@ -42,22 +42,34 @@ const ColliderData2D AIRDROP_COLLIDERS[]   = {COLLIDER_RECTANGLE, {0.0f, 0.0f}, 
 const ColliderData2D CONTAINER_COLLIDERS[] = {COLLIDER_RECTANGLE, {0.0f, 0.0f}, 0.0f, {0.7f, 0.4f}, true};
 const ColliderData2D BARREL_COLLIDERS[]    = {COLLIDER_CIRCLE,    {0.0f, 0.0f}, 0.0f,  {0.2f, 0.2f}, true};
 const ColliderData2D TIRE_COLLIDERS[]      = {COLLIDER_CIRCLE,    {0.0f, 0.0f}, 0.0f,  {0.25f, 0.25f}, true};
+const ColliderData2D CACTUS_03_COLLIDERS[] = {COLLIDER_CIRCLE,    {0.0f, 0.0f}, 0.0f,  {0.1f, 0.1f}, true};
 const ColliderData2D TOWER_COLLIDERS[]     = {COLLIDER_RECTANGLE, {0.0f, 0.0f}, 0.0f,  {0.5f, 0.5f}, true};
+const ColliderData2D WALL_COLLIDERS[]      = {COLLIDER_RECTANGLE, {0.0f, 0.0f}, 0.0f,  {0.125f, 0.125f}, true};
 
-const ColliderData2D BUILDING_LARGE_COLLIDERS[2] = {{COLLIDER_RECTANGLE, {0.025f, 0.0f}, 0.0f, {0.44f, 0.475f}, true},
-												    {COLLIDER_RECTANGLE, {-0.22f, 0.044f}, 0.0f, {0.09f, 0.275f}, true}};
+const ColliderData2D BUILDING_LARGE_COLLIDERS[2]  = {{COLLIDER_RECTANGLE, {-0.35f, 0.05f}, 0.0f, {0.1f, 0.42f}, true},
+													 {COLLIDER_RECTANGLE, {0.036f, 0.0f}, 0.0f, {0.65f, 0.7f}, true}};
+
+const ColliderData2D BUILDING_MEDIUM_COLLIDERS[2] = {{COLLIDER_RECTANGLE, {0.28f, -0.05f}, 0.0f, {0.11f, 0.36f}, true},
+													 {COLLIDER_RECTANGLE, {-0.05f, -0.01f}, 0.0f, {0.55f, 0.525f}, true}};
 
 const ColliderData2D BUILDING_SMALL_COLLIDERS[] = {COLLIDER_RECTANGLE, {-0.01f, -0.01f}, 0.0f,  {0.5f, 0.4f}, true};
 
 const Prefab PREFAB_AIRDROP = {TEXTURE_AIRDROP_PATH, {0.0f, 0.0f}, {0.5f, 0.5f}, 0.0f,
 							  PROPS_RENDER_SORT_LAYER, _countof(AIRDROP_COLLIDERS), AIRDROP_COLLIDERS, "Airdrop"};
+
 const Prefab PREFAB_BARREL = {TEXTURE_BARREL_PATH, {0.0f, 0.0f}, {0.25f, 0.25f}, 0.0f,
 							  PROPS_RENDER_SORT_LAYER, _countof(BARREL_COLLIDERS), BARREL_COLLIDERS, "Barrel"};
 
-const Prefab PREFAB_BUILDING_LARGE = {TEXTURE_BUILDING_LARGE_PATH, {0.0f, 0.0f}, {1.15f, 1.0f}, 0.0f,
+const Prefab PREFAB_CACTUS_03 = {TEXTURE_CACTUS_03_PATH, {0.0f, 0.0f}, {0.33f, 0.33f}, 0.0f,
+							  PROPS_RENDER_SORT_LAYER, _countof(CACTUS_03_COLLIDERS), CACTUS_03_COLLIDERS, "Cactus 3"};
+
+const Prefab PREFAB_BUILDING_LARGE = {TEXTURE_BUILDING_LARGE_PATH, {0.0f, 0.0f}, {1.725f, 1.5f}, 0.0f,
 								 	 PROPS_RENDER_SORT_LAYER, _countof(BUILDING_LARGE_COLLIDERS), BUILDING_LARGE_COLLIDERS, "Building Large"};
 
-const Prefab PREFAB_BUILDING_SMALL = {TEXTURE_BUILDING_SMALL_PATH, {0.0f, 0.0f}, {1.15f, 1.0f}, 0.0f,
+const Prefab PREFAB_BUILDING_MEDIUM = {TEXTURE_BUILDING_MEDIUM_PATH, {0.0f, 0.0f}, {1.4f, 1.2f}, 0.0f,
+								 	 PROPS_RENDER_SORT_LAYER, _countof(BUILDING_MEDIUM_COLLIDERS), BUILDING_MEDIUM_COLLIDERS, "Building Medium"};
+
+const Prefab PREFAB_BUILDING_SMALL = {TEXTURE_BUILDING_SMALL_PATH, {0.0f, 0.0f}, {1.16666f, 1.0f}, 0.0f,
 								 	 PROPS_RENDER_SORT_LAYER, _countof(BUILDING_SMALL_COLLIDERS), BUILDING_SMALL_COLLIDERS, "Building Small"};
 
 const Prefab PREFAB_TIRE = {TEXTURE_TIRES_PATH, {0.0f, 0.0f}, {0.33f, 0.33f}, 0.0f,
@@ -69,9 +81,14 @@ const Prefab PREFAB_CONTAINER = {TEXTURE_CONTAINER_PATH, {0.0f, 0.0f}, {1.0f * 1
 const Prefab PREFAB_TOWER = {TEXTURE_TOWER_PATH, {0.0f, 0.0f}, {1.2f, 1.2f}, 0.0f,
 							  PROPS_RENDER_SORT_LAYER, _countof(TOWER_COLLIDERS), TOWER_COLLIDERS, "Tower"};
 
+const Prefab PREFAB_WALL = {TEXTURE_WALL_01_PATH, {0.0f, 0.0f}, {0.25f, 0.25f}, 0.0f,
+							  PROPS_RENDER_SORT_LAYER, _countof(WALL_COLLIDERS), WALL_COLLIDERS, "Wall"};
+
 const Prefab * PREFABS[] = {&PREFAB_AIRDROP, &PREFAB_BARREL, &PREFAB_BUILDING_LARGE,
 							&PREFAB_CONTAINER, &PREFAB_TIRE, &PREFAB_TOWER,
-							&PREFAB_BUILDING_SMALL};
+							&PREFAB_BUILDING_SMALL, &PREFAB_BUILDING_MEDIUM, &PREFAB_WALL,
+							&PREFAB_CACTUS_03,
+};
 
 PrefabInstance TEST_PREFAB_INSTANCE = {};
 PrefabInstanceData DEBUG_PREFAB_INSTANCE_DATA[] = {

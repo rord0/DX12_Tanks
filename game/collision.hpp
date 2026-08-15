@@ -40,6 +40,7 @@ typedef struct CollisionSystem2D
 	Array staticColliders;
 	Array dynamicColliders;
 	TransformHierarchy * transforms;
+	u32 collisionChecks;
 	u32 AddCollider(ColliderType type, u32 transformIndex, bool isStatic);
 	bool RemoveCollider(u32 colliderID);
 	void ResolveCollisions(TransformHierarchy * transforms);

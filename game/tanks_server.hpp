@@ -11,7 +11,8 @@
 #define TICK_RATE 60
 #define TICK_DURATION (1.0 / TICK_RATE)
 #define TURRET_RANGE 2.0f
-#define ROUND_TIME 120.0f
+#define ROUND_TIME (60.0f * 5.0f)
+#define HILL_MOVE_TIME 45.0f;
 #define HILL_TICK_RATE 0.8f
 
 typedef struct {
@@ -47,6 +48,7 @@ typedef struct {
 	f32 hillTimeRemaining;
 	bool hillMovingSent;
 	double nextHillTick;
+	u64 currentTick;
 } ServerState;
 
 typedef struct HillData
@@ -55,9 +57,15 @@ typedef struct HillData
 	f32 radius;
 } HillData;
 
-const vec2 RR_SPAWN_POSITIONS[4] = {{-1.0f, 1.0f}, {1.0f, 1.0f}, {-1.0f, -1.0f}, {1.0f, -1.0f}};
-const vec4 WORLD_EXTENTS = {6.0f, -2.0f, 2.0f, -2.0f}; // RIGHT, LEFT, UP, DOWN
-const HillData HILL_ZONES[] = {{{-0.9, 1.2}, 2.85f}, {{5.0f, 1.2}, 3.0f}};
+const vec2 RR_SPAWN_POSITIONS[4] = {{1.0f, -0.3f}, {2.85f, -0.3f}, {-1.0f, -1.0f}, {3.7f, -1.0f}};
+const vec4 WORLD_EXTENTS = {6.0f, -2.0f, 2.0f, -6.0f}; // RIGHT, LEFT, UP, DOWN
+const HillData HILL_ZONES[] = {
+							   {{-0.7f,-5.25f}, 3.0f},
+							   {{2.0f,-2.0f}, 2.8f},
+							   {{-0.9, 1.2}, 2.85f},
+							   {{5.0f, 1.2}, 3.0f},
+							   {{5.0f, -5.25f}, 3.0f},
+};
 
 void ServerStart(ServerState * state, u16 port, u16 maxPlayers);
 void ServerStop(ServerState * state);

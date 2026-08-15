@@ -525,6 +525,18 @@ void ClientLoadTextures(HashMap * handles, PlatformAPI * platform)
 
 	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_building_03.png");
 	HashMapInsert(handles, TEXTURE_BUILDING_SMALL_PATH, &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_building_02.png");
+	HashMapInsert(handles, TEXTURE_BUILDING_MEDIUM_PATH, &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_wall_01.png");
+	HashMapInsert(handles, TEXTURE_WALL_01_PATH, &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_cactus_03.png");
+	HashMapInsert(handles, TEXTURE_CACTUS_03_PATH, &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"tanks_text.png");
+	HashMapInsert(handles, "tanks_text", &textureHandle);
 }
 
 void ClientStart(GameState * state, GameMemory * gameMemory)
@@ -578,10 +590,12 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 
 	state->random = {0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL};
 	state->cameraZoom = 1.5f;
+	state->cameraPos = {-5.75f, -2.0f};
 	state->ui = (UILayout*)ArenaPush(&state->permArena, sizeof(UILayout));
 	state->props = (TransformHierarchy*)ArenaPush(&state->permArena, sizeof(TransformHierarchy));
 	state->instances = ArrayInit(sizeof(PrefabInstance), 256, ArenaPush(&state->permArena, sizeof(PrefabInstance) * 256));
 	state->selectedInstances = ArrayInit(sizeof(u32), 256, ArenaPush(&state->permArena, sizeof(u32) * 256));
+	state->editorState.dragStartPositions = ArrayInit(sizeof(vec2), state->selectedInstances.capacity, ArenaPush(&state->permArena, sizeof(vec2) * 256));
 	state->colliders = InitCollisionSystem2D(&state->permArena, 256, 16);
 	state->colliders.transforms = state->props;
 
@@ -1452,6 +1466,23 @@ void DrawRectFromVerts(RendererPushBuffer * renderCMDs, vec2 verts[4], vec3 colo
 	}
 }
 
+void DEBUG_DrawCollider(RendererPushBuffer * renderCMDs, Collider2D * collider, TransformHierarchy * transforms)
+{
+	Transform2D * t = transforms->GetTransform(collider->transformIndex);
+	vec3 color = collider->colliding ? vec3{1,0,0} : vec3{0,1,0};
+	if (collider->type == COLLIDER_RECTANGLE)
+	{
+		vec2 verts[4];
+		GetRectWorldVertices(t, verts);
+
+		DrawRectFromVerts(renderCMDs, verts, color, 0.004f);
+	}
+	else if (collider->type == COLLIDER_CIRCLE)
+	{
+		RendererPushCircle(renderCMDs, mat4GetPositionVec2(&t->world), t->rotation, t->scale, {0,1,0}, 0.1f, 5);
+	}
+}
+
 i32 FindInstanceWithColliderID(Array * instances, u32 colliderID)
 {
 	for (int i = 0; i < instances->count; i++)
@@ -1463,6 +1494,16 @@ i32 FindInstanceWithColliderID(Array * instances, u32 colliderID)
 		}
 	}
 	return -1;
+}
+
+inline f32 SnapToGrid(float value, float gridSize)
+{
+    return roundf(value / gridSize) * gridSize;
+}
+
+inline vec2 SnapToGrid(vec2 value, float gridSize)
+{
+    return { SnapToGrid(value.x, gridSize), SnapToGrid(value.y, gridSize) };
 }
 
 void DEBUG_PrefabSelection(GameState * clientState, RendererPushBuffer * renderCMDs,GameInput * input, vec2 mouseWorld)
@@ -1499,6 +1540,15 @@ void DEBUG_PrefabSelection(GameState * clientState, RendererPushBuffer * renderC
 						if (prefabIndex == *((u32*)clientState->selectedInstances.elements + i))
 						{
 							editorState->state = EDITOR_STATE_DRAGGING;
+							editorState->dragStartPos = mouseWorld;
+							editorState->dragStartPositions.count = 0;
+							for (int i = 0; i < clientState->selectedInstances.count; i++)
+							{
+								u32 instanceIndex = *((u32*)clientState->selectedInstances.elements + i);
+								PrefabInstance * instance = (PrefabInstance*)clientState->instances.elements + instanceIndex;
+								vec2 instancePos = clientState->props->GetTransform(instance->transformIndex)->position;
+								ArrayPush(&editorState->dragStartPositions, &instancePos);
+							}
 						}
 					}
 				}
@@ -1519,8 +1569,10 @@ void DEBUG_PrefabSelection(GameState * clientState, RendererPushBuffer * renderC
 			if (selectionDist > 0.02f)
 			{
 				Array selectedIDs = ArrayInit(sizeof(u32), 128, ArenaPush(&clientState->frameArena, sizeof(u32) * 128));
-				vec2 selectionCenter = {(editorState->selectionStart.x - mouseWorld.x) / 2.0f, (editorState->selectionStart.y - mouseWorld.y) / 2.0f};
+
+				vec2 selectionCenter = {(mouseWorld.x + editorState->selectionStart.x)/2.0f, (mouseWorld.y + editorState->selectionStart.y)/2.0f};
 				vec2 selectionExtents = {fabsf(editorState->selectionStart.x - mouseWorld.x), fabsf(editorState->selectionStart.y - mouseWorld.y)};
+
 				clientState->colliders.AABBHits(selectionCenter, selectionExtents, &selectedIDs);
 				for (int i = 0; i < selectedIDs.count; i++)
 				{
@@ -1529,7 +1581,7 @@ void DEBUG_PrefabSelection(GameState * clientState, RendererPushBuffer * renderC
 
 					if (instance >= 0)
 					{
-						//ArrayPush(&clientState->selectedInstances, &instance);
+						ArrayPush(&clientState->selectedInstances, &instance);
 					}
 				}
 			}
@@ -1555,13 +1607,16 @@ void DEBUG_PrefabSelection(GameState * clientState, RendererPushBuffer * renderC
 
 	if (editorState->state == EDITOR_STATE_DRAGGING && editorState->mouseWorldLast != mouseWorld)
 	{
-		vec2 mouseWorldDelta = mouseWorld - editorState->mouseWorldLast;
+		vec2 mouseWorldDragDelta = mouseWorld - editorState->dragStartPos;
 		for (int i = 0; i < clientState->selectedInstances.count; i++)
 		{
 			u32 * index = (u32*)clientState->selectedInstances.elements + i;
 			PrefabInstance * instance = (PrefabInstance*)clientState->instances.elements + *index;
+			vec2 startPos = *((vec2*)editorState->dragStartPositions.elements + i);
 			Transform2D * transform = clientState->props->GetTransform(instance->transformIndex);
-			transform->SetPosition(transform->position + mouseWorldDelta);
+			vec2 newPos = startPos + mouseWorldDragDelta;
+			if (editorState->snapToGrid) { newPos = SnapToGrid(newPos, 0.03125f); }
+			transform->SetPosition(newPos);
 		}
 	}
 
@@ -1575,10 +1630,15 @@ void DEBUG_PrefabSelection(GameState * clientState, RendererPushBuffer * renderC
 	editorState->mouseWorldLast = mouseWorld;
 }
 
-void DEBUG_PrefabEditor(GameState* state, PlatformAPI * platform)
+void DEBUG_PrefabEditor(GameState* state, GameInput * input, PlatformAPI * platform)
 {
     if (ImGui::Begin("Prefab Editor"))
     {
+		vec2 mouseWorld = MousePosToWorld(input->mousePosVP, state->cameraPos, input->viewportSize, state->cameraZoom);
+		ImGui::Text("Mouse Viewport: %d, %d\nMouse World: %.3f, %.3f", input->mousePosVP.x, input->mousePosVP.y, mouseWorld.x, mouseWorld.y);
+		ImGui::Checkbox("Snap to Grid", &state->editorState.snapToGrid);
+		ImGui::DragFloat("Camera Zoom", &state->cameraZoom, 0.1f, 0.5f, 4.0f);
+
 		if (ImGui::CollapsingHeader("Prefabs"))
 		{
 			for (u32 i = 0; i < _countof(PREFABS); i++)
@@ -1591,7 +1651,7 @@ void DEBUG_PrefabEditor(GameState* state, PlatformAPI * platform)
 
 				if (ImGui::Button("Add"))
 				{
-					PrefabInstanceData data = {i, vec2::zero, {1.0f, 1.0f}, 0.0f};
+					PrefabInstanceData data = {i, state->cameraPos, {1.0f, 1.0f}, 0.0f};
 					PrefabInstance instance = CreatePrefabInstance(data, &state->colliders, state->props);
 					ArrayPush(&state->instances, &instance);
 				}
@@ -1724,6 +1784,27 @@ void DrawHillIndictator(GameState * state, RendererPushBuffer * renderCMDs)
 	RendererPushSDFTriangle(renderCMDs, arrowPos, arrowAngle, arrowSize, &ARROW_STYLE, 6);
 }
 
+void DrawWorld(RendererPushBuffer * renderCMDs, GameState * state, double deltaTime)
+{
+	state->props->UpdateTransforms();
+	mat4 gdEasy = ModelMatrix2D({-5.75f, -1.25f}, 0.05, {2.0f, 1.0f});
+	u32 tanksTextTextureHandle;
+	HashMapGet(&state->textureHandles, "tanks_text", &tanksTextTextureHandle);
+    RendererPushImage(renderCMDs, tanksTextTextureHandle, 1.0f, gdEasy, 1);
+
+	for (int i = 0; i < state->instances.count; i++)
+	{
+		PrefabInstance * instance = (PrefabInstance*)state->instances.elements + i;
+		DrawPrefab(instance, state, renderCMDs);
+	}
+
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		UpdateTankGFX(&state->tanks[i], &state->tankTrackEmitter, deltaTime);
+		DrawTank(state->tanks[i], renderCMDs, state);
+	}
+}
+
 void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, RendererPushBuffer * renderCommands)
 {
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
@@ -1736,8 +1817,6 @@ void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, Re
 
 	ClientSendInput(state, input, platform, mouseWorld);
 
-	mat4 gdEasy = ModelMatrix2D({0.75f, 0.75f}, 0.0f, {0.5f, 0.5f});
-    RendererPushImage(renderCommands, 1, 1.0f, gdEasy, 1);
 
 	SimulateParticles(&state->turretFireEmitter, input->deltaTime);
 	SimulateParticles(&state->explosionEmitter,  input->deltaTime);
@@ -1750,24 +1829,8 @@ void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, Re
 	DrawHillIndictator(state, renderCommands);
 	DrawHill(state, renderCommands);
 
-	//RendererPushImage(renderCommands, state->airdropTextureHandle, {{TEST_}})
-
 	DEBUG_PrefabSelection(state, renderCommands,input, mouseWorld);
-	DEBUG_PrefabEditor(state, platform);
-	f32 angle = fmodf(state->time, 2.0f * PI);
-	state->props->UpdateTransforms();
-	for (int i = 0; i < state->instances.count; i++)
-	{
-		PrefabInstance * instance = (PrefabInstance*)state->instances.elements + i;
-		DrawPrefab(instance, state, renderCommands);
-	}
-
-	for (int i = 0; i < MAX_PLAYERS; i++)
-	{
-		UpdateTankGFX(&state->tanks[i], &state->tankTrackEmitter, input->deltaTime);
-		DrawTank(state->tanks[i], renderCommands, state);
-	}
-
+	DEBUG_PrefabEditor(state, input, platform);
 }
 void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands, RendererPushBuffer * uiRenderCMDs)
 {
@@ -1801,18 +1864,7 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 		}
 	}
 
-
 	DrawScrollingBackground(state, input, renderCommands);
-
-    char buf[256];
-	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, state->cameraPos, input->viewportSize, state->cameraZoom);
-	snprintf(buf, sizeof(buf), "MouseVP: %d, %d   World: %f, %f", input->mousePosVP.x, input->mousePosVP.y, mouseWorld.x, mouseWorld.y);
-   	const char * text = "This is some text!";
-	vec2 textPos = {0.5,0};
-	vec4 textColor = {1.0f, 0.0f, 0.0f, 1.0f};
-	TextStyle testTextStyle = {.fillColor = textColor, .strokeWidth = 0.0f};
-	f32 fontSize = 0.1f;
-	RendererPushText(renderCommands, buf, fontSize, state->interFontHandle, textPos, testTextStyle, true, 30);
 
 	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
 	RendererPushSetProjection(uiRenderCMDs, uiProjection, uiProjection);
@@ -1843,6 +1895,7 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 		} break;
 	}
 
+	DrawWorld(renderCommands, state, input->deltaTime);
 
 	DrawUI(*state->ui, uiRenderCMDs);
 }

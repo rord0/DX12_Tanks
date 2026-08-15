@@ -223,6 +223,7 @@ bool IsColliding(const Collider2D * a, const Collider2D * b, CollisionData * out
 
 void CollisionSystem2D::ResolveCollisions(TransformHierarchy * th)
 {
+	collisionChecks = 0;
 	transforms = th;
 	for (int i = 0; i < dynamicColliders.count; i++)
 	{
@@ -248,6 +249,7 @@ void CollisionSystem2D::ResolveCollisions(TransformHierarchy * th)
 
 			CollisionData cd = {0};
 			bool colliding = IsColliding(colliderA, colliderB, &cd, transformA, transformB);
+			collisionChecks++;
 			if (colliding)
 			{
 				vec2 correction = cd.normal * (cd.penetration * 1.0f);
@@ -445,6 +447,24 @@ bool CollisionSystem2D::RaycastHit(vec2 start, vec2 end, vec2 * outPoint, u32 ig
 
 bool CollisionSystem2D::AABBHits(vec2 pos, vec2 extents, Array * ids)
 {
+	auto testArray = [&](Array& colliders)
+	{
+		for (int i = 0; i < colliders.count; i++)
+		{
+			Collider2D * collider = (Collider2D*)colliders.elements + i;
+			Transform2D transformAABB = {pos, extents, 0.0f};
+
+			transformAABB.world = ModelMatrix2D(transformAABB.position, transformAABB.rotation, transformAABB.scale);
+			Collider2D AABB = {COLLIDER_RECTANGLE, 0, 0};
+			if (IsColliding(collider, &AABB, NULL, transforms->GetTransform(collider->transformIndex), &transformAABB))
+			{
+				ArrayPush(ids, &collider->id);
+			}
+		}
+	};
+
+	testArray(dynamicColliders);
+	testArray(staticColliders);
 	return false;
 }
 

@@ -79,8 +79,11 @@ typedef enum EditorState {
 typedef struct DEBUG_EditorState
 {
 	EditorState state;
+	Array dragStartPositions;
 	vec2 selectionStart;
 	vec2 mouseWorldLast;
+	vec2 dragStartPos;
+	bool snapToGrid;
 } DEBUG_EditorState;
 
 typedef struct {
