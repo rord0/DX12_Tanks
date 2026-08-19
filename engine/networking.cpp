@@ -19,7 +19,7 @@ NetworkState NETWORK_STATE = {0};
 
 PLATFORM_START_SERVER(PlatformStartServer)
 {
-	NETWORK_STATE.server = PortalCreateServer(SOCKET_TYPE_IPV6, port, maxConnections);
+	NETWORK_STATE.server = PortalCreateServer(SOCKET_TYPE_IPV4, port, maxConnections);
 	if (NETWORK_STATE.server.started) { return true; }
 	return false;
 }
@@ -31,10 +31,10 @@ PLATFORM_STOP_SERVER(PlatformStopServer)
 
 PLATFORM_START_CLIENT(PlatformStartClient)
 {
-	PortalAddress serverAddress = PortalStrToIPv6Address(addressStr, serverPort);
-	if (serverAddress.type != ADDRESS_IPV6) { return false; }
+	PortalAddress serverAddress = PortalStrToIPv4Address(addressStr, serverPort);
+	if (serverAddress.type != ADDRESS_IPV4) { return false; }
 
-	NETWORK_STATE.client = PortalCreateClient(SOCKET_TYPE_IPV6, 0);
+	NETWORK_STATE.client = PortalCreateClient(SOCKET_TYPE_IPV4, 0);
 	NETWORK_STATE.client.lastPacketReceiveTime = NETWORK_STATE.time;
 	NETWORK_STATE.client.time = NETWORK_STATE.time;
 	PortalClientConnect(&NETWORK_STATE.client, serverAddress);

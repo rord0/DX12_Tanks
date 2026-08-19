@@ -34,6 +34,7 @@ typedef struct
 	u32 transformIndex;
 	u32 textureTransformIndex;
 	u32 colliderID;
+	u32 random;
 } PrefabInstance;
 
 #define PROPS_RENDER_SORT_LAYER 4
@@ -81,7 +82,7 @@ const Prefab PREFAB_CONTAINER = {TEXTURE_CONTAINER_PATH, {0.0f, 0.0f}, {1.0f * 1
 const Prefab PREFAB_TOWER = {TEXTURE_TOWER_PATH, {0.0f, 0.0f}, {1.2f, 1.2f}, 0.0f,
 							  PROPS_RENDER_SORT_LAYER, _countof(TOWER_COLLIDERS), TOWER_COLLIDERS, "Tower"};
 
-const Prefab PREFAB_WALL = {TEXTURE_WALL_01_PATH, {0.0f, 0.0f}, {0.25f, 0.25f}, 0.0f,
+const Prefab PREFAB_WALL = {WALL_TEXTURES[0], {0.0f, 0.0f}, {0.25f, 0.25f}, 0.0f,
 							  PROPS_RENDER_SORT_LAYER, _countof(WALL_COLLIDERS), WALL_COLLIDERS, "Wall"};
 
 const Prefab * PREFABS[] = {&PREFAB_AIRDROP, &PREFAB_BARREL, &PREFAB_BUILDING_LARGE,

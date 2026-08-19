@@ -59,7 +59,7 @@ EXPORT GAME_START_FUNCTION(start)
 	serverState->tempArena  = ArenaInit(ArenaPush(&temporaryMemoryArena, maxTempArenaSize), maxTempArenaSize);
 
 	copy_c_str(clientState->displayName, "Player", 32);
-	const char * ip = "::1";
+	const char * ip = "172.0.0.1";
 
 	serverState->platform = gameMemory->platform;
 
@@ -67,7 +67,7 @@ EXPORT GAME_START_FUNCTION(start)
 	{
 		if (strcmp(argv[i], "--host") == 0 && serverState->serverActive == false)
 		{
-			ServerStart(serverState, 7777, 8);
+			ServerStart(serverState, 7777, MAX_PLAYERS);
 		}
 		else if (strncmp(argv[i], "--name=", 7) == 0)
 		{

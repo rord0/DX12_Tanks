@@ -5,7 +5,7 @@
 #include "arena.cpp"
 #include "ring_buffer.cpp"
 
-#include "renderer_dx12.cpp"
+#include "./engine/renderer/renderer_dx12.cpp"
 #include "./engine/networking.cpp"
 #include "./engine/fonts.cpp"
 

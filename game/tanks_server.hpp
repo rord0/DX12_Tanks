@@ -57,7 +57,9 @@ typedef struct HillData
 	f32 radius;
 } HillData;
 
-const vec2 RR_SPAWN_POSITIONS[4] = {{1.0f, -0.3f}, {2.85f, -0.3f}, {-1.0f, -1.0f}, {3.7f, -1.0f}};
+const vec2 RR_SPAWN_POSITIONS[] = {{1.0f, -0.3f}, {2.85f, -0.3f}, {-0.25f, -1.25f}, {3.7f, -1.0f},
+							   	   {0.25f, -2.75f}, {3.7f, -2.75f}
+};
 const vec4 WORLD_EXTENTS = {6.0f, -2.0f, 2.0f, -6.0f}; // RIGHT, LEFT, UP, DOWN
 const HillData HILL_ZONES[] = {
 							   {{-0.7f,-5.25f}, 3.0f},

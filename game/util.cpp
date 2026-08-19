@@ -34,6 +34,11 @@ vec2 RandomDirection(pcg32_random_t* rng)
     return { cosf(angle), sinf(angle) };
 }
 
+u32 RandomU32(pcg32_random_t * rng)
+{
+	return pcg32_random_r(rng);
+}
+
 u32 fn1va_32(const char * s)
 {
  	u32 hash = 2166136261u;
@@ -111,6 +116,21 @@ vec4 lerp(const vec4 & a, const vec4 & b, float t)
         a.z + (b.z - a.z) * t,
         a.w + (b.w - a.w) * t
     };
+}
+
+vec2 lerp(const vec2 & a, const vec2 & b, float t)
+{
+    t = std::clamp(t, 0.0f, 1.0f);
+    return {
+        a.x + (b.x - a.x) * t,
+        a.y + (b.y - a.y) * t,
+    };
+}
+
+f32 lerp(const f32 & a, const f32 & b, float t)
+{
+    t = std::clamp(t, 0.0f, 1.0f);
+	return a + (b - a) * t;
 }
 
 vec2 vec2SmoothDamp(vec2 currentPos, vec2 targetPos, vec2 * currentVelocity, float smoothTime, float maxSpeed, float deltaTime)

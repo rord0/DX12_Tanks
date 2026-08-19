@@ -35,7 +35,12 @@ const char * TEXTURE_BUILDING_SMALL_PATH = "images/props/props_building_03.png";
 const char * TEXTURE_CONTAINER_PATH = "images/props/props_container.png";
 const char * TEXTURE_TIRES_PATH = "images/props/props_tire_stack.png";
 const char * TEXTURE_TOWER_PATH = "images/props/props_tower.png";
-const char * TEXTURE_WALL_01_PATH = "images/props/props_wall_01.png";
+
+const char * WALL_TEXTURES[4] = {"images/props/props_wall_01.png",
+								 "images/props/props_wall_02.png",
+								 "images/props/props_wall_03.png",
+								 "images/props/props_wall_04.png",
+};
 
 typedef struct PlayerConnectData_t {
 	u16 playerID;
@@ -213,6 +218,7 @@ typedef struct PlayerFiredPacket {
 typedef struct ServerUpdatePacket {
 	u16 count;
 	f32 roundTimer;
+	u32 tick;
 	PlayerUpdateData * playerData;
 	template<typename Stream>
 	bool serialize(Stream & stream, Arena * arena = nullptr)
@@ -221,6 +227,7 @@ typedef struct ServerUpdatePacket {
 		SerializeU8(stream, type);
 		SerializeU16(stream, count);
 		SerializeF32(stream, roundTimer);
+		SerializeU32(stream, tick);
 
 		if (Stream::IsReading)
 		{

@@ -45,6 +45,12 @@ typedef struct {
 	Particle * particles;
 } ParticleEmitter;
 
+typedef struct {
+	u32 tick;
+	vec2 pos;
+	f32 rot;
+} TankSnapshot;
+
 typedef struct
 {
 	u16 playerID;
@@ -109,7 +115,8 @@ typedef struct {
 	ParticleEmitter shellTrailEmitter;
 	ParticleEmitter impactEmitter;
 	ParticleEmitter tankTrackEmitter;
-	TankGFX tanks[8]; 
+	TankGFX tanks[MAX_PLAYERS]; 
+	RingQueue tankPosSnapshots[MAX_PLAYERS];
 	u16 playerID;
 	TankStyle playerStyle;
 	bool connected;
@@ -119,9 +126,12 @@ typedef struct {
 	bool showBadIPPopup;
 	bool showConnFailedPopup;
 	vec2 cameraVelocity;
+	vec2 cameraTarget;
 	u32 currentHillIndex;
 	f32 cameraZoom;
 	f32 roundTimer;
+	u32 lastServerTick;
+	double estimatedTick;
 	bool hillMoving;
 	bool roundOver;
 	pcg32_random_t random;

@@ -131,6 +131,7 @@ void ServerSendUpdateMessage(ServerState * state)
 	packet.count = state->playerCount;
 	packet.roundTimer = (f32)state->roundTimer;
 	packet.playerData = (PlayerUpdateData*)ArenaPush(temp.arena, sizeof(PlayerUpdateData) * state->playerCount);
+	packet.tick = state->currentTick;
 
 	for (int i = 0; i < MAX_PLAYERS; i++)
 	{
@@ -234,8 +235,8 @@ void ServerStart(ServerState * state, u16 port, u16 maxPlayers)
 	state->platform.platformStartServer(7777, maxPlayers);
 	state->serverActive = true;
 	state->transforms = (TransformHierarchy*)ArenaPush(&state->permArena, sizeof(TransformHierarchy));
-	state->instances = ArrayInit(sizeof(PrefabInstance), 256, ArenaPush(&state->permArena, sizeof(PrefabInstance) * 256));
-	state->collision = InitCollisionSystem2D(&state->permArena, 256, 16);
+	state->instances = ArrayInit(sizeof(PrefabInstance), 512, ArenaPush(&state->permArena, sizeof(PrefabInstance) * 512));
+	state->collision = InitCollisionSystem2D(&state->permArena, 512, 16);
 	state->roundTimer = ROUND_TIME;
 	state->roundOver = false;
 	state->hillZoneIndex = 3;
@@ -245,7 +246,7 @@ void ServerStart(ServerState * state, u16 port, u16 maxPlayers)
 	state->last_tick = state->time;
 	state->currentTick = 0;
 
-	Array prefabData = ParsePrefabInstancesCSV(RESOURCES_PATH"meow.csv", &state->platform, &state->tempArena);
+	Array prefabData = ParsePrefabInstancesCSV(RESOURCES_PATH"prefab_instances.csv", &state->platform, &state->tempArena);
 	for (int i = 0; i < prefabData.count; i++)
 	{
 		PrefabInstanceData data = *((PrefabInstanceData*)prefabData.elements + i);
@@ -574,6 +575,7 @@ void DEBUG_ServerStats(ServerState * state)
     ImGui::Separator();
 
     ImGui::Text("Instances: %u", state->instances.count);
+    ImGui::Text("Transforms: %u", state->transforms->count);
 
     ImGui::End();
 }
@@ -586,11 +588,10 @@ void ServerUpdate(ServerState * state, GameInput * input)
 
 	if (DEBUG_RENDER_CMDS != NULL)
 	{
-		DEBUG_DrawColliders(DEBUG_RENDER_CMDS, &state->collision, state->transforms);
+		// DEBUG_DrawColliders(DEBUG_RENDER_CMDS, &state->collision, state->transforms);
 		for (int i = 0; i < _countof(RR_SPAWN_POSITIONS); i++)
 		{
-
-			RendererPushCircle(DEBUG_RENDER_CMDS, RR_SPAWN_POSITIONS[i], 0.0, {0.1f, 0.1f}, {1,0.2,0}, 1.0f, 1);
+			// RendererPushCircle(DEBUG_RENDER_CMDS, RR_SPAWN_POSITIONS[i], 0.0, {0.1f, 0.1f}, {1,0.2,0}, 1.0f, 1);
 		}
 	}
 	DEBUG_ServerStats(state);

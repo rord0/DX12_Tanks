@@ -20,6 +20,7 @@ RingQueue rQueueInit(size_t elementSize, uint32_t capacity, void * data);
 void * rQueuePeek(RingQueue * q);
 void   rQueuePush(RingQueue * q, const void * element);
 void   rQueuePop(RingQueue * q, void * dest);
+void * rQueuePeekAt(RingQueue * q, uint32_t index);
 
 #define RING_QUEUE_PUSH(queue, element) rQueuePush(queue, (void*)(&element));
 
@@ -59,6 +60,13 @@ void  * rQueuePeek(RingQueue * q)
 {
 	if (q == NULL || q->count <= 0) { return NULL; }
 	return (void*)(((uint8_t*)q->data) + (q->elementSize*q->head));
+}
+
+void * rQueuePeekAt(RingQueue * q, uint32_t index)
+{
+    if (q == NULL || index >= q->count) { return NULL; }
+    uint32_t actualIndex = (q->head + index) % q->capacity;
+    return (void*)(((uint8_t*)q->data) + (q->elementSize * actualIndex));
 }
 
 #endif // RING_QUEUE_IMPLEMENTATION

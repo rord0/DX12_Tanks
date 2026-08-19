@@ -14,7 +14,7 @@ typedef struct Transform2D
 	void SetRotation(f32 rot);
 } Transform2D;
 
-#define MAX_TRANSFORMS 512
+#define MAX_TRANSFORMS 1024
 typedef struct Transform2DHierarchy_t
 {
 	Transform2D transforms[MAX_TRANSFORMS];

@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <iterator>
 
 mat4 orthographicProjection(float right, float left, float top, float bottom, float n, float f)
 {
@@ -167,9 +168,43 @@ void CalculateTankUVs(TankStyle style, AtlasEntry * atlasEntries, vec4 * uvs)
 	uvs[2] = turretUV;
 }
 
+void GetInterpolatedPosition(double renderTick, RingQueue * snapshots, vec2 * outPos, f32 * outRot)
+{
+	if (snapshots == NULL || snapshots->count == 0) { return; }
+	if (snapshots->count < 2)
+	{
+		TankSnapshot * s = ((TankSnapshot*)rQueuePeekAt(snapshots, 0));
+		*outPos = s->pos;
+		*outRot = s->rot;
+	}
+
+	for (u32 i = 0; i + 1 < snapshots->count; i++)
+	{
+		TankSnapshot * a = (TankSnapshot*)rQueuePeekAt(snapshots, i);
+		TankSnapshot * b = (TankSnapshot*)rQueuePeekAt(snapshots, i + 1);
+
+		if (renderTick >= a->tick && renderTick <= b->tick)
+		{
+			double t = (renderTick - a->tick) / double(b->tick - a->tick);
+			*outPos = lerp(a->pos, b->pos, t);
+			*outRot = lerp(a->rot, b->rot, t);
+		}
+	}
+
+	TankSnapshot * s = ((TankSnapshot*)rQueuePeekAt(snapshots, snapshots->count - 1));
+	*outPos = s->pos;
+	*outRot = s->rot;
+
+	return;
+}
+
 void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 {
 	if (!tank.active) { return; }
+
+	vec2 pos = tank.position;
+	f32 rot = tank.rotation;
+	GetInterpolatedPosition(state->estimatedTick - 2.0, &state->tankPosSnapshots[tank.playerID], &pos, &rot);
 
     u32 trackIndex  =  0 + (3 * tank.style.trackType) + tank.style.colorID;
     u32 bodyIndex   = 12 + (3 * tank.style.bodyType ) + tank.style.colorID;
@@ -183,23 +218,23 @@ void DrawTank(TankGFX & tank, RendererPushBuffer * cmdBuffer, GameState * state)
 	CalculateTankUVs(tank.style, state->tankAtlasEntries, uvs);
 
 	vec2 turretDir = vec2{cosf(tank.turretRot), sinf(tank.turretRot)};
-	vec2 tankDir   = vec2{cosf(tank.rotation),  sinf(tank.rotation)};
-	vec2 turretCenter = (-tankDir * -0.03f) + tank.position;
+	vec2 tankDir   = vec2{cosf(rot),  sinf(rot)};
+	vec2 turretCenter = (-tankDir * -0.03f) + pos;
 	vec2 turretPos = (-turretDir * 0.075f); // Offset backwards
 	turretPos += (turretDir *  TurretRecoilOffset(tank.turretOffset)); // Add recoil offset.
 	turretPos += turretCenter;
 
 	f32 tankRot = tank.rotation + (PI/2.0f);
 
-	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.8f, 1.0f}, uvs[0], 3);
-	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {tank.position.x, tank.position.y, 0.0f}, tankRot, {0.64f, 1.0f}, uvs[1], 4);
+	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {pos.x, pos.y, 0.0f}, tankRot, {0.8f, 1.0f}, uvs[0], 3);
+	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {pos.x, pos.y, 0.0f}, tankRot, {0.64f, 1.0f}, uvs[1], 4);
 	RendererPushSubTexture(cmdBuffer, state->tankAtlasHandle, {turretPos.x, turretPos.y, 0.0f}, tank.turretRot + (PI/2.0f), {0.57f, 1.0f}, uvs[2], 5);
 
-	DrawHealthbar(cmdBuffer, vec2{tank.position.x, tank.position.y + 0.3f}, ((float)tank.health / (float)TANK_MAX_HEALTH), tank.healthLerp);
+	DrawHealthbar(cmdBuffer, vec2{pos.x, pos.y + 0.3f}, ((float)tank.health / (float)TANK_MAX_HEALTH), tank.healthLerp);
 	bool isEnemyTank = tank.playerID != state->playerID;
 	vec4 nameColor = isEnemyTank ? ColorHexToRBGANormalized(0xFF6D5DFF) : ColorHexToRBGANormalized(0xFFFFFFFF);
 	TextStyle textStyle = {.fillColor = nameColor, .strokeWidth = 0.27f};
-	RendererPushText(cmdBuffer, tank.displayName, 0.05f, state->interFontHandle, vec2{tank.position.x - 0.2f, tank.position.y + 0.34f}, textStyle, true, 30);
+	RendererPushText(cmdBuffer, tank.displayName, 0.05f, state->interFontHandle, vec2{pos.x - 0.2f, pos.y + 0.34f}, textStyle, true, 30);
 
 	// DEBUG VISUALS
     // RendererPushCircle(cmdBuffer, tank.position + tankDir*0.2, 0, {0.05f,0.05f}, {0.0f, 1.0f, 0.0f}, 1.0f, 30);
@@ -530,7 +565,16 @@ void ClientLoadTextures(HashMap * handles, PlatformAPI * platform)
 	HashMapInsert(handles, TEXTURE_BUILDING_MEDIUM_PATH, &textureHandle);
 
 	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_wall_01.png");
-	HashMapInsert(handles, TEXTURE_WALL_01_PATH, &textureHandle);
+	HashMapInsert(handles, WALL_TEXTURES[0], &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_wall_02.png");
+	HashMapInsert(handles, WALL_TEXTURES[1], &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_wall_03.png");
+	HashMapInsert(handles, WALL_TEXTURES[2], &textureHandle);
+
+	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_wall_04.png");
+	HashMapInsert(handles, WALL_TEXTURES[3], &textureHandle);
 
 	textureHandle = platform->platformLoadTexture(RESOURCES_PATH"images/props/props_cactus_03.png");
 	HashMapInsert(handles, TEXTURE_CACTUS_03_PATH, &textureHandle);
@@ -576,6 +620,7 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 	for (int i = 0; i < MAX_PLAYERS; i++)
 	{
 		state->tanks[i] = {0};
+		state->tankPosSnapshots[i] = rQueueInit(sizeof(TankSnapshot), 16, ArenaPush(&state->permArena, sizeof(TankSnapshot) * 16));
 	}
 
 	const f32 spritesheetAnimFPS = 20;
@@ -590,13 +635,14 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 
 	state->random = {0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL};
 	state->cameraZoom = 1.5f;
-	state->cameraPos = {-5.75f, -2.0f};
+	state->cameraTarget = {-5.75f, -2.0f};
+	state->cameraPos = state->cameraTarget;
 	state->ui = (UILayout*)ArenaPush(&state->permArena, sizeof(UILayout));
 	state->props = (TransformHierarchy*)ArenaPush(&state->permArena, sizeof(TransformHierarchy));
-	state->instances = ArrayInit(sizeof(PrefabInstance), 256, ArenaPush(&state->permArena, sizeof(PrefabInstance) * 256));
+	state->instances = ArrayInit(sizeof(PrefabInstance), 512, ArenaPush(&state->permArena, sizeof(PrefabInstance) * 512));
 	state->selectedInstances = ArrayInit(sizeof(u32), 256, ArenaPush(&state->permArena, sizeof(u32) * 256));
 	state->editorState.dragStartPositions = ArrayInit(sizeof(vec2), state->selectedInstances.capacity, ArenaPush(&state->permArena, sizeof(vec2) * 256));
-	state->colliders = InitCollisionSystem2D(&state->permArena, 256, 16);
+	state->colliders = InitCollisionSystem2D(&state->permArena, 512, 16);
 	state->colliders.transforms = state->props;
 
 	state->currentHillIndex = 0;
@@ -604,11 +650,12 @@ void ClientStart(GameState * state, GameMemory * gameMemory)
 
 	copy_c_str(state->winningPlayerName, "Player", 32);
 
-	Array prefabData = ParsePrefabInstancesCSV(RESOURCES_PATH"meow.csv", &gameMemory->platform, &state->frameArena);
+	Array prefabData = ParsePrefabInstancesCSV(RESOURCES_PATH"prefab_instances.csv", &gameMemory->platform, &state->frameArena);
 	for (int i = 0; i < prefabData.count; i++)
 	{
 		PrefabInstanceData data = *((PrefabInstanceData*)prefabData.elements + i);
 		PrefabInstance instance = CreatePrefabInstance(data, &state->colliders, state->props);
+		instance.random = RandomU32(&state->random);
 		ArrayPush(&state->instances, &instance);
 	}
 }
@@ -618,7 +665,18 @@ void ClientStop(GameState * state, PlatformAPI * platform)
 	if (state->connected == false) { return; }
 
 	memset(state->tanks, 0, sizeof(state->tanks));
+	for (int i = 0; i < MAX_PLAYERS; i++)
+	{
+		RingQueue * q = &state->tankPosSnapshots[i];
+		q->count = 0;
+		q->head = 0;
+		q->tail = 0;
+	}
 	state->clientState = CLIENT_STATE_MAIN_MENU;
+	state->cameraPos = {-5.75f, -2.0f};
+	state->cameraVelocity = {0,0};
+	state->lastServerTick = 0;
+	state->estimatedTick = 0.0;
 	state->welcomeReceived = false;
 	state->helloSent = false;
 	state->connected = false;
@@ -658,7 +716,20 @@ void ClientProcessDisconnectPacket(GameState * state, DisconnectPacket * packet)
 
 void ClientProcessUpdatePacket(GameState * state, UpdatePacket * packet)
 {
+	if (packet->tick <= state->lastServerTick) { return; }
+	
+	state->lastServerTick = packet->tick;
 	state->roundTimer = packet->roundTimer;
+	double error = state->lastServerTick - state->estimatedTick;
+	if (fabs(error) > 6.0)
+	{
+        state->estimatedTick = (double)state->lastServerTick;
+	}
+	else
+	{
+        state->estimatedTick += error * 0.1;
+	}
+
 	for (int i = 0; i < packet->count; i++)
 	{
 		PlayerUpdateData * updateData = packet->playerData + i;
@@ -669,6 +740,14 @@ void ClientProcessUpdatePacket(GameState * state, UpdatePacket * packet)
 		player->rotation = updateData->rotation;
 		player->kills = updateData->kills;
 		if (player->playerID != state->playerID) { player->turretRot = updateData->turretRot; }
+
+		TankSnapshot s = {packet->tick, updateData->pos, updateData->rotation};
+		RingQueue * snapshots = &state->tankPosSnapshots[updateData->playerID];
+		rQueuePush(snapshots, &s);	
+		while (snapshots->count > 8)
+		{
+			rQueuePop(snapshots, NULL);
+		}
 	}
 }
 
@@ -939,6 +1018,8 @@ void ErrorPopupUI(UILayout & ui, u32 fontHandle, const char * message)
 
 void MainMenu(GameState * state, GameMemory * gameMemory, GameInput * input, PlatformAPI * platform)
 {
+	state->cameraTarget = {-5.75f, -2.0f};
+
 	FontStyle fontStyle = {state->interFontHandle, 40.0f, 0.0f};
 
 	UINodeData menuContainerData = {.type = UINodeType::UI_NODE_TYPE_CONTAINER, .container = { .visible = true, .style = DEFAULT_CONTAINER_STYLE}};
@@ -980,7 +1061,7 @@ void MainMenu(GameState * state, GameMemory * gameMemory, GameInput * input, Pla
 
 	if (ui.isButtonPressed("HOST_BUTTON"))
 	{
-		copy_c_str(state->serverIP, "::1", 64);
+		copy_c_str(state->serverIP, "127.0.0.1", 64);
 		ServerState * serverState = (ServerState*)((u8*)gameMemory->permStorage + sizeof(GameState));
 		ServerStart(serverState, 7777, 8);
 		platform->platformStartClient(state->serverIP, 7777);
@@ -1079,11 +1160,11 @@ void DirectJoinMenu(GameState * state, GameInput * input, PlatformAPI * platform
 			if (state->showConnFailedPopup) { ErrorPopupUI(ui, state->interFontHandle, "failed to connect to server"); }
 		ui.end();
 		ui.begin("IP_SECTION", sectionLayout);
-			ui.text("IP_LABEL", state->interFontHandle, 30.0f, 0.2f, "IPv6 Address:");
+			ui.text("IP_LABEL", state->interFontHandle, 30.0f, 0.2f, "IPv4 Address:");
 			ui.inputField("IP_INPUT", {428.0f, 70.0f},
 						  state->serverIP, 40,
 						  &DEFAULT_BUTTON_STYLE,ipInputFontStyle,
-						  UI_INPUT_ALLOW_ALPHANUM | UI_INPUT_ALLOW_COLONS);
+						  UI_INPUT_ALLOW_ALPHANUM | UI_INPUT_ALLOW_COLONS | UI_INPUT_ALLOW_PERIODS);
 			ui.button("CONNECT_BTN",{428,80.f}, &DEFAULT_BUTTON_STYLE, "CONNECT", &btnFontStyle);
 			ui.button("BACK_BTN",{150,60}, &DEFAULT_BUTTON_STYLE, "BACK", &btnFontStyle);
 		ui.end();
@@ -1280,6 +1361,7 @@ void GameHUD(GameState * state, RendererPushBuffer * pb, GameInput * input, Plat
 
 void CustomizeMenu(GameState * state, GameInput * input, PlatformAPI * platform)
 {
+	state->cameraTarget = {-4.6f, -2.0f};
 	UIInput uiInput = {{(f32)input->mousePosVP.x, (f32)input->mousePosVP.y}, input->mouseL};
 	uiInput.charsPressed = input->charsPressed;
 	uiInput.charCount = input->charCount;
@@ -1427,6 +1509,12 @@ void DrawPrefab(const PrefabInstance * instance, GameState * state, RendererPush
 
 	mat4 prefabModel = ModelMatrix2D(prefab->position, prefab->rotation, prefab->scale);
 	mat4 instanceModel = state->props->transforms[instance->transformIndex].world;
+	if (instance->prefabID == 8)
+	{
+		const f32 randomRotations[4] = {deg2Rad(0), deg2Rad(90), deg2Rad(180), deg2Rad(270)};
+		prefabModel = ModelMatrix2D(prefab->position, randomRotations[(instance->random & 0xFFFF) % 4], prefab->scale);
+		HashMapGet(&state->textureHandles, WALL_TEXTURES[(instance->random >> 16)% _countof(WALL_TEXTURES)], &textureHandle);
+	}
 	RendererPushImage(renderCMDs, textureHandle, 1.0f, prefabModel * instanceModel, prefab->layer);
 }
 
@@ -1630,12 +1718,22 @@ void DEBUG_PrefabSelection(GameState * clientState, RendererPushBuffer * renderC
 	editorState->mouseWorldLast = mouseWorld;
 }
 
+void DEBUG_ClientStats(GameState * state, GameInput * input)
+{
+	TankGFX * localPlayer = &state->tanks[state->playerID];
+    ImGui::Begin("Client Stats");
+		vec2 mouseWorld = MousePosToWorld(input->mousePosVP, state->cameraPos, input->viewportSize, state->cameraZoom);
+		ImGui::Text("Mouse Viewport: %d, %d\nMouse World: %.3f, %.3f", input->mousePosVP.x, input->mousePosVP.y, mouseWorld.x, mouseWorld.y);
+		ImGui::Text("Local Player Pos: (%f, %f)", localPlayer->position.x, localPlayer->position.y);
+		ImGui::Text("Last Server Tick: %u", state->lastServerTick);
+		ImGui::Text("Estimated Tick: %.2lf (error %.2lf)", state->estimatedTick, state->lastServerTick - state->estimatedTick);
+	ImGui::End();
+}
+
 void DEBUG_PrefabEditor(GameState* state, GameInput * input, PlatformAPI * platform)
 {
     if (ImGui::Begin("Prefab Editor"))
     {
-		vec2 mouseWorld = MousePosToWorld(input->mousePosVP, state->cameraPos, input->viewportSize, state->cameraZoom);
-		ImGui::Text("Mouse Viewport: %d, %d\nMouse World: %.3f, %.3f", input->mousePosVP.x, input->mousePosVP.y, mouseWorld.x, mouseWorld.y);
 		ImGui::Checkbox("Snap to Grid", &state->editorState.snapToGrid);
 		ImGui::DragFloat("Camera Zoom", &state->cameraZoom, 0.1f, 0.5f, 4.0f);
 
@@ -1809,11 +1907,12 @@ void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, Re
 {
 	float aspect = (float)input->viewportSize.x / (float)input->viewportSize.y;
 	TankGFX * localPlayer = &state->tanks[state->playerID];
+	state->cameraTarget = localPlayer->position;
 	mat4 projection = orthographicProjection(aspect * state->cameraZoom, -aspect * state->cameraZoom,
 											 1.0f * state->cameraZoom,   -1.0f * state->cameraZoom, -0.01f, 100.0f);
 	vec2 mouseWorld = MousePosToWorld(input->mousePosVP, state->cameraPos, input->viewportSize, state->cameraZoom);
-	state->cameraPos = vec2SmoothDamp(state->cameraPos, localPlayer->position, &state->cameraVelocity, 1.0f, 100.0f, input->deltaTime);
 
+	state->estimatedTick += input->deltaTime / TICK_DURATION;
 
 	ClientSendInput(state, input, platform, mouseWorld);
 
@@ -1829,8 +1928,9 @@ void UpdateGame(GameState * state, GameInput * input, PlatformAPI * platform, Re
 	DrawHillIndictator(state, renderCommands);
 	DrawHill(state, renderCommands);
 
-	DEBUG_PrefabSelection(state, renderCommands,input, mouseWorld);
-	DEBUG_PrefabEditor(state, input, platform);
+	// DEBUG_ClientStats(state, input);
+	// DEBUG_PrefabSelection(state, renderCommands,input, mouseWorld);
+	// DEBUG_PrefabEditor(state, input, platform);
 }
 void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input, RendererPushBuffer * renderCommands, RendererPushBuffer * uiRenderCMDs)
 {
@@ -1868,6 +1968,8 @@ void ClientUpdate(GameState * state, GameMemory * gameMemory, GameInput * input,
 
 	mat4 uiProjection = orthographicProjection(input->viewportSize.x, 0.0f, 0.0f, input->viewportSize.y, -1.0f, 100.f);
 	RendererPushSetProjection(uiRenderCMDs, uiProjection, uiProjection);
+
+	state->cameraPos = vec2SmoothDamp(state->cameraPos, state->cameraTarget, &state->cameraVelocity, 1.0f, 100.0f, input->deltaTime);
 
 	switch (state->clientState)
 	{
